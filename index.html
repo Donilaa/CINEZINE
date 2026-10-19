@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cine Journal - Curaduría Cinematográfica</title>
+    <title>CineZine - Curaduría y Ruleta Cinematográfica</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -49,127 +49,66 @@
             background-image: radial-gradient(#e8e1d5 0.75px, transparent 0.75px);
             background-size: 16px 16px;
         }
-
         .dark body {
             background-color: #121110;
             color: #f4f0ea;
             background-image: radial-gradient(#262320 0.75px, transparent 0.75px);
             background-size: 16px 16px;
         }
-
-        .custom-scrollbar::-webkit-scrollbar {
-            width: 4px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-            background: transparent;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-            background: #d6d3d1;
-        }
-        .dark .custom-scrollbar::-webkit-scrollbar-thumb {
-            background: #44403c;
-        }
-
-        details > summary {
-            list-style: none;
-        }
-        details > summary::-webkit-details-marker {
-            display: none;
-        }
-
-        .range-slider-container {
-            position: relative;
-            height: 24px;
-            display: flex;
-            align-items: center;
-        }
-        .range-slider-track {
-            position: absolute;
-            width: 100%;
-            height: 3px;
-            background-color: #d6d3d1;
-            z-index: 1;
-        }
-        .dark .range-slider-track {
-            background-color: #44403c;
-        }
-        .range-slider-container input[type=range] {
-            position: absolute;
-            width: 100%;
-            background: none;
-            pointer-events: none;
-            appearance: none;
-            -webkit-appearance: none;
-            z-index: 2;
-            margin: 0;
-        }
-        .range-slider-container input[type=range]::-webkit-slider-thumb {
-            height: 14px;
-            width: 14px;
-            border-radius: 0%;
-            background: #881337;
-            pointer-events: auto;
-            appearance: none;
-            -webkit-appearance: none;
-            cursor: pointer;
-            border: 1px solid #ffffff;
-        }
-
-        .journal-border {
-            border: 1px solid #d6d3d1;
-        }
-        .dark .journal-border {
-            border: 1px solid #292524;
-        }
-        
-        .journal-border-double {
-            border-top: 3px double #1c1917;
-            border-bottom: 3px double #1c1917;
-        }
-        .dark .journal-border-double {
-            border-top: 3px double #f4f0ea;
-            border-bottom: 3px double #f4f0ea;
-        }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #d6d3d1; }
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb { background: #44403c; }
+        details > summary { list-style: none; }
+        details > summary::-webkit-details-marker { display: none; }
+        .range-slider-container { position: relative; height: 24px; display: flex; align-items: center; }
+        .range-slider-track { position: absolute; width: 100%; height: 3px; background-color: #d6d3d1; z-index: 1; }
+        .dark .range-slider-track { background-color: #44403c; }
+        .range-slider-container input[type=range] { position: absolute; width: 100%; background: none; pointer-events: none; appearance: none; -webkit-appearance: none; z-index: 2; margin: 0; }
+        .range-slider-container input[type=range]::-webkit-slider-thumb { height: 14px; width: 14px; border-radius: 0%; background: #881337; pointer-events: auto; appearance: none; -webkit-appearance: none; cursor: pointer; border: 1px solid #ffffff; }
+        .journal-border { border: 1px solid #d6d3d1; }
+        .dark .journal-border { border: 1px solid #292524; }
+        .journal-border-double { border-top: 3px double #1c1917; border-bottom: 3px double #1c1917; }
+        .dark .journal-border-double { border-top: 3px double #f4f0ea; border-bottom: 3px double #f4f0ea; }
     </style>
 </head>
 <body class="min-h-screen flex flex-col justify-between custom-scrollbar transition-colors duration-300">
 
-    <!-- Header Estilo Revista -->
+    <!-- Header Estilo Revista / CineZine -->
     <header class="border-b-2 border-stone-800 dark:border-stone-700 bg-stone-50/95 dark:bg-stone-950/95 backdrop-blur-md sticky top-0 z-40">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex flex-col items-center justify-center gap-3">
-            
             <div class="w-full flex items-center justify-between text-[11px] font-mono tracking-widest uppercase text-stone-500 dark:text-stone-400 border-b border-stone-200 dark:border-stone-800 pb-2">
                 <span>VOL. XXIV — NO. 412</span>
                 <span>EDICIÓN ESPECIAL DE CRÍTICA</span>
-                <span>OCTUBRE, 2026</span>
+                <span>2026</span>
             </div>
-
             <div class="w-full flex flex-wrap items-center justify-between gap-4">
                 <div class="flex items-center space-x-3">
                     <div class="border-2 border-stone-800 dark:border-stone-200 p-1.5 flex items-center justify-center">
                         <i class="fa-solid fa-film text-xl"></i>
                     </div>
                     <div>
-                        <h1 class="text-2xl sm:text-3xl font-extrabold tracking-wider font-heading uppercase">Cine Journal</h1>
-                        <span class="text-[10px] font-mono tracking-widest uppercase text-rose-700 dark:text-rose-500">Revista de Selección y Ruleta Cinematográfica</span>
+                        <h1 class="text-2xl sm:text-3xl font-extrabold tracking-wider font-heading uppercase">CineZine</h1>
+                        <span class="text-[10px] font-mono tracking-widest uppercase text-rose-700 dark:text-rose-500">Fanzine & Sorteo Cinematográfico</span>
                     </div>
                 </div>
-
                 <div class="flex items-center space-x-2">
                     <button onclick="toggleTheme()" class="flex items-center justify-center w-8 h-8 bg-stone-200 dark:bg-stone-900 hover:bg-stone-300 dark:hover:bg-stone-800 rounded-none journal-border transition" title="Cambiar Tema">
                         <i id="themeIcon" class="fa-solid fa-moon text-xs"></i>
                     </button>
-
                     <button id="muteBtn" onclick="toggleMute()" class="flex items-center space-x-1.5 text-xs bg-stone-200 dark:bg-stone-900 hover:bg-stone-300 dark:hover:bg-stone-800 px-3 py-1.5 rounded-none journal-border transition font-serif">
                         <i id="muteIcon" class="fa-solid fa-volume-high text-rose-700"></i>
                         <span id="muteText" class="hidden sm:inline">Sonido On</span>
                     </button>
-
                     <button onclick="toggleSettingsModal()" class="flex items-center space-x-1.5 text-xs bg-stone-200 dark:bg-stone-900 hover:bg-stone-300 dark:hover:bg-stone-800 px-3 py-1.5 rounded-none journal-border transition font-serif">
-                        <i class="fa-solid fa-globe text-stone-700 dark:text-stone-300"></i>
-                        <span class="hidden sm:inline">Idioma</span>
+                        <i class="fa-solid fa-sliders text-stone-700 dark:text-stone-300"></i>
+                        <span class="hidden sm:inline">Ajustes</span>
                     </button>
-
+                    <!-- Agrega este botón dentro de la barra superior donde están Ajustes y Mute -->
+                    <button onclick="toggleProfileDrawer()" class="flex items-center space-x-2 bg-stone-200 dark:bg-stone-900 hover:bg-stone-300 dark:hover:bg-stone-800 px-2.5 py-1.5 rounded-none journal-border transition font-serif">
+                        <img id="headerProfileAvatar" src="https://api.dicebear.com/7.x/bottts/svg?seed=Dante" alt="Avatar" class="w-5 h-5 rounded-full journal-border bg-stone-300 dark:bg-stone-800">
+                        <span id="headerUsername" class="hidden sm:inline text-xs font-mono font-bold">Dante</span>
+                    </button>
                     <div id="apiStatus" class="hidden sm:flex items-center space-x-1.5 text-[10px] font-mono tracking-wider uppercase bg-emerald-700/10 text-emerald-700 dark:text-emerald-400 journal-border px-2 py-1.5">
                         <span class="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
                         <span>TMDb API</span>
@@ -179,29 +118,24 @@
         </div>
     </header>
 
-    <!-- Main Container Layout: 3 Columnas Estilo Revista -->
+    <!-- Main Container Layout -->
     <main class="max-w-7xl mx-auto px-4 sm:px-6 py-8 w-full flex-grow grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         
-        <!-- COLUMNA 1 (IZQUIERDA): LA MÁQUINA DE SORTEO (RULETA) -->
+        <!-- COLUMNA 1 (IZQUIERDA): MÁQUINA DE SORTEO -->
         <section class="lg:col-span-4 flex flex-col items-center space-y-6 lg:sticky lg:top-28">
-            
             <div class="w-full text-center pb-1 journal-border-double">
                 <h3 class="font-heading font-bold text-lg tracking-wider uppercase">Sorteo Editorial</h3>
             </div>
-
             <div class="relative w-full max-w-[320px] aspect-square flex items-center justify-center p-3 bg-stone-100 dark:bg-stone-900 journal-border shadow-inner transition-all">
                 <div id="roulettePointer" class="absolute -top-3 z-20 text-rose-800 dark:text-rose-600 drop-shadow flex flex-col items-center transition-transform duration-75">
                     <i class="fa-solid fa-caret-down text-4xl"></i>
                 </div>
-
                 <canvas id="rouletteCanvas" width="800" height="800" class="w-full h-full rounded-full cursor-pointer transition-transform duration-100"></canvas>
-
                 <button id="spinCenterBtn" onclick="spinWheel()" class="absolute z-10 w-20 h-20 bg-stone-900 dark:bg-stone-950 text-white font-heading font-bold text-xs tracking-widest uppercase rounded-full border-2 border-rose-800 shadow-2xl hover:scale-105 active:scale-95 transition-all flex flex-col items-center justify-center gap-0.5 group">
                     <i class="fa-solid fa-play text-rose-500 text-sm translate-x-0.5"></i>
                     <span class="text-[9px] font-mono">GIRAR</span>
                 </button>
             </div>
-
             <div class="w-full max-w-[320px] grid grid-cols-2 gap-2">
                 <button onclick="spinWheel()" class="w-full py-2.5 px-3 bg-rose-900 hover:bg-rose-800 text-stone-100 font-serif font-semibold rounded-none journal-border transition text-xs flex items-center justify-center space-x-2 uppercase tracking-wider">
                     <i class="fa-solid fa-rotate text-xs"></i>
@@ -212,7 +146,6 @@
                     <span>Azar</span>
                 </button>
             </div>
-
             <div class="w-full max-w-[320px] bg-stone-50 dark:bg-stone-900 journal-border p-4 space-y-3">
                 <div class="flex items-center justify-between border-b border-stone-300 dark:border-stone-800 pb-2">
                     <h3 class="font-heading font-bold text-xs uppercase tracking-widest flex items-center space-x-2">
@@ -224,17 +157,12 @@
                         <span>Vaciar</span>
                     </button>
                 </div>
-
-                <div id="movieChipsList" class="flex flex-wrap gap-1.5 max-h-48 overflow-y-auto custom-scrollbar pt-1 pr-1">
-                </div>
+                <div id="movieChipsList" class="flex flex-wrap gap-1.5 max-h-48 overflow-y-auto custom-scrollbar pt-1 pr-1"></div>
             </div>
-
         </section>
 
         <!-- COLUMNA 2 (CENTRO): BUSCADOR Y CATÁLOGO EDITORIAL -->
         <section class="lg:col-span-5 space-y-6">
-            
-            <!-- Buscador Editorial -->
             <div class="bg-stone-50 dark:bg-stone-900 journal-border p-4 space-y-2 relative">
                 <label class="block text-xs font-heading font-bold tracking-widest uppercase">
                     <i class="fa-solid fa-magnifying-glass text-rose-800 mr-1.5"></i>Índice y Búsqueda de Obras
@@ -244,13 +172,10 @@
                         <input type="text" id="manualMovieInput" oninput="handleAutocompleteInput(this.value)" placeholder="Buscar película por título..." class="w-full bg-stone-100 dark:bg-stone-950 journal-border rounded-none pl-3 pr-8 py-2 text-xs font-serif placeholder-stone-400 focus:outline-none focus:border-rose-800 transition">
                         <i id="autocompleteSpinner" class="fa-solid fa-circle-notch fa-spin absolute right-3 text-stone-400 text-xs hidden"></i>
                     </div>
-
-                    <div id="autocompleteDropdown" class="absolute left-0 right-0 top-full mt-1 bg-stone-50 dark:bg-stone-900 journal-border shadow-2xl z-50 max-h-64 overflow-y-auto custom-scrollbar hidden">
-                    </div>
+                    <div id="autocompleteDropdown" class="absolute left-0 right-0 top-full mt-1 bg-stone-50 dark:bg-stone-900 journal-border shadow-2xl z-50 max-h-64 overflow-y-auto custom-scrollbar hidden"></div>
                 </div>
             </div>
 
-            <!-- Catálogo Estilo Gaceta -->
             <div class="bg-stone-50 dark:bg-stone-900 journal-border p-4 space-y-4">
                 <div class="flex items-center justify-between border-b-2 border-stone-800 dark:border-stone-700 pb-2.5">
                     <div class="flex items-center space-x-2 font-heading font-bold text-xs uppercase tracking-widest">
@@ -261,14 +186,11 @@
                         + Cargar Visibles
                     </button>
                 </div>
-
-                <!-- Filtros Estilo Imprenta -->
                 <div class="space-y-3">
                     <div class="relative">
                         <input type="text" id="catalogSearchFilter" oninput="applyCatalogFilters()" placeholder="Filtrar colección actual..." class="w-full bg-stone-100 dark:bg-stone-950 journal-border rounded-none pl-8 pr-3 py-1.5 text-xs font-serif placeholder-stone-400 focus:border-rose-800 transition">
                         <i class="fa-solid fa-filter absolute left-2.5 top-2.5 text-stone-400 text-[10px]"></i>
                     </div>
-
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs font-serif">
                         <div>
                             <label class="block font-mono text-[10px] text-stone-500 uppercase mb-1">Género</label>
@@ -302,8 +224,6 @@
                         </div>
                     </div>
                 </div>
-
-                <!-- Slider -->
                 <div class="space-y-1 pt-1 font-serif text-xs">
                     <div class="flex justify-between font-mono text-[11px]">
                         <span class="text-stone-500">Rango de Puntuación</span>
@@ -315,7 +235,6 @@
                         <input type="range" id="maxRatingInput" min="1.0" max="10.0" step="0.5" value="8.5" oninput="handleRangeInput(); debounceFetchFilteredMovies()">
                     </div>
                 </div>
-
                 <div class="flex items-center justify-between pt-1 text-xs font-mono">
                     <span class="text-stone-500">Votos Mín.:</span>
                     <select id="minVotes" onchange="resetAndFetchFilteredMovies()" class="bg-stone-100 dark:bg-stone-950 journal-border rounded-none px-2 py-1 text-[11px]">
@@ -325,19 +244,14 @@
                     </select>
                     <span id="catalogCountIndicator" class="text-stone-400 text-[11px] italic">Cargando...</span>
                 </div>
-
-                <!-- Resultados Cuadrícula Estilo Revista -->
                 <div class="pt-2">
-                    <div id="resultsGrid" class="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-[380px] overflow-y-auto custom-scrollbar pr-1">
-                    </div>
-
+                    <div id="resultsGrid" class="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-[380px] overflow-y-auto custom-scrollbar pr-1"></div>
                     <button id="loadMoreBtn" onclick="loadNextFilteredPage()" class="w-full mt-3 py-2 bg-stone-200 dark:bg-stone-800 hover:bg-stone-300 dark:hover:bg-stone-700 rounded-none text-xs font-mono font-semibold journal-border hidden uppercase tracking-wider">
                         <i class="fa-solid fa-angles-down mr-1"></i> Cargar más reseñas
                     </button>
                 </div>
             </div>
 
-            <!-- Óscars Plegables Estilo Editorial -->
             <details class="group bg-stone-50 dark:bg-stone-900 journal-border overflow-hidden transition-all">
                 <summary class="flex items-center justify-between p-3.5 cursor-pointer select-none bg-stone-100 dark:bg-stone-950 hover:bg-stone-200/50 transition">
                     <div class="flex items-center space-x-2 font-heading font-bold text-xs uppercase tracking-widest text-amber-700 dark:text-amber-500">
@@ -346,51 +260,61 @@
                     </div>
                     <i class="fa-solid fa-chevron-down text-stone-400 text-xs transition-transform group-open:rotate-180"></i>
                 </summary>
-                
                 <div class="p-3.5 space-y-3 border-t border-stone-200 dark:border-stone-800">
                     <div class="grid grid-cols-2 gap-2 bg-stone-200 dark:bg-stone-950 p-1 journal-border">
-                        <button id="btnFilterWinners" onclick="setOscarFilterMode('WINNERS')" class="py-1 rounded-none text-xs font-serif font-semibold bg-amber-600 text-stone-50 transition">
-                            🏆 Ganadoras
-                        </button>
-                        <button id="btnFilterAll" onclick="setOscarFilterMode('ALL')" class="py-1 rounded-none text-xs font-serif font-semibold text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white transition">
-                            🎬 Nominadas
-                        </button>
+                        <button id="btnFilterWinners" onclick="setOscarFilterMode('WINNERS')" class="py-1 rounded-none text-xs font-serif font-semibold bg-amber-600 text-stone-50 transition">🏆 Ganadoras</button>
+                        <button id="btnFilterAll" onclick="setOscarFilterMode('ALL')" class="py-1 rounded-none text-xs font-serif font-semibold text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white transition">🎬 Nominadas</button>
                     </div>
-
-                    <div id="oscarListContainer" class="space-y-2 max-h-[220px] overflow-y-auto custom-scrollbar pr-1">
-                    </div>
-
+                    <div id="oscarListContainer" class="space-y-2 max-h-[220px] overflow-y-auto custom-scrollbar pr-1"></div>
                     <button onclick="addAllOscarsToRoulette()" class="w-full py-1.5 bg-amber-600/10 hover:bg-amber-600/20 text-amber-700 dark:text-amber-400 journal-border text-xs font-serif font-semibold transition uppercase tracking-wider">
                         + Añadir Selección al Sorteo
                     </button>
                 </div>
             </details>
-
         </section>
 
-        <!-- COLUMNA 3 (DERECHA): CUADERNO DE LISTAS PERSONALES -->
-        <section class="lg:col-span-3 space-y-4">
-            
-            <div class="bg-stone-50 dark:bg-stone-900 journal-border p-4 space-y-3 lg:sticky lg:top-28">
+        <!-- COLUMNA 3 (DERECHA): CUADERNOS, BITÁCORA, HISTORIAL Y DIARIO MURAL -->
+        <section class="lg:col-span-3 space-y-6">
+            <div class="bg-stone-50 dark:bg-stone-900 journal-border p-4 space-y-4">
+                <div class="flex border-b border-stone-300 dark:border-stone-800 pb-2 text-[11px]">
+                    <button id="tabBitacoraBtn" onclick="switchRightTab('bitacora')" class="flex-1 text-center font-heading font-bold uppercase tracking-wider text-rose-800 dark:text-rose-500 border-b-2 border-rose-800 pb-1">
+                        <i class="fa-solid fa-star mr-1"></i>Bitácora
+                    </button>
+                    <button id="tabMuralBtn" onclick="switchRightTab('mural')" class="flex-1 text-center font-heading font-bold uppercase tracking-wider text-stone-400 hover:text-stone-800 dark:hover:text-stone-200 pb-1">
+                        <i class="fa-solid fa-newspaper mr-1"></i>Mural
+                    </button>
+                    <button id="tabVistasBtn" onclick="switchRightTab('vistas')" class="flex-1 text-center font-heading font-bold uppercase tracking-wider text-stone-400 hover:text-stone-800 dark:hover:text-stone-200 pb-1">
+                        <i class="fa-solid fa-eye mr-1"></i>Vistas (<span id="watchedCountHeader">0</span>)
+                    </button>
+                </div>
+                <div id="tabBitacoraContent" class="space-y-3">
+                    <div id="personalReviewsContainer" class="space-y-2 max-h-[240px] overflow-y-auto custom-scrollbar pr-1"></div>
+                </div>
+                <div id="tabMuralContent" class="space-y-3 hidden">
+                    <div id="diarioMuralContainer" class="space-y-2 max-h-[240px] overflow-y-auto custom-scrollbar pr-1"></div>
+                </div>
+                <div id="tabVistasContent" class="space-y-3 hidden">
+                    <div id="watchedMoviesListContainer" class="space-y-2 max-h-[240px] overflow-y-auto custom-scrollbar pr-1"></div>
+                </div>
+            </div>
+
+            <div class="bg-stone-50 dark:bg-stone-900 journal-border p-4 space-y-3">
                 <div class="flex items-center justify-between border-b-2 border-stone-800 dark:border-stone-700 pb-2">
                     <h3 class="font-heading font-bold text-xs uppercase tracking-widest flex items-center space-x-2">
                         <i class="fa-solid fa-feather text-rose-800"></i>
                         <span>Cuadernos de Listas</span>
                     </h3>
                 </div>
-
                 <div class="flex gap-1.5">
                     <input type="text" id="newListInput" placeholder="Nueva libreta..." class="flex-grow bg-stone-100 dark:bg-stone-950 journal-border rounded-none px-2.5 py-1.5 text-xs font-serif placeholder-stone-400 focus:outline-none focus:border-rose-800 transition">
                     <button onclick="createNewList()" class="bg-rose-900 hover:bg-rose-800 text-stone-100 px-2.5 py-1.5 rounded-none text-xs font-mono font-semibold transition flex-shrink-0 journal-border">
                         <i class="fa-solid fa-plus"></i>
                     </button>
                 </div>
-
-                <div id="customListsContainer" class="space-y-3 max-h-[520px] overflow-y-auto custom-scrollbar pr-1">
+                <div id="customListsContainer" class="space-y-3 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
                     <div class="text-center py-6 text-stone-400 text-xs font-serif italic">Sin cuadernos creados.</div>
                 </div>
             </div>
-
         </section>
     </main>
 
@@ -403,115 +327,96 @@
         <div id="quickListItemsContainer" class="max-h-40 overflow-y-auto custom-scrollbar space-y-1 pt-1"></div>
     </div>
 
-    <!-- MODAL DE DETALLE / CRÍTICA Y VALORACIÓN -->
+    <!-- MODALES -->
     <div id="detailModal" class="fixed inset-0 bg-stone-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
         <div class="bg-stone-50 dark:bg-stone-900 journal-border rounded-none max-w-lg w-full p-6 space-y-4 text-left relative shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar">
-            <button onclick="closeDetailModal()" class="absolute top-4 right-4 text-stone-400 hover:text-stone-800 dark:hover:text-white text-lg p-1 transition">
-                <i class="fa-solid fa-xmark"></i>
-            </button>
-
+            <button onclick="closeDetailModal()" class="absolute top-4 right-4 text-stone-400 hover:text-stone-800 dark:hover:text-white text-lg p-1 transition"><i class="fa-solid fa-xmark"></i></button>
             <div class="flex flex-col sm:flex-row gap-4 items-start">
                 <div class="relative flex-shrink-0 mx-auto sm:mx-0">
                     <img id="detailPoster" src="" alt="Poster" class="w-32 h-48 object-cover journal-border shadow-md">
-                    <button id="detailWatchedBtn" onclick="" class="absolute top-2 right-2 p-1.5 rounded-none text-xs backdrop-blur-md transition journal-border shadow-md">
-                        <i id="detailWatchedIcon" class="fa-solid fa-eye"></i>
-                    </button>
+                    <button id="detailWatchedBtn" onclick="" class="absolute top-2 right-2 p-1.5 rounded-none text-xs backdrop-blur-md transition journal-border shadow-md"><i id="detailWatchedIcon" class="fa-solid fa-eye"></i></button>
                 </div>
-                
                 <div class="space-y-2 flex-grow min-w-0">
-                    <div id="detailTag" class="inline-block bg-stone-200 dark:bg-stone-800 text-stone-800 dark:text-stone-300 journal-border px-2.5 py-0.5 text-[10px] font-mono font-bold uppercase tracking-widest">
-                        Reseña Crítica
-                    </div>
+                    <div id="detailTag" class="inline-block bg-stone-200 dark:bg-stone-800 text-stone-800 dark:text-stone-300 journal-border px-2.5 py-0.5 text-[10px] font-mono font-bold uppercase tracking-widest">Reseña Crítica</div>
                     <h2 id="detailTitle" class="text-xl font-extrabold font-heading leading-tight">Título</h2>
-                    
                     <div class="flex items-center space-x-3 text-xs font-mono text-stone-600 dark:text-stone-400">
                         <span id="detailRating" class="text-amber-700 dark:text-amber-500 font-bold"><i class="fa-solid fa-star mr-1"></i>8.5</span>
                         <span id="detailVotes"><i class="fa-solid fa-users mr-1"></i>120k votos</span>
                     </div>
-
                     <p class="text-xs font-mono text-stone-500" id="detailYear">Año: 2024</p>
                 </div>
             </div>
-
             <div class="space-y-1">
                 <h4 class="text-xs font-heading font-bold uppercase tracking-wider">Sinopsis Editorial</h4>
-                <div id="detailOverview" class="text-xs font-serif text-stone-700 dark:text-stone-300 bg-stone-100 dark:bg-stone-950 p-3 journal-border max-h-24 overflow-y-auto custom-scrollbar leading-relaxed">
-                    Sinopsis no disponible.
-                </div>
+                <div id="detailOverview" class="text-xs font-serif text-stone-700 dark:text-stone-300 bg-stone-100 dark:bg-stone-950 p-3 journal-border max-h-24 overflow-y-auto custom-scrollbar leading-relaxed">Sinopsis no disponible.</div>
             </div>
-
-            <!-- SECCIÓN DE CALIFICACIÓN Y APUNTES -->
+            
             <div class="bg-stone-100 dark:bg-stone-950 journal-border p-3.5 space-y-3">
                 <div class="flex items-center justify-between">
                     <h4 class="text-xs font-heading font-bold text-rose-900 dark:text-rose-400 flex items-center space-x-1.5">
-                        <i class="fa-solid fa-star text-amber-500"></i>
-                        <span>Bitácora y Calificación Personal</span>
+                        <i class="fa-solid fa-star text-amber-500"></i><span>Bitácora y Calificación Personal</span>
                     </h4>
                     <button onclick="clearPersonalRating()" class="text-[10px] font-mono text-stone-500 hover:text-rose-800 transition">Borrar nota</button>
                 </div>
-
                 <div class="space-y-1">
                     <div class="flex items-center justify-between text-xs font-mono">
                         <span class="text-stone-500">Nota del crítico: <strong id="starRatingText" class="text-amber-600">0.0</strong> / 10</span>
                     </div>
-                    <div id="starContainer" class="flex flex-wrap gap-1 items-center bg-stone-50 dark:bg-stone-900 p-2 journal-border">
-                    </div>
+                    <div id="starContainer" class="flex flex-wrap gap-1 items-center bg-stone-50 dark:bg-stone-900 p-2 journal-border"></div>
                 </div>
-
                 <div>
                     <textarea id="userPersonalReview" placeholder="Escribe tus notas al margen, impresiones o fecha de función..." rows="2" class="w-full bg-stone-50 dark:bg-stone-900 journal-border rounded-none p-2.5 text-xs font-serif placeholder-stone-400 focus:outline-none focus:border-rose-800 custom-scrollbar transition"></textarea>
                 </div>
+                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between pt-1 border-t border-stone-200 dark:border-stone-800 gap-2">
+                    <label class="flex items-center space-x-2 text-xs font-serif text-stone-600 dark:text-stone-400 cursor-pointer select-none">
+                        <!-- Casilla marcada por defecto -->
+                        <input type="checkbox" id="userPublicReviewCheck" checked class="rounded-none accent-rose-800">
+                        <span>Publicar en Diario Mural</span>
+                    </label>
+                    <div class="flex items-center space-x-2 w-full sm:w-auto justify-end">
+                        <span id="saveStatusIndicator" class="text-[11px] font-mono text-emerald-600 dark:text-emerald-400 hidden"><i class="fa-solid fa-check mr-1"></i>Guardado</span>
+                        <button onclick="savePersonalReview()" class="py-1.5 px-4 bg-stone-800 hover:bg-stone-700 dark:bg-stone-800 text-stone-100 journal-border text-xs font-mono font-semibold transition uppercase tracking-wider">Guardar Apunte</button>
+                    </div>
+                </div>
+            </div>
 
-                <button onclick="savePersonalReview()" class="w-full py-1.5 bg-stone-800 hover:bg-stone-700 dark:bg-stone-800 text-stone-100 journal-border text-xs font-mono font-semibold transition uppercase tracking-wider">
-                    Guardar Apunte en Bitácora
-                </button>
+            <!-- Críticas públicas de la comunidad para la película -->
+            <div class="space-y-2 border-t border-stone-200 dark:border-stone-800 pt-3">
+                <h4 class="text-xs font-heading font-bold uppercase tracking-wider flex items-center space-x-1.5 text-amber-700 dark:text-amber-500">
+                    <i class="fa-solid fa-newspaper text-xs"></i><span>Comentarios del Diario Mural</span>
+                </h4>
+                <div id="detailPublicReviewsContainer" class="space-y-2 max-h-36 overflow-y-auto custom-scrollbar pr-1"></div>
             </div>
 
             <div class="grid grid-cols-2 gap-3 pt-1">
                 <button onclick='openQuickListMenuFromDetail(event)' class="py-2 bg-stone-200 dark:bg-stone-800 hover:bg-stone-300 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 font-serif font-semibold rounded-none text-xs journal-border transition flex items-center justify-center space-x-1.5 uppercase tracking-wider">
-                    <i class="fa-solid fa-folder-plus"></i>
-                    <span>Fichar en Cuaderno</span>
+                    <i class="fa-solid fa-folder-plus"></i><span>Fichar en Cuaderno</span>
                 </button>
                 <button id="detailAddBtn" onclick="" class="py-2 bg-rose-900 hover:bg-rose-800 text-white font-serif font-semibold rounded-none text-xs journal-border transition flex items-center justify-center space-x-1.5 uppercase tracking-wider">
-                    <i class="fa-solid fa-plus"></i>
-                    <span>Añadir a Sorteo</span>
+                    <i class="fa-solid fa-plus"></i><span>Añadir a Sorteo</span>
                 </button>
             </div>
         </div>
     </div>
 
-    <!-- MODAL DE CONFIRMACIÓN DE BORRADO -->
     <div id="confirmModal" class="fixed inset-0 bg-stone-950/75 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
         <div class="bg-stone-50 dark:bg-stone-900 journal-border rounded-none max-w-sm w-full p-6 space-y-4 text-center relative shadow-2xl">
-            <div class="w-12 h-12 bg-rose-900/10 text-rose-800 rounded-full flex items-center justify-center mx-auto text-xl journal-border">
-                <i class="fa-solid fa-triangle-exclamation"></i>
-            </div>
+            <div class="w-12 h-12 bg-rose-900/10 text-rose-800 rounded-full flex items-center justify-center mx-auto text-xl journal-border"><i class="fa-solid fa-triangle-exclamation"></i></div>
             <div class="space-y-1">
                 <h3 class="text-base font-heading font-bold">¿Descartar Cuaderno?</h3>
                 <p id="confirmModalText" class="text-xs font-serif text-stone-500">Esta acción eliminará permanentemente la libreta.</p>
             </div>
             <div class="grid grid-cols-2 gap-2 pt-2">
-                <button onclick="closeConfirmModal()" class="py-2 bg-stone-200 dark:bg-stone-800 text-stone-800 dark:text-stone-300 font-mono font-semibold rounded-none text-xs journal-border transition">
-                    Conservar
-                </button>
-                <button id="confirmDeleteBtn" onclick="" class="py-2 bg-rose-900 hover:bg-rose-800 text-white font-mono font-semibold rounded-none text-xs journal-border transition">
-                    Descartar
-                </button>
+                <button onclick="closeConfirmModal()" class="py-2 bg-stone-200 dark:bg-stone-800 text-stone-800 dark:text-stone-300 font-mono font-semibold rounded-none text-xs journal-border transition">Conservar</button>
+                <button id="confirmDeleteBtn" onclick="" class="py-2 bg-rose-900 hover:bg-rose-800 text-white font-mono font-semibold rounded-none text-xs journal-border transition">Descartar</button>
             </div>
         </div>
     </div>
 
-    <!-- Modal Película Sorteada (Ganadora) -->
     <div id="winnerModal" class="fixed inset-0 bg-stone-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
         <div class="bg-stone-50 dark:bg-stone-900 journal-border rounded-none max-w-md w-full p-6 space-y-4 text-center relative shadow-2xl">
-            <button onclick="closeModal()" class="absolute top-4 right-4 text-stone-400 hover:text-stone-800 dark:hover:text-white text-lg p-1 transition">
-                <i class="fa-solid fa-xmark"></i>
-            </button>
-
-            <div class="inline-block bg-amber-600/10 text-amber-700 dark:text-amber-400 journal-border px-3 py-1 text-xs font-mono font-bold uppercase tracking-wider" id="modalTag">
-                🏆 Selección del Sorteo
-            </div>
-
+            <button onclick="closeModal()" class="absolute top-4 right-4 text-stone-400 hover:text-stone-800 dark:hover:text-white text-lg p-1 transition"><i class="fa-solid fa-xmark"></i></button>
+            <div class="inline-block bg-amber-600/10 text-amber-700 dark:text-amber-400 journal-border px-3 py-1 text-xs font-mono font-bold uppercase tracking-wider" id="modalTag">🏆 Selección del Sorteo</div>
             <div class="space-y-1">
                 <h2 id="modalTitle" class="text-2xl font-extrabold font-heading">Título</h2>
                 <div class="flex items-center justify-center space-x-3 text-xs font-mono text-stone-500">
@@ -519,1206 +424,160 @@
                     <span id="modalVotes"><i class="fa-solid fa-users mr-1"></i>120k votos</span>
                 </div>
             </div>
-
             <div class="relative w-32 mx-auto">
                 <img id="modalPoster" src="" alt="Poster" class="w-32 h-48 object-cover journal-border shadow-md">
-                <button id="winnerWatchedBtn" onclick="" class="absolute top-2 right-2 p-1.5 rounded-none text-xs backdrop-blur-md transition journal-border shadow-md">
-                    <i id="winnerWatchedIcon" class="fa-solid fa-eye"></i>
-                </button>
+                <button id="winnerWatchedBtn" onclick="" class="absolute top-2 right-2 p-1.5 rounded-none text-xs backdrop-blur-md transition journal-border shadow-md"><i id="winnerWatchedIcon" class="fa-solid fa-eye"></i></button>
             </div>
-
-            <div id="modalOverview" class="text-xs font-serif text-stone-700 dark:text-stone-300 text-left bg-stone-100 dark:bg-stone-950 p-3 journal-border max-h-28 overflow-y-auto custom-scrollbar leading-relaxed">
-                Sinopsis no disponible.
-            </div>
-
+            <div id="modalOverview" class="text-xs font-serif text-stone-700 dark:text-stone-300 text-left bg-stone-100 dark:bg-stone-950 p-3 journal-border max-h-28 overflow-y-auto custom-scrollbar leading-relaxed">Sinopsis no disponible.</div>
             <div class="grid grid-cols-2 gap-2 pt-1">
                 <button id="winnerAddListBtn" onclick="" class="py-2 bg-stone-200 dark:bg-stone-800 hover:bg-stone-300 text-stone-800 dark:text-stone-200 font-serif font-semibold rounded-none text-xs journal-border transition flex items-center justify-center space-x-1.5 uppercase tracking-wider">
-                    <i class="fa-solid fa-folder-plus"></i>
-                    <span>Fichar en Cuaderno</span>
+                    <i class="fa-solid fa-folder-plus"></i><span>Fichar en Cuaderno</span>
                 </button>
                 <button onclick="getRandomRecommendation()" class="py-2 bg-rose-900 hover:bg-rose-800 text-white font-serif font-semibold rounded-none text-xs journal-border transition flex items-center justify-center space-x-1.5 uppercase tracking-wider">
-                    <i class="fa-solid fa-shuffle"></i>
-                    <span>Sortear Otra</span>
+                    <i class="fa-solid fa-shuffle"></i><span>Sortear Otra</span>
                 </button>
             </div>
         </div>
     </div>
 
-    <!-- Modal Idioma -->
     <div id="settingsModal" class="fixed inset-0 bg-stone-950/75 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
         <div class="bg-stone-50 dark:bg-stone-900 journal-border rounded-none max-w-sm w-full p-6 space-y-4 text-left relative shadow-2xl">
-            <button onclick="toggleSettingsModal()" class="absolute top-4 right-4 text-stone-400 hover:text-stone-800 dark:hover:text-white text-lg p-1 transition">
-                <i class="fa-solid fa-xmark"></i>
-            </button>
-
+            <button onclick="toggleSettingsModal()" class="absolute top-4 right-4 text-stone-400 hover:text-stone-800 dark:hover:text-white text-lg p-1 transition"><i class="fa-solid fa-xmark"></i></button>
             <div class="flex items-center space-x-2 font-heading font-bold text-lg">
-                <i class="fa-solid fa-sliders text-rose-800"></i>
-                <span>Ajustes de Edición</span>
+                <i class="fa-solid fa-sliders text-rose-800"></i><span>Ajustes de Edición</span>
             </div>
-
             <div class="space-y-3 text-sm font-serif">
                 <div>
-                    <label class="block text-xs font-mono text-stone-500 mb-1">Idioma del catálogo</label>
-                    <select id="languageSelect" onchange="changeLanguage(this.value)" class="w-full bg-stone-100 dark:bg-stone-950 journal-border rounded-none px-3 py-2 text-xs font-serif focus:border-rose-800">
-                        <option value="es-MX" selected>Español Latino (América Latina)</option>
-                        <option value="en-US">Inglés / Título Original</option>
+                    <label class="block text-xs font-mono text-stone-500 mb-1">Nombre de Usuario (Firmante)</label>
+                    <input type="text" id="usernameInput" onchange="updateUsername(this.value)" placeholder="Tu nombre o seudónimo..." class="w-full bg-stone-100 dark:bg-stone-950 journal-border rounded-none px-3 py-2 text-xs font-serif focus:border-rose-800">
+                </div>
+                <div>
+                    <label class="block text-xs font-mono text-stone-500 mb-1">Idioma de Títulos y Carátulas</label>
+                    <select id="titleLangSelect" onchange="changeTitleLanguage(this.value)" class="w-full bg-stone-100 dark:bg-stone-950 journal-border rounded-none px-3 py-2 text-xs font-serif focus:border-rose-800">
+                        <option value="en-US" selected>Inglés / Título Original</option>
+                        <option value="es-MX">Español Latino (América Latina)</option>
                         <option value="es-ES">Español de España</option>
                     </select>
                 </div>
+                <div>
+                    <label class="block text-xs font-mono text-stone-500 mb-1">Idioma de Sinopsis e Interfaz</label>
+                    <select id="languageSelect" onchange="changeLanguage(this.value)" class="w-full bg-stone-100 dark:bg-stone-950 journal-border rounded-none px-3 py-2 text-xs font-serif focus:border-rose-800">
+                        <option value="es-MX" selected>Español Latino (América Latina)</option>
+                        <option value="es-ES">Español de España</option>
+                        <option value="en-US">Inglés</option>
+                    </select>
+                </div>
+            </div>
+            <button onclick="toggleSettingsModal()" class="w-full py-2 bg-stone-900 hover:bg-stone-800 text-white font-mono text-xs journal-border transition mt-2 uppercase tracking-wider">Guardar Ajustes</button>
+        </div>
+    </div>
+
+    <!-- Importar la lógica de JavaScript separada -->
+    <script src="script.js"></script>
+    <!-- PANEL LATERAL DE PERFIL (DRAWER) -->
+<div id="profileDrawerBackdrop" onclick="toggleProfileDrawer()" class="fixed inset-0 bg-stone-950/60 backdrop-blur-sm z-50 hidden transition-opacity duration-300"></div>
+
+<aside id="profileDrawer" class="fixed top-0 right-0 h-full w-80 sm:w-96 bg-stone-50 dark:bg-stone-950 journal-border border-l-2 z-50 transform translate-x-full transition-transform duration-300 ease-in-out flex flex-col justify-between shadow-2xl overflow-y-auto custom-scrollbar">
+    <div>
+        <!-- Cabecera del Panel -->
+        <div class="p-4 border-b-2 border-stone-800 dark:border-stone-700 flex items-center justify-between bg-stone-100 dark:bg-stone-900">
+            <div class="flex items-center space-x-2 font-heading font-bold text-xs uppercase tracking-widest text-rose-900 dark:text-rose-400">
+                <i class="fa-solid fa-id-card"></i>
+                <span>Ficha de Redacción</span>
+            </div>
+            <button onclick="toggleProfileDrawer()" class="text-stone-400 hover:text-stone-800 dark:hover:text-white p-1 text-base transition">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+
+        <!-- Tarjeta de Usuario / Perfil -->
+        <div class="p-5 border-b border-stone-200 dark:border-stone-800 space-y-4 text-center bg-stone-50 dark:bg-stone-950">
+            <div class="relative w-20 h-20 mx-auto group">
+                <img id="drawerProfileAvatar" src="https://api.dicebear.com/7.x/bottts/svg?seed=Dante" alt="Foto de perfil" class="w-20 h-20 rounded-full journal-border shadow-md object-cover bg-stone-200 dark:bg-stone-900">
+                <button onclick="changeAvatarPreset()" title="Cambiar avatar" class="absolute bottom-0 right-0 w-6 h-6 bg-rose-900 text-stone-100 rounded-full journal-border flex items-center justify-center text-[10px] hover:scale-110 transition">
+                    <i class="fa-solid fa-camera"></i>
+                </button>
+            </div>
+            <div class="space-y-0.5">
+                <h3 id="drawerUsername" class="font-heading font-bold text-lg text-stone-900 dark:text-stone-100">Dante</h3>
+                <span class="inline-block text-[10px] font-mono tracking-widest uppercase bg-rose-900/10 text-rose-800 dark:text-rose-400 journal-border px-2 py-0.5">Crítico Principal / Editor</span>
             </div>
 
-            <button onclick="toggleSettingsModal()" class="w-full py-2 bg-stone-900 hover:bg-stone-800 text-white font-mono text-xs journal-border transition mt-2 uppercase tracking-wider">
-                Guardar Ajustes
+            <!-- Resumen de Estadísticas del Cineasta -->
+            <div class="grid grid-cols-3 gap-2 pt-2 border-t border-stone-200 dark:border-stone-800 text-center font-mono">
+                <div class="bg-stone-100 dark:bg-stone-900 p-2 journal-border">
+                    <span id="statWatchedCount" class="block text-sm font-bold text-amber-600">0</span>
+                    <span class="text-[9px] text-stone-500 uppercase">Vistas</span>
+                </div>
+                <div class="bg-stone-100 dark:bg-stone-900 p-2 journal-border">
+                    <span id="statBitacoraCount" class="block text-sm font-bold text-rose-800 dark:text-rose-400">0</span>
+                    <span class="text-[9px] text-stone-500 uppercase">Apuntes</span>
+                </div>
+                <div class="bg-stone-100 dark:bg-stone-900 p-2 journal-border">
+                    <span id="statListsCount" class="block text-sm font-bold text-stone-700 dark:text-stone-300">0</span>
+                    <span class="text-[9px] text-stone-500 uppercase">Cuadernos</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Opciones y Menú de Perfil -->
+        <div class="p-4 space-y-1.5 font-serif text-xs">
+            <div class="text-[10px] font-mono text-stone-400 uppercase tracking-widest px-2 pb-1">Navegación Personal</div>
+            
+            <button onclick="switchRightTab('bitacora'); toggleProfileDrawer();" class="w-full text-left px-3 py-2 journal-border bg-stone-100 dark:bg-stone-900 hover:bg-stone-200 dark:hover:bg-stone-800 transition flex items-center justify-between group">
+                <span class="flex items-center space-x-2.5">
+                    <i class="fa-solid fa-star text-amber-500 w-4"></i>
+                    <span>Mi Bitácora de Reseñas</span>
+                </span>
+                <i class="fa-solid fa-chevron-right text-[10px] text-stone-400 group-hover:translate-x-0.5 transition"></i>
+            </button>
+
+            <button onclick="switchRightTab('mural'); toggleProfileDrawer();" class="w-full text-left px-3 py-2 journal-border bg-stone-100 dark:bg-stone-900 hover:bg-stone-200 dark:hover:bg-stone-800 transition flex items-center justify-between group">
+                <span class="flex items-center space-x-2.5">
+                    <i class="fa-solid fa-newspaper text-rose-800 dark:text-rose-400 w-4"></i>
+                    <span>Mis Publicaciones en Mural</span>
+                </span>
+                <i class="fa-solid fa-chevron-right text-[10px] text-stone-400 group-hover:translate-x-0.5 transition"></i>
+            </button>
+
+            <button onclick="switchRightTab('vistas'); toggleProfileDrawer();" class="w-full text-left px-3 py-2 journal-border bg-stone-100 dark:bg-stone-900 hover:bg-stone-200 dark:hover:bg-stone-800 transition flex items-center justify-between group">
+                <span class="flex items-center space-x-2.5">
+                    <i class="fa-solid fa-eye text-emerald-600 w-4"></i>
+                    <span>Histórico de Películas Vistas</span>
+                </span>
+                <i class="fa-solid fa-chevron-right text-[10px] text-stone-400 group-hover:translate-x-0.5 transition"></i>
+            </button>
+
+            <div class="text-[10px] font-mono text-stone-400 uppercase tracking-widest px-2 pt-3 pb-1">Colecciones y Clasificación</div>
+
+            <button onclick="scrollToLists(); toggleProfileDrawer();" class="w-full text-left px-3 py-2 journal-border bg-stone-100 dark:bg-stone-900 hover:bg-stone-200 dark:hover:bg-stone-800 transition flex items-center justify-between group">
+                <span class="flex items-center space-x-2.5">
+                    <i class="fa-solid fa-feather text-stone-700 dark:text-stone-300 w-4"></i>
+                    <span>Mis Cuadernos y Listas (TOP 10)</span>
+                </span>
+                <i class="fa-solid fa-chevron-right text-[10px] text-stone-400 group-hover:translate-x-0.5 transition"></i>
+            </button>
+
+            <button onclick="toggleSettingsModal(); toggleProfileDrawer();" class="w-full text-left px-3 py-2 journal-border bg-stone-100 dark:bg-stone-900 hover:bg-stone-200 dark:hover:bg-stone-800 transition flex items-center justify-between group">
+                <span class="flex items-center space-x-2.5">
+                    <i class="fa-solid fa-sliders text-stone-500 w-4"></i>
+                    <span>Ajustes de Perfil e Idioma</span>
+                </span>
+                <i class="fa-solid fa-chevron-right text-[10px] text-stone-400 group-hover:translate-x-0.5 transition"></i>
             </button>
         </div>
     </div>
 
-    <!-- Script Principal Completo -->
-    <script>
-        const TMDB_BEARER_TOKEN = "eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJjYjQwZTE1MTc4ZDYyNWY5N2Q5N2YxOWI1YTM5ZjE1NCIsIm5iZiI6MTc5MjEwMzE3Ni4wOTcsInN1YiI6IjZhZDE1MzA4MTg4NDAyOWU1ODE4ZTk3ZSIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.RUI9o-J4oFpIOCbXlLZ88KwBfN9WcWcf0bfOQUKq2dA";
-        
-        let currentLang = "es-MX"; 
-        let oscarMode = "WINNERS"; 
-        let moviesList = []; 
-        let fetchedResults = [];
-        let currentFilterPage = 1;
-        let totalFilterPages = 1;
-        let currentOscarList = [];
-        let recentRecommendations = [];
-        let watchedMovies = JSON.parse(localStorage.getItem('cine_watched_movies') || '[]');
-        let personalReviews = JSON.parse(localStorage.getItem('cine_personal_reviews') || '{}');
-        
-        let customLists = JSON.parse(localStorage.getItem('cine_custom_lists') || '[]');
-        let currentDetailMenuMovie = null;
-        let currentDetailMovie = null;
-        let currentWinnerMovie = null;
-        let selectedStarRating = 0;
-        let pendingListDeleteId = null;
-
-        let isSpinning = false;
-        let startAngle = 0;
-        let lastSegmentIndex = -1;
-        let soundEnabled = true;
-        let autocompleteDebounceTimer = null;
-        let fetchDebounceTimer = null;
-
-        const OSCAR_DATABASE = [
-            { oscarYear: 2024, isWinner: true,  tmdbId: 872585, defaultTitle: "Oppenheimer" },
-            { oscarYear: 2024, isWinner: false, tmdbId: 346698, defaultTitle: "Barbie" },
-            { oscarYear: 2024, isWinner: false, tmdbId: 466420, defaultTitle: "Killers of the Flower Moon" },
-            { oscarYear: 2024, isWinner: false, tmdbId: 792307, defaultTitle: "Poor Things" },
-            { oscarYear: 2024, isWinner: false, tmdbId: 915935, defaultTitle: "Anatomy of a Fall" },
-            { oscarYear: 2024, isWinner: false, tmdbId: 666277, defaultTitle: "Past Lives" },
-            { oscarYear: 2023, isWinner: true,  tmdbId: 545611, defaultTitle: "Everything Everywhere All at Once" },
-            { oscarYear: 2023, isWinner: false, tmdbId: 361743, defaultTitle: "Top Gun: Maverick" },
-            { oscarYear: 2023, isWinner: false, tmdbId: 76600,  defaultTitle: "Avatar: The Way of Water" },
-            { oscarYear: 2023, isWinner: false, tmdbId: 674324, defaultTitle: "The Banshees of Inisherin" },
-            { oscarYear: 2022, isWinner: true,  tmdbId: 601498, defaultTitle: "CODA" },
-            { oscarYear: 2022, isWinner: false, tmdbId: 438631, defaultTitle: "Dune" },
-            { oscarYear: 2022, isWinner: false, tmdbId: 600583, defaultTitle: "The Power of the Dog" },
-            { oscarYear: 2021, isWinner: true,  tmdbId: 581734, defaultTitle: "Nomadland" },
-            { oscarYear: 2021, isWinner: false, tmdbId: 530915, defaultTitle: "1917" },
-            { oscarYear: 2021, isWinner: false, tmdbId: 522162, defaultTitle: "Jojo Rabbit" },
-            { oscarYear: 2020, isWinner: true,  tmdbId: 496243, defaultTitle: "Parasite" },
-            { oscarYear: 2020, isWinner: false, tmdbId: 475557, defaultTitle: "Joker" },
-            { oscarYear: 2020, isWinner: false, tmdbId: 398978, defaultTitle: "The Irishman" },
-            { oscarYear: 2019, isWinner: true,  tmdbId: 490132, defaultTitle: "Green Book" },
-            { oscarYear: 2019, isWinner: false, tmdbId: 424694, defaultTitle: "Bohemian Rhapsody" },
-            { oscarYear: 2018, isWinner: true,  tmdbId: 399055, defaultTitle: "The Shape of Water" },
-            { oscarYear: 2017, isWinner: true,  tmdbId: 376867, defaultTitle: "Moonlight" },
-            { oscarYear: 2017, isWinner: false, tmdbId: 313369, defaultTitle: "La La Land" },
-            { oscarYear: 2016, isWinner: true,  tmdbId: 299534, defaultTitle: "Spotlight" },
-            { oscarYear: 2015, isWinner: true,  tmdbId: 225886, defaultTitle: "Birdman" },
-            { oscarYear: 2014, isWinner: true,  tmdbId: 76203,  defaultTitle: "12 Years a Slave" },
-            { oscarYear: 2013, isWinner: true,  tmdbId: 68734,  defaultTitle: "Argo" },
-            { oscarYear: 2012, isWinner: true,  tmdbId: 74643,  defaultTitle: "The Artist" },
-            { oscarYear: 2011, isWinner: true,  tmdbId: 45269,  defaultTitle: "The King's Speech" },
-            { oscarYear: 2010, isWinner: true,  tmdbId: 12162,  defaultTitle: "The Hurt Locker" },
-            { oscarYear: 2009, isWinner: true,  tmdbId: 44214,  defaultTitle: "Slumdog Millionaire" },
-            { oscarYear: 2008, isWinner: true,  tmdbId: 6977,   defaultTitle: "No Country for Old Men" },
-            { oscarYear: 2007, isWinner: true,  tmdbId: 1422,   defaultTitle: "The Departed" },
-            { oscarYear: 2006, isWinner: true,  tmdbId: 1669,   defaultTitle: "Crash" },
-            { oscarYear: 2005, isWinner: true,  tmdbId: 70,     defaultTitle: "Million Dollar Baby" },
-            { oscarYear: 2004, isWinner: true,  tmdbId: 122,    defaultTitle: "The Lord of the Rings: The Return of the King" },
-            { oscarYear: 2003, isWinner: true,  tmdbId: 1911,   defaultTitle: "Chicago" },
-            { oscarYear: 2002, isWinner: true,  tmdbId: 475,    defaultTitle: "A Beautiful Mind" },
-            { oscarYear: 2001, isWinner: true,  tmdbId: 98,     defaultTitle: "Gladiator" },
-            { oscarYear: 2000, isWinner: true,  tmdbId: 14,     defaultTitle: "American Beauty" }
-        ];
-
-        let audioCtx = null;
-        function getAudioContext() {
-            if (!audioCtx) {
-                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            }
-            if (audioCtx.state === 'suspended') {
-                audioCtx.resume();
-            }
-            return audioCtx;
-        }
-
-        function playTickSound() {
-            if (!soundEnabled) return;
-            try {
-                const ctx = getAudioContext();
-                const osc = ctx.createOscillator();
-                const gain = ctx.createGain();
-
-                osc.type = 'triangle';
-                osc.frequency.setValueAtTime(600, ctx.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(120, ctx.currentTime + 0.04);
-
-                gain.gain.setValueAtTime(0.15, ctx.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.04);
-
-                osc.connect(gain);
-                gain.connect(ctx.destination);
-
-                osc.start();
-                osc.stop(ctx.currentTime + 0.04);
-
-                const pointer = document.getElementById('roulettePointer');
-                pointer.style.transform = 'translateY(-4px)';
-                setTimeout(() => pointer.style.transform = 'translateY(0)', 50);
-            } catch (e) {}
-        }
-
-        function playVictorySound() {
-            if (!soundEnabled) return;
-            try {
-                const ctx = getAudioContext();
-                const notes = [261.63, 329.63, 392.00, 523.25, 659.25, 783.99];
-                notes.forEach((freq, idx) => {
-                    const osc = ctx.createOscillator();
-                    const gain = ctx.createGain();
-
-                    osc.type = 'sine';
-                    osc.frequency.setValueAtTime(freq, ctx.currentTime + idx * 0.08);
-
-                    gain.gain.setValueAtTime(0.1, ctx.currentTime + idx * 0.08);
-                    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + idx * 0.08 + 0.5);
-
-                    osc.connect(gain);
-                    gain.connect(ctx.destination);
-
-                    osc.start(ctx.currentTime + idx * 0.08);
-                    osc.stop(ctx.currentTime + idx * 0.08 + 0.5);
-                });
-            } catch (e) {}
-        }
-
-        function toggleTheme() {
-            const html = document.documentElement;
-            const themeIcon = document.getElementById('themeIcon');
-            if (html.classList.contains('dark')) {
-                html.classList.remove('dark');
-                localStorage.setItem('cine_theme', 'light');
-                themeIcon.className = "fa-solid fa-sun text-xs text-amber-600";
-            } else {
-                html.classList.add('dark');
-                localStorage.setItem('cine_theme', 'dark');
-                themeIcon.className = "fa-solid fa-moon text-xs text-amber-400";
-            }
-            drawWheel();
-        }
-
-        if (localStorage.getItem('cine_theme') === 'light') {
-            document.documentElement.classList.remove('dark');
-            document.getElementById('themeIcon').className = "fa-solid fa-sun text-xs text-amber-600";
-        }
-
-        function toggleMute() {
-            soundEnabled = !soundEnabled;
-            const icon = document.getElementById('muteIcon');
-            const text = document.getElementById('muteText');
-            if (soundEnabled) {
-                icon.className = "fa-solid fa-volume-high text-rose-800 dark:text-rose-500";
-                text.innerText = "Sonido On";
-            } else {
-                icon.className = "fa-solid fa-volume-xmark text-stone-400";
-                text.innerText = "Muteado";
-            }
-        }
-
-        function toggleSettingsModal() {
-            const modal = document.getElementById('settingsModal');
-            modal.classList.toggle('hidden');
-        }
-
-        function changeLanguage(newLang) {
-            currentLang = newLang;
-            resetAndFetchFilteredMovies();
-            loadOscarMovies();
-        }
-
-        function handleRangeInput() {
-            let minVal = parseFloat(document.getElementById('minRatingInput').value);
-            let maxVal = parseFloat(document.getElementById('maxRatingInput').value);
-
-            if (minVal > maxVal) {
-                let temp = minVal;
-                minVal = maxVal;
-                maxVal = temp;
-                document.getElementById('minRatingInput').value = minVal;
-                document.getElementById('maxRatingInput').value = maxVal;
-            }
-
-            document.getElementById('minRatingVal').innerText = minVal.toFixed(1);
-            document.getElementById('maxRatingVal').innerText = maxVal.toFixed(1);
-        }
-
-        function debounceFetchFilteredMovies() {
-            clearTimeout(fetchDebounceTimer);
-            fetchDebounceTimer = setTimeout(() => {
-                resetAndFetchFilteredMovies();
-            }, 400);
-        }
-
-        function toggleWatchedStatus(movieId, event) {
-            if (event) event.stopPropagation();
-            
-            const index = watchedMovies.indexOf(movieId);
-            if (index > -1) {
-                watchedMovies.splice(index, 1);
-            } else {
-                watchedMovies.push(movieId);
-            }
-
-            localStorage.setItem('cine_watched_movies', JSON.stringify(watchedMovies));
-            
-            renderResultsGrid();
-            renderOscarList();
-            renderCustomLists();
-            
-            if (currentDetailMovie && currentDetailMovie.id === movieId) {
-                updateDetailModalWatchedButton(movieId);
-            }
-        }
-
-        function updateDetailModalWatchedButton(movieId) {
-            const isWatched = watchedMovies.includes(movieId);
-            const btn = document.getElementById('detailWatchedBtn');
-            const icon = document.getElementById('detailWatchedIcon');
-
-            if (isWatched) {
-                btn.className = "absolute top-2 right-2 bg-emerald-700/20 text-emerald-700 dark:text-emerald-400 journal-border p-1.5 text-xs transition shadow-md";
-                icon.className = "fa-solid fa-check";
-            } else {
-                btn.className = "absolute top-2 right-2 bg-stone-50 dark:bg-stone-900 text-stone-500 hover:text-stone-900 dark:hover:text-white journal-border p-1.5 text-xs transition shadow-md";
-                icon.className = "fa-solid fa-eye-slash";
-            }
-            btn.onclick = (e) => toggleWatchedStatus(movieId, e);
-        }
-
-        function openQuickListMenu(movie, event) {
-            if (event) event.stopPropagation();
-            currentDetailMenuMovie = typeof movie === 'string' ? JSON.parse(movie) : movie;
-
-            const dropdown = document.getElementById('quickListDropdown');
-            const container = document.getElementById('quickListItemsContainer');
-            container.innerHTML = '';
-
-            if (customLists.length === 0) {
-                container.innerHTML = `<div class="text-[10px] font-serif text-stone-400 italic p-2 text-center">No hay cuadernos creados.</div>`;
-            } else {
-                customLists.forEach(list => {
-                    const alreadyIn = list.movies.some(m => m.id === currentDetailMenuMovie.id);
-                    const item = document.createElement('button');
-                    item.className = `w-full text-left px-2.5 py-1.5 rounded-none text-xs flex items-center justify-between transition font-serif ${alreadyIn ? 'text-rose-900 dark:text-rose-400 bg-stone-200 dark:bg-stone-800' : 'text-stone-700 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-stone-800'}`;
-                    item.innerHTML = `<span class="truncate">${list.name}</span> ${alreadyIn ? '<i class="fa-solid fa-check text-[10px]"></i>' : ''}`;
-                    item.onclick = (e) => {
-                        e.stopPropagation();
-                        if (!alreadyIn) {
-                            addMovieToCustomList(list.id, currentDetailMenuMovie);
-                        }
-                        dropdown.classList.add('hidden');
-                    };
-                    container.appendChild(item);
-                });
-            }
-
-            const targetBtn = event ? event.currentTarget : document.body;
-            const rect = targetBtn.getBoundingClientRect();
-            
-            dropdown.style.top = `${Math.min(rect.bottom + 4, window.innerHeight - 200)}px`;
-            dropdown.style.left = `${Math.max(10, Math.min(rect.left, window.innerWidth - 220))}px`;
-            dropdown.classList.remove('hidden');
-        }
-
-        function closeQuickListDropdown() {
-            document.getElementById('quickListDropdown').classList.add('hidden');
-        }
-
-        function openQuickListMenuFromDetail(event) {
-            if (currentDetailMovie) {
-                openQuickListMenu(currentDetailMovie, event);
-            }
-        }
-
-        window.addEventListener('click', (event) => {
-            const dropdown = document.getElementById('quickListDropdown');
-            if (dropdown && !dropdown.contains(event.target) && !event.target.closest('button[onclick*="openQuickListMenu"]')) {
-                dropdown.classList.add('hidden');
-            }
-        });
-
-        function renderStarSelector(val) {
-            selectedStarRating = val || 0;
-            const container = document.getElementById('starContainer');
-            container.innerHTML = '';
-            document.getElementById('starRatingText').innerText = selectedStarRating.toFixed(1);
-
-            for (let i = 1; i <= 10; i++) {
-                const starWrapper = document.createElement('div');
-                starWrapper.className = "relative cursor-pointer text-sm px-0.5 text-stone-300 dark:text-stone-700";
-                
-                const isFull = selectedStarRating >= i;
-                const isHalf = selectedStarRating === i - 0.5;
-
-                let iconClass = "fa-regular fa-star text-stone-300 dark:text-stone-700";
-                if (isFull) {
-                    iconClass = "fa-solid fa-star text-amber-600";
-                } else if (isHalf) {
-                    iconClass = "fa-solid fa-star-half-stroke text-amber-600";
-                }
-
-                starWrapper.innerHTML = `<i class="${iconClass}"></i>`;
-
-                starWrapper.onclick = (e) => {
-                    const rect = starWrapper.getBoundingClientRect();
-                    const clickX = e.clientX - rect.left;
-                    if (clickX < rect.width / 2) {
-                        selectedStarRating = i - 0.5;
-                    } else {
-                        selectedStarRating = i;
-                    }
-                    renderStarSelector(selectedStarRating);
-                };
-
-                container.appendChild(starWrapper);
-            }
-        }
-
-        function clearPersonalRating() {
-            selectedStarRating = 0;
-            renderStarSelector(0);
-        }
-
-        function savePersonalReview() {
-            if (!currentDetailMovie) return;
-            const reviewInput = document.getElementById('userPersonalReview').value.trim();
-
-            personalReviews[currentDetailMovie.id] = {
-                rating: selectedStarRating > 0 ? selectedStarRating : null,
-                review: reviewInput
-            };
-
-            localStorage.setItem('cine_personal_reviews', JSON.stringify(personalReviews));
-            alert("¡Apunte guardado en bitácora!");
-            renderResultsGrid();
-        }
-
-        function createNewList() {
-            const input = document.getElementById('newListInput');
-            const name = input.value.trim();
-            if (!name) return;
-
-            if (customLists.some(l => l.name.toLowerCase() === name.toLowerCase())) {
-                alert("Ya existe un cuaderno con ese nombre.");
-                return;
-            }
-
-            customLists.push({ id: Date.now(), name: name, movies: [] });
-            saveAndRenderCustomLists();
-            input.value = '';
-        }
-
-        function promptDeleteCustomList(listId) {
-            pendingListDeleteId = listId;
-            const list = customLists.find(l => l.id === listId);
-            document.getElementById('confirmModalText').innerText = `Estás a punto de descartar el cuaderno "${list ? list.name : ''}".`;
-            document.getElementById('confirmDeleteBtn').onclick = executeDeleteCustomList;
-            document.getElementById('confirmModal').classList.remove('hidden');
-        }
-
-        function closeConfirmModal() {
-            document.getElementById('confirmModal').classList.add('hidden');
-            pendingListDeleteId = null;
-        }
-
-        function executeDeleteCustomList() {
-            if (pendingListDeleteId !== null) {
-                customLists = customLists.filter(l => l.id !== pendingListDeleteId);
-                saveAndRenderCustomLists();
-                closeConfirmModal();
-            }
-        }
-
-        function addMovieToCustomList(listId, movie) {
-            const list = customLists.find(l => l.id === listId);
-            if (list) {
-                if (!list.movies.some(m => m.id === movie.id)) {
-                    list.movies.push(movie);
-                    saveAndRenderCustomLists();
-                }
-            }
-        }
-
-        function removeMovieFromCustomList(listId, movieId) {
-            const list = customLists.find(l => l.id === listId);
-            if (list) {
-                list.movies = list.movies.filter(m => m.id !== movieId);
-                saveAndRenderCustomLists();
-            }
-        }
-
-        function loadListToRoulette(listId) {
-            const list = customLists.find(l => l.id === listId);
-            if (list && list.movies.length > 0) {
-                list.movies.forEach(m => {
-                    if (!watchedMovies.includes(m.id) && !moviesList.some(existing => existing.id === m.id)) {
-                        moviesList.push(m);
-                    }
-                });
-                updateUI();
-            } else {
-                alert("Este cuaderno está vacío.");
-            }
-        }
-
-        function saveAndRenderCustomLists() {
-            localStorage.setItem('cine_custom_lists', JSON.stringify(customLists));
-            renderCustomLists();
-        }
-
-        function renderCustomLists() {
-            const container = document.getElementById('customListsContainer');
-            if (!container) return;
-            container.innerHTML = '';
-
-            if (customLists.length === 0) {
-                container.innerHTML = `<div class="text-center py-6 text-stone-400 text-xs font-serif italic">Sin cuadernos creados.</div>`;
-                return;
-            }
-
-            customLists.forEach(list => {
-                const item = document.createElement('div');
-                item.className = "bg-stone-100 dark:bg-stone-950 journal-border p-2.5 space-y-2";
-                
-                let moviesHtml = '';
-                if (list.movies.length === 0) {
-                    moviesHtml = `<div class="text-[10px] font-serif text-stone-400 italic">Libreta vacía.</div>`;
-                } else {
-                    list.movies.forEach(m => {
-                        const isWatched = watchedMovies.includes(m.id);
-                        moviesHtml += `
-                            <div class="flex items-center justify-between bg-stone-50 dark:bg-stone-900 px-2 py-1 journal-border text-xs font-serif text-stone-700 dark:text-stone-300">
-                                <span class="truncate max-w-[110px] ${isWatched ? 'line-through opacity-50' : ''}">${m.title}</span>
-                                <div class="flex items-center space-x-1.5">
-                                    <button onclick='toggleWatchedStatus(${m.id}, event)' title="Marcar vista" class="text-[10px] ${isWatched ? 'text-emerald-600 font-bold' : 'text-stone-400 hover:text-stone-900 dark:hover:text-white'}"><i class="fa-solid ${isWatched ? 'fa-check' : 'fa-eye-slash'}"></i></button>
-                                    <button onclick='openDetailModal(${JSON.stringify(m).replace(/'/g, "&apos;")}, "Cuaderno: ${list.name}")' title="Ver reseña" class="text-[10px] text-stone-400 hover:text-stone-900 dark:hover:text-white"><i class="fa-solid fa-circle-info"></i></button>
-                                    <button onclick="removeMovieFromCustomList(${list.id}, ${m.id})" title="Quitar" class="text-[10px] text-stone-400 hover:text-rose-800"><i class="fa-solid fa-xmark"></i></button>
-                                </div>
-                            </div>
-                        `;
-                    });
-                }
-
-                item.innerHTML = `
-                    <div class="flex items-center justify-between border-b border-stone-200 dark:border-stone-800 pb-1.5">
-                        <h4 class="text-xs font-heading font-bold text-rose-900 dark:text-rose-400 truncate max-w-[110px]">${list.name} (${list.movies.length})</h4>
-                        <div class="flex items-center space-x-1">
-                            <button onclick="loadListToRoulette(${list.id})" title="Cargar a sorteo" class="text-[10px] font-mono bg-stone-200 dark:bg-stone-800 hover:bg-stone-300 px-2 py-0.5 journal-border transition">
-                                <i class="fa-solid fa-rotate"></i> Sorteo
-                            </button>
-                            <button onclick="promptDeleteCustomList(${list.id})" title="Descartar" class="text-stone-400 hover:text-rose-800 text-xs px-1 transition"><i class="fa-solid fa-trash"></i></button>
-                        </div>
-                    </div>
-                    <div class="space-y-1 max-h-28 overflow-y-auto custom-scrollbar pr-1">
-                        ${moviesHtml}
-                    </div>
-                `;
-                container.appendChild(item);
-            });
-        }
-
-        const colorsDark = [
-            "#50101d", "#1e293b", "#78350f", "#334155", 
-            "#4c0519", "#0f172a", "#713f12", "#1e1b4b"
-        ];
-        const colorsLight = [
-            "#881337", "#3b82f6", "#b45309", "#10b981", 
-            "#7c2d12", "#0ea5e9", "#ca8a04", "#4f46e5"
-        ];
-
-        window.onload = async () => {
-            const initialIds = [872585, 98]; 
-            moviesList = [];
-
-            for (const id of initialIds) {
-                const mData = await fetchFromTMDb(`/movie/${id}?language=${currentLang}`);
-                if (mData) {
-                    moviesList.push({
-                        id: mData.id,
-                        title: mData.title,
-                        rating: mData.vote_average ? mData.vote_average.toFixed(1) : '8.0',
-                        votes: mData.vote_count > 1000 ? (mData.vote_count/1000).toFixed(0) + 'k' : mData.vote_count,
-                        poster: mData.poster_path ? `https://image.tmdb.org/t/p/w500${mData.poster_path}` : 'https://via.placeholder.com/150',
-                        overview: mData.overview || 'Sin descripción disponible.'
-                    });
-                }
-            }
-
-            updateUI();
-            resetAndFetchFilteredMovies();
-            loadOscarMovies();
-            renderCustomLists();
-        };
-
-        async function fetchFromTMDb(endpoint) {
-            try {
-                const response = await fetch(`https://api.themoviedb.org/3${endpoint}`, {
-                    method: 'GET',
-                    headers: {
-                        'Authorization': `Bearer ${TMDB_BEARER_TOKEN}`,
-                        'Content-Type': 'application/json;charset=utf-8'
-                    }
-                });
-                if (!response.ok) throw new Error("Error en TMDb API");
-                return await response.json();
-            } catch (err) {
-                console.error("Fallo TMDb API:", err);
-                return null;
-            }
-        }
-
-        function resetAndFetchFilteredMovies() {
-            currentFilterPage = 1;
-            fetchedResults = [];
-            fetchMultipleFilteredPages();
-        }
-
-        function loadNextFilteredPage() {
-            if (currentFilterPage < totalFilterPages) {
-                currentFilterPage++;
-                fetchFilteredBatch(currentFilterPage);
-            }
-        }
-
-        async function fetchMultipleFilteredPages() {
-            document.getElementById('catalogCountIndicator').innerText = "Cargando...";
-            const genre = document.getElementById('genreSelect').value;
-            const minRating = parseFloat(document.getElementById('minRatingInput').value);
-            const maxRating = parseFloat(document.getElementById('maxRatingInput').value);
-            const sortBy = document.getElementById('sortBySelect').value;
-            const minVotes = document.getElementById('minVotes').value;
-
-            let baseEndpoint = `/discover/movie?language=${currentLang}&sort_by=${sortBy}&vote_average.gte=${minRating}&vote_average.lte=${maxRating}&vote_count.gte=${minVotes}`;
-            if (genre) baseEndpoint += `&with_genres=${genre}`;
-
-            const pagePromises = [1, 2, 3].map(page => fetchFromTMDb(`${baseEndpoint}&page=${page}`));
-            const responses = await Promise.all(pagePromises);
-
-            fetchedResults = [];
-            responses.forEach((data, index) => {
-                if (data && data.results) {
-                    if (index === 0) totalFilterPages = data.total_pages || 1;
-                    const mapped = data.results.map(m => ({
-                        id: m.id,
-                        title: m.title,
-                        rating: m.vote_average ? m.vote_average.toFixed(1) : 'N/A',
-                        votes: m.vote_count > 1000 ? (m.vote_count/1000).toFixed(0) + 'k' : (m.vote_count || 0),
-                        poster: m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : 'https://via.placeholder.com/150',
-                        overview: m.overview || 'Sin descripción disponible.'
-                    }));
-                    fetchedResults = [...fetchedResults, ...mapped];
-                }
-            });
-
-            currentFilterPage = 3;
-            renderResultsGrid();
-            document.getElementById('catalogCountIndicator').innerText = `${fetchedResults.length} obras`;
-
-            const loadMoreBtn = document.getElementById('loadMoreBtn');
-            if (currentFilterPage < totalFilterPages) {
-                loadMoreBtn.classList.remove('hidden');
-            } else {
-                loadMoreBtn.classList.add('hidden');
-            }
-        }
-
-        async function fetchFilteredBatch(page) {
-            const genre = document.getElementById('genreSelect').value;
-            const minRating = parseFloat(document.getElementById('minRatingInput').value);
-            const maxRating = parseFloat(document.getElementById('maxRatingInput').value);
-            const sortBy = document.getElementById('sortBySelect').value;
-            const minVotes = document.getElementById('minVotes').value;
-
-            let endpoint = `/discover/movie?language=${currentLang}&sort_by=${sortBy}&vote_average.gte=${minRating}&vote_average.lte=${maxRating}&vote_count.gte=${minVotes}&page=${page}`;
-            if (genre) endpoint += `&with_genres=${genre}`;
-
-            const data = await fetchFromTMDb(endpoint);
-            if (data && data.results) {
-                const newMovies = data.results.map(m => ({
-                    id: m.id,
-                    title: m.title,
-                    rating: m.vote_average ? m.vote_average.toFixed(1) : 'N/A',
-                    votes: m.vote_count > 1000 ? (m.vote_count/1000).toFixed(0) + 'k' : (m.vote_count || 0),
-                    poster: m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : 'https://via.placeholder.com/150',
-                    overview: m.overview || 'Sin descripción disponible.'
-                }));
-
-                fetchedResults = [...fetchedResults, ...newMovies];
-                renderResultsGrid();
-                document.getElementById('catalogCountIndicator').innerText = `${fetchedResults.length} obras`;
-
-                const loadMoreBtn = document.getElementById('loadMoreBtn');
-                if (currentFilterPage < totalFilterPages) {
-                    loadMoreBtn.classList.remove('hidden');
-                } else {
-                    loadMoreBtn.classList.add('hidden');
-                }
-            }
-        }
-
-        function applyCatalogFilters() {
-            renderResultsGrid();
-        }
-
-        function renderResultsGrid() {
-            const container = document.getElementById('resultsGrid');
-            container.innerHTML = '';
-
-            const textFilter = document.getElementById('catalogSearchFilter').value.toLowerCase().trim();
-            const watchedFilter = document.getElementById('watchedFilterSelect').value;
-
-            let filtered = fetchedResults.filter(movie => {
-                const isWatched = watchedMovies.includes(movie.id);
-                if (watchedFilter === 'UNWATCHED' && isWatched) return false;
-                if (watchedFilter === 'WATCHED' && !isWatched) return false;
-                if (textFilter && !movie.title.toLowerCase().includes(textFilter)) return false;
-                return true;
-            });
-
-            if (filtered.length === 0) {
-                container.innerHTML = `<div class="col-span-full text-center py-8 font-serif text-stone-400 text-xs italic">No se hallaron obras con este filtro.</div>`;
-                return;
-            }
-
-            filtered.forEach(movie => {
-                const isWatched = watchedMovies.includes(movie.id);
-                const pReview = personalReviews[movie.id];
-                const card = document.createElement('div');
-                card.className = `bg-stone-50 dark:bg-stone-900 journal-border p-2 flex flex-col justify-between transition group relative cursor-pointer shadow-sm ${isWatched ? 'opacity-60' : 'hover:border-rose-900'}`;
-                
-                card.onclick = (e) => {
-                    if (!e.target.closest('button')) {
-                        openDetailModal(movie, "Reseña de Catálogo");
-                    }
-                };
-
-                const watchedBtnClass = isWatched ? "bg-emerald-700/20 text-emerald-700 dark:text-emerald-400 journal-border" : "bg-stone-50 dark:bg-stone-900 text-stone-400 hover:text-stone-900 dark:hover:text-white journal-border";
-                const watchedIcon = isWatched ? "fa-check" : "fa-eye-slash";
-
-                let reviewBadge = '';
-                if (pReview && pReview.rating) {
-                    reviewBadge = `<div class="absolute top-1.5 left-1.5 bg-stone-900/90 text-stone-100 px-1.5 py-0.5 text-[9px] font-mono font-bold flex items-center space-x-1 journal-border">
-                        <i class="fa-solid fa-star text-amber-500"></i>
-                        <span>Tu: ${pReview.rating}</span>
-                    </div>`;
-                }
-
-                card.innerHTML = `
-                    <div class="relative aspect-[2/3] w-full overflow-hidden journal-border bg-stone-200 dark:bg-stone-950 mb-2">
-                        <img src="${movie.poster}" onerror="this.src='https://via.placeholder.com/150'" class="w-full h-full object-cover group-hover:scale-105 transition duration-300">
-                        ${reviewBadge}
-                        <button onclick='toggleWatchedStatus(${movie.id}, event)' title="Marcar vista" class="${watchedBtnClass} absolute top-1.5 right-1.5 w-6 h-6 flex items-center justify-center text-[10px] transition shadow-sm">
-                            <i class="fa-solid ${watchedIcon}"></i>
-                        </button>
-                        <div class="absolute bottom-1.5 left-1.5 bg-stone-950/80 px-1.5 py-0.5 text-[9px] text-amber-500 font-mono font-bold flex items-center space-x-1">
-                            <i class="fa-solid fa-star"></i>
-                            <span>${movie.rating}</span>
-                        </div>
-                    </div>
-                    <div class="space-y-1.5 flex-grow flex flex-col justify-between">
-                        <div>
-                            <h5 class="text-xs font-serif font-semibold group-hover:text-rose-800 dark:group-hover:text-rose-400 transition truncate">${movie.title}</h5>
-                        </div>
-                        <div class="grid grid-cols-2 gap-1 mt-1">
-                            <button onclick='openQuickListMenu(${JSON.stringify(movie).replace(/'/g, "&apos;")}, event)' title="Fichar" class="py-1 bg-stone-200 dark:bg-stone-800 hover:bg-stone-300 text-stone-800 dark:text-stone-200 text-[10px] font-mono font-semibold transition flex items-center justify-center space-x-1 journal-border uppercase">
-                                <i class="fa-solid fa-folder-plus"></i>
-                                <span>Libreta</span>
-                            </button>
-                            <button onclick='addMovieToRoulette(${JSON.stringify(movie).replace(/'/g, "&apos;")})' class="py-1 bg-rose-900/10 hover:bg-rose-900 text-rose-900 hover:text-stone-100 text-[10px] font-mono font-semibold transition flex items-center justify-center space-x-1 journal-border uppercase">
-                                <i class="fa-solid fa-plus"></i>
-                                <span>Sorteo</span>
-                            </button>
-                        </div>
-                    </div>
-                `;
-                container.appendChild(card);
-            });
-        }
-
-        async function loadOscarMovies() {
-            const container = document.getElementById('oscarListContainer');
-            container.innerHTML = `<div class="text-center py-4 text-stone-400 text-xs font-mono"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Consultando archivo...</div>`;
-
-            let filteredDB = OSCAR_DATABASE;
-            if (oscarMode === 'WINNERS') filteredDB = filteredDB.filter(m => m.isWinner);
-
-            const promises = filteredDB.slice(0, 15).map(async (item) => {
-                const mData = await fetchFromTMDb(`/movie/${item.tmdbId}?language=${currentLang}`);
-                if (mData) {
-                    return {
-                        id: mData.id,
-                        oscarYear: item.oscarYear,
-                        isWinner: item.isWinner,
-                        title: mData.title || item.defaultTitle,
-                        rating: mData.vote_average ? mData.vote_average.toFixed(1) : '8.0',
-                        votes: mData.vote_count > 1000 ? (mData.vote_count/1000).toFixed(0) + 'k' : mData.vote_count,
-                        poster: mData.poster_path ? `https://image.tmdb.org/t/p/w500${mData.poster_path}` : 'https://via.placeholder.com/150',
-                        overview: mData.overview || 'Película galardonada.'
-                    };
-                }
-                return null;
-            });
-
-            const results = await Promise.all(promises);
-            currentOscarList = results.filter(m => m !== null);
-            renderOscarList();
-        }
-
-        function setOscarFilterMode(mode) {
-            oscarMode = mode;
-            const btnWinners = document.getElementById('btnFilterWinners');
-            const btnAll = document.getElementById('btnFilterAll');
-
-            if (mode === 'WINNERS') {
-                btnWinners.className = "py-1 rounded-none text-xs font-serif font-semibold bg-amber-600 text-stone-50 transition";
-                btnAll.className = "py-1 rounded-none text-xs font-serif font-semibold text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white transition";
-            } else {
-                btnAll.className = "py-1 rounded-none text-xs font-serif font-semibold bg-amber-600 text-stone-50 transition";
-                btnWinners.className = "py-1 rounded-none text-xs font-serif font-semibold text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white transition";
-            }
-            loadOscarMovies();
-        }
-
-        function renderOscarList() {
-            const container = document.getElementById('oscarListContainer');
-            container.innerHTML = '';
-
-            currentOscarList.forEach(movie => {
-                const isWatched = watchedMovies.includes(movie.id);
-                const item = document.createElement('div');
-                item.className = `flex items-center space-x-2.5 p-2 journal-border transition cursor-pointer ${isWatched ? 'bg-stone-200/50 dark:bg-stone-950/30 opacity-60' : 'bg-stone-50 dark:bg-stone-950 hover:border-amber-600'}`;
-                
-                item.onclick = (e) => {
-                    if (!e.target.closest('button')) {
-                        openDetailModal(movie, movie.isWinner ? "🏆 Ganadora del Óscar" : "🎬 Nominada al Óscar");
-                    }
-                };
-
-                const watchedBtnClass = isWatched ? "bg-emerald-700/20 text-emerald-700 dark:text-emerald-400 journal-border" : "bg-stone-200 dark:bg-stone-800 text-stone-400 hover:text-stone-900 dark:hover:text-white journal-border";
-                const watchedIcon = isWatched ? "fa-check" : "fa-eye-slash";
-
-                item.innerHTML = `
-                    <span class="text-[9px] font-mono font-bold text-amber-700 dark:text-amber-500 bg-amber-500/10 px-1.5 py-0.5 journal-border">${movie.oscarYear}</span>
-                    <img src="${movie.poster}" onerror="this.src='https://via.placeholder.com/150'" class="w-8 h-11 object-cover journal-border bg-stone-200">
-                    <div class="flex-grow min-w-0">
-                        <h4 class="text-xs font-serif font-semibold truncate">${movie.title}</h4>
-                        <span class="text-[10px] font-mono text-amber-700 dark:text-amber-500 font-bold"><i class="fa-solid fa-star mr-0.5"></i>${movie.rating}</span>
-                    </div>
-                    <div class="flex items-center space-x-1 flex-shrink-0">
-                        <button onclick='toggleWatchedStatus(${movie.id}, event)' title="Marcar vista" class="${watchedBtnClass} p-1.5 text-[10px]">
-                            <i class="fa-solid ${watchedIcon}"></i>
-                        </button>
-                        <button onclick='addMovieToRoulette(${JSON.stringify(movie).replace(/'/g, "&apos;")})' title="Añadir a sorteo" class="bg-amber-600/10 hover:bg-amber-600 text-amber-700 dark:text-amber-400 hover:text-stone-50 p-1.5 text-[10px] journal-border">
-                            <i class="fa-solid fa-plus"></i>
-                        </button>
-                    </div>
-                `;
-                container.appendChild(item);
-            });
-        }
-
-        async function getRandomRecommendation() {
-            const genre = document.getElementById('genreSelect').value;
-            const minRating = document.getElementById('minRatingInput').value;
-            const maxRating = document.getElementById('maxRatingInput').value;
-            const minVotes = document.getElementById('minVotes').value;
-
-            const randomPage = Math.floor(Math.random() * 5) + 1;
-            let endpoint = `/discover/movie?language=${currentLang}&vote_average.gte=${minRating}&vote_average.lte=${maxRating}&vote_count.gte=${minVotes}&page=${randomPage}`;
-            if (genre) endpoint += `&with_genres=${genre}`;
-
-            const data = await fetchFromTMDb(endpoint);
-            if (data && data.results && data.results.length > 0) {
-                let availableMovies = data.results.filter(m => !watchedMovies.includes(m.id) && !recentRecommendations.includes(m.id));
-                
-                if (availableMovies.length === 0) {
-                    availableMovies = data.results.filter(m => !watchedMovies.includes(m.id));
-                }
-
-                if (availableMovies.length === 0) {
-                    alert("Has visto todas las obras de esta selección. Amplía los filtros.");
-                    return;
-                }
-
-                const randomMovie = availableMovies[Math.floor(Math.random() * availableMovies.length)];
-                
-                recentRecommendations.push(randomMovie.id);
-                if (recentRecommendations.length > 10) recentRecommendations.shift();
-
-                playVictorySound();
-                showModal({
-                    id: randomMovie.id,
-                    title: randomMovie.title,
-                    rating: randomMovie.vote_average.toFixed(1),
-                    votes: randomMovie.vote_count > 1000 ? (randomMovie.vote_count/1000).toFixed(0) + 'k' : randomMovie.vote_count,
-                    poster: randomMovie.poster_path ? `https://image.tmdb.org/t/p/w500${randomMovie.poster_path}` : 'https://via.placeholder.com/150',
-                    overview: randomMovie.overview || 'Sin descripción disponible.'
-                }, "Selección al Azar");
-            }
-        }
-
-        function openDetailModal(movie, tag) {
-            currentDetailMovie = movie;
-            document.getElementById('detailTag').innerText = tag || "Reseña Crítica";
-            document.getElementById('detailTitle').innerText = movie.title;
-            document.getElementById('detailRating').innerHTML = `<i class="fa-solid fa-star mr-1"></i>${movie.rating || 'N/A'}`;
-            document.getElementById('detailVotes').innerHTML = `<i class="fa-solid fa-users mr-1"></i>${movie.votes || 'N/A'} votos`;
-            document.getElementById('detailYear').innerText = movie.oscarYear ? `Año: ${movie.oscarYear}` : '';
-            document.getElementById('detailPoster').src = movie.poster;
-            
-            updateDetailModalWatchedButton(movie.id);
-
-            const pReview = personalReviews[movie.id] || { rating: 0, review: '' };
-            renderStarSelector(pReview.rating || 0);
-            document.getElementById('userPersonalReview').value = pReview.review || '';
-
-            const overviewEl = document.getElementById('detailOverview');
-            overviewEl.innerText = movie.overview || "Sinopsis no disponible.";
-            overviewEl.scrollTop = 0;
-
-            const addBtn = document.getElementById('detailAddBtn');
-            addBtn.onclick = () => {
-                addMovieToRoulette(movie);
-                closeDetailModal();
-            };
-
-            document.getElementById('detailModal').classList.remove('hidden');
-        }
-
-        function closeDetailModal() {
-            document.getElementById('detailModal').classList.add('hidden');
-        }
-
-        function addAllOscarsToRoulette() {
-            currentOscarList.forEach(m => {
-                if (!watchedMovies.includes(m.id) && !moviesList.some(existing => existing.id === m.id)) {
-                    moviesList.push(m);
-                }
-            });
-            updateUI();
-        }
-
-        function handleAutocompleteInput(query) {
-            clearTimeout(autocompleteDebounceTimer);
-            const dropdown = document.getElementById('autocompleteDropdown');
-            const spinner = document.getElementById('autocompleteSpinner');
-
-            const cleanQuery = query.trim();
-            if (cleanQuery.length < 2) {
-                dropdown.classList.add('hidden');
-                spinner.classList.add('hidden');
-                return;
-            }
-
-            spinner.classList.remove('hidden');
-
-            autocompleteDebounceTimer = setTimeout(async () => {
-                const [dataEs, dataEn] = await Promise.all([
-                    fetchFromTMDb(`/search/movie?language=${currentLang}&query=${encodeURIComponent(cleanQuery)}&page=1`),
-                    fetchFromTMDb(`/search/movie?language=en-US&query=${encodeURIComponent(cleanQuery)}&page=1`)
-                ]);
-
-                spinner.classList.add('hidden');
-
-                const resultsMap = new Map();
-                if (dataEs && dataEs.results) dataEs.results.forEach(m => resultsMap.set(m.id, m));
-                if (dataEn && dataEn.results) {
-                    dataEn.results.forEach(m => {
-                        if (!resultsMap.has(m.id)) resultsMap.set(m.id, m);
-                    });
-                }
-
-                const combinedResults = Array.from(resultsMap.values());
-
-                if (combinedResults.length > 0) {
-                    dropdown.innerHTML = '';
-                    combinedResults.slice(0, 6).forEach(m => {
-                        const poster = m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : 'https://via.placeholder.com/150';
-                        const year = m.release_date ? m.release_date.split('-')[0] : '';
-                        const rating = m.vote_average ? m.vote_average.toFixed(1) : 'N/A';
-                        const votes = m.vote_count > 1000 ? (m.vote_count/1000).toFixed(0) + 'k' : m.vote_count;
-                        const isWatched = watchedMovies.includes(m.id);
-
-                        const movieObj = {
-                            id: m.id,
-                            title: m.title,
-                            rating: rating,
-                            votes: votes,
-                            poster: poster,
-                            overview: m.overview || 'Sin descripción disponible.'
-                        };
-
-                        const item = document.createElement('div');
-                        item.className = "flex items-center space-x-2.5 p-2 hover:bg-stone-200 dark:hover:bg-stone-800 cursor-pointer border-b border-stone-200 dark:border-stone-800 last:border-none transition";
-                        
-                        item.onclick = (e) => {
-                            if (!e.target.closest('button')) {
-                                selectAutocompleteMovie(movieObj);
-                            }
-                        };
-
-                        const watchedBtnClass = isWatched ? "text-emerald-600 font-bold" : "text-stone-400 hover:text-stone-900 dark:hover:text-white";
-
-                        item.innerHTML = `
-                            <img src="${poster}" onerror="this.src='https://via.placeholder.com/150'" class="w-7 h-10 object-cover journal-border flex-shrink-0 bg-stone-200">
-                            <div class="min-w-0 flex-grow">
-                                <h4 class="text-xs font-serif font-semibold truncate ${isWatched ? 'line-through opacity-50' : ''}">${m.title}</h4>
-                                <div class="flex items-center space-x-2 text-[10px] font-mono text-stone-500">
-                                    <span>${year}</span>
-                                    <span class="text-amber-600"><i class="fa-solid fa-star mr-0.5"></i>${rating}</span>
-                                </div>
-                            </div>
-                            <div class="flex items-center space-x-1 flex-shrink-0">
-                                <button onclick='toggleWatchedStatus(${m.id}, event)' title="Marcar vista" class="${watchedBtnClass} p-1 text-xs">
-                                    <i class="fa-solid ${isWatched ? 'fa-check' : 'fa-eye-slash'}"></i>
-                                </button>
-                                <button onclick='openQuickListMenu(${JSON.stringify(movieObj).replace(/'/g, "&apos;")}, event)' title="Fichar" class="text-rose-900 dark:text-rose-400 text-[10px] font-mono bg-rose-900/10 px-2 py-1 journal-border">
-                                    <i class="fa-solid fa-folder-plus"></i>
-                                </button>
-                            </div>
-                        `;
-                        dropdown.appendChild(item);
-                    });
-                    dropdown.classList.remove('hidden');
-                } else {
-                    dropdown.innerHTML = `<div class="p-3 text-xs font-serif text-stone-400 text-center italic">Sin coincidencias</div>`;
-                    dropdown.classList.remove('hidden');
-                }
-            }, 300);
-        }
-
-        function selectAutocompleteMovie(movie) {
-            document.getElementById('manualMovieInput').value = '';
-            document.getElementById('autocompleteDropdown').classList.add('hidden');
-            openDetailModal(movie, "Búsqueda Directa");
-        }
-
-        function addMovieToRoulette(movie) {
-            const mObj = typeof movie === 'string' ? JSON.parse(movie) : movie;
-            if (!moviesList.some(m => m.id === mObj.id)) {
-                moviesList.push(mObj);
-                updateUI();
-            }
-        }
-
-        function addAllFilteredToRoulette() {
-            fetchedResults.forEach(m => {
-                if (!watchedMovies.includes(m.id) && !moviesList.some(existing => existing.id === m.id)) {
-                    moviesList.push(m);
-                }
-            });
-            updateUI();
-        }
-
-        function removeMovie(index) {
-            moviesList.splice(index, 1);
-            updateUI();
-        }
-
-        function clearList() {
-            moviesList = [];
-            updateUI();
-        }
-
-        function updateUI() {
-            document.getElementById('movieCount').innerText = moviesList.length;
-            const container = document.getElementById('movieChipsList');
-            container.innerHTML = '';
-
-            if (moviesList.length === 0) {
-                container.innerHTML = `<div class="text-xs font-serif text-stone-400 italic text-center py-3 w-full">Sorteo vacío. Añade obras.</div>`;
-            }
-
-            moviesList.forEach((m, idx) => {
-                const chip = document.createElement('div');
-                chip.className = "flex items-center space-x-1.5 bg-stone-100 dark:bg-stone-950 text-stone-800 dark:text-stone-200 px-2.5 py-1 text-xs journal-border font-serif";
-                chip.innerHTML = `
-                    <span class="truncate max-w-[110px]">${m.title}</span>
-                    <button onclick="removeMovie(${idx})" class="text-stone-400 hover:text-rose-800 ml-1 transition">
-                        <i class="fa-solid fa-xmark"></i>
-                    </button>
-                `;
-                container.appendChild(chip);
-            });
-
-            drawWheel();
-        }
-
-        function drawWheel() {
-            const canvas = document.getElementById('rouletteCanvas');
-            const ctx = canvas.getContext('2d');
-            const numOptions = moviesList.length;
-            const width = canvas.width;
-            const height = canvas.height;
-            const center = width / 2;
-            const radius = center - 20;
-
-            const isDark = document.documentElement.classList.contains('dark');
-            const activeColors = isDark ? colorsDark : colorsLight;
-
-            ctx.clearRect(0, 0, width, height);
-
-            if (numOptions === 0) {
-                ctx.beginPath();
-                ctx.arc(center, center, radius, 0, 2 * Math.PI);
-                ctx.fillStyle = isDark ? "#1a1816" : "#e8e1d5";
-                ctx.fill();
-                ctx.fillStyle = isDark ? "#78716c" : "#78716c";
-                ctx.font = "bold 24px Playfair Display";
-                ctx.textAlign = "center";
-                ctx.fillText("Seleccione Obras", center, center);
-                return;
-            }
-
-            const arcSize = (2 * Math.PI) / numOptions;
-
-            for (let i = 0; i < numOptions; i++) {
-                const angle = startAngle + i * arcSize;
-                
-                ctx.beginPath();
-                ctx.fillStyle = activeColors[i % activeColors.length];
-                ctx.moveTo(center, center);
-                ctx.arc(center, center, radius, angle, angle + arcSize);
-                ctx.lineTo(center, center);
-                ctx.fill();
-                ctx.strokeStyle = isDark ? "#121110" : "#fcfaf2";
-                ctx.lineWidth = 3;
-                ctx.stroke();
-
-                ctx.save();
-                ctx.translate(center, center);
-                ctx.rotate(angle + arcSize / 2);
-                ctx.textAlign = "right";
-                ctx.fillStyle = "#fcfaf2";
-                ctx.font = "bold 22px Playfair Display";
-                
-                let text = moviesList[i].title;
-                if (text.length > 18) text = text.substring(0, 16) + "..";
-                
-                ctx.fillText(text, radius - 40, 8);
-                ctx.restore();
-            }
-
-            if (numOptions > 0) {
-                const degrees = startAngle * 180 / Math.PI + 90;
-                const arclen = 360 / numOptions;
-                const currentSegment = Math.floor((360 - (degrees % 360)) / arclen) % numOptions;
-                
-                if (currentSegment !== lastSegmentIndex) {
-                    if (isSpinning) {
-                        playTickSound();
-                    }
-                    lastSegmentIndex = currentSegment;
-                }
-            }
-        }
-
-        function spinWheel() {
-            if (isSpinning || moviesList.length === 0) return;
-            getAudioContext();
-            isSpinning = true;
-
-            const spinAngleStart = Math.random() * 10 + 20;
-            let spinTime = 0;
-            const spinTimeTotal = Math.random() * 3000 + 4000;
-
-            function rotate() {
-                spinTime += 30;
-                if (spinTime >= spinTimeTotal) {
-                    stopRotate();
-                    return;
-                }
-                const spinAngle = spinAngleStart - easeOut(spinTime, 0, spinAngleStart, spinTimeTotal);
-                startAngle += (spinAngle * Math.PI / 180);
-                drawWheel();
-                requestAnimationFrame(rotate);
-            }
-
-            rotate();
-        }
-
-        function stopRotate() {
-            isSpinning = false;
-            const degrees = startAngle * 180 / Math.PI + 90;
-            const arclen = 360 / moviesList.length;
-            const index = Math.floor((360 - (degrees % 360)) / arclen) % moviesList.length;
-            
-            const winner = moviesList[index];
-            playVictorySound();
-            showModal(winner, "🏆 Selección del Sorteo");
-            
-            confetti({
-                particleCount: 100,
-                spread: 70,
-                origin: { y: 0.6 }
-            });
-        }
-
-        function easeOut(t, b, c, d) {
-            const ts = (t /= d) * t;
-            const tc = ts * t;
-            return b + c * (tc + -3 * ts + 3 * t);
-        }
-
-        function showModal(movie, tag) {
-            currentWinnerMovie = movie;
-            document.getElementById('modalTag').innerText = tag;
-            document.getElementById('modalTitle').innerText = movie.title;
-            document.getElementById('modalRating').innerHTML = `<i class="fa-solid fa-star mr-1"></i>${movie.rating || 'N/A'}`;
-            document.getElementById('modalVotes').innerHTML = `<i class="fa-solid fa-users mr-1"></i>${movie.votes || 'N/A'} votos`;
-            document.getElementById('modalPoster').src = movie.poster;
-            
-            const isWatched = watchedMovies.includes(movie.id);
-            const winnerBtn = document.getElementById('winnerWatchedBtn');
-            const winnerIcon = document.getElementById('winnerWatchedIcon');
-
-            if (isWatched) {
-                winnerBtn.className = "absolute top-2 right-2 bg-emerald-700/20 text-emerald-700 dark:text-emerald-400 journal-border p-1.5 text-xs transition shadow-md";
-                winnerIcon.className = "fa-solid fa-check";
-            } else {
-                winnerBtn.className = "absolute top-2 right-2 bg-stone-50 dark:bg-stone-900 text-stone-500 hover:text-stone-900 dark:hover:text-white journal-border p-1.5 text-xs transition shadow-md";
-                winnerIcon.className = "fa-solid fa-eye-slash";
-            }
-            winnerBtn.onclick = (e) => toggleWatchedStatus(movie.id, e);
-
-            const addListBtn = document.getElementById('winnerAddListBtn');
-            addListBtn.onclick = (e) => openQuickListMenu(movie, e);
-
-            const overviewEl = document.getElementById('modalOverview');
-            overviewEl.innerText = movie.overview;
-            overviewEl.scrollTop = 0;
-            
-            document.getElementById('winnerModal').classList.remove('hidden');
-        }
-
-        function closeModal() {
-            document.getElementById('winnerModal').classList.add('hidden');
-        }
-    </script>
+    <!-- Pie del Panel (Estado de Cuenta / Futuro Login) -->
+    <div class="p-4 border-t border-stone-200 dark:border-stone-800 bg-stone-100 dark:bg-stone-900 space-y-2">
+        <div class="flex items-center justify-between text-[11px] font-mono text-stone-500">
+            <span>Estado de Cuenta:</span>
+            <span class="text-emerald-600 font-bold flex items-center"><i class="fa-solid fa-circle text-[8px] mr-1"></i>Perfil Local</span>
+        </div>
+        <button onclick="toggleSettingsModal(); toggleProfileDrawer();" class="w-full py-1.5 bg-stone-800 hover:bg-stone-700 text-stone-100 font-mono text-xs journal-border transition uppercase tracking-wider">
+            <i class="fa-solid fa-gear mr-1"></i> Configurar Perfil
+        </button>
+    </div>
+    </aside>
 </body>
 </html>
