@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="es" class="dark">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -42,42 +43,115 @@
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,900;1,400;1,700&family=Inter:wght@300;400;500;600&display=swap');
-        
+
         body {
             background-color: #fcfaf2;
             color: #1c1917;
             background-image: radial-gradient(#e8e1d5 0.75px, transparent 0.75px);
             background-size: 16px 16px;
         }
+
         .dark body {
             background-color: #121110;
             color: #f4f0ea;
             background-image: radial-gradient(#262320 0.75px, transparent 0.75px);
             background-size: 16px 16px;
         }
-        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #d6d3d1; }
-        .dark .custom-scrollbar::-webkit-scrollbar-thumb { background: #44403c; }
-        details > summary { list-style: none; }
-        details > summary::-webkit-details-marker { display: none; }
-        .range-slider-container { position: relative; height: 24px; display: flex; align-items: center; }
-        .range-slider-track { position: absolute; width: 100%; height: 3px; background-color: #d6d3d1; z-index: 1; }
-        .dark .range-slider-track { background-color: #44403c; }
-        .range-slider-container input[type=range] { position: absolute; width: 100%; background: none; pointer-events: none; appearance: none; -webkit-appearance: none; z-index: 2; margin: 0; }
-        .range-slider-container input[type=range]::-webkit-slider-thumb { height: 14px; width: 14px; border-radius: 0%; background: #881337; pointer-events: auto; appearance: none; -webkit-appearance: none; cursor: pointer; border: 1px solid #ffffff; }
-        .journal-border { border: 1px solid #d6d3d1; }
-        .dark .journal-border { border: 1px solid #292524; }
-        .journal-border-double { border-top: 3px double #1c1917; border-bottom: 3px double #1c1917; }
-        .dark .journal-border-double { border-top: 3px double #f4f0ea; border-bottom: 3px double #f4f0ea; }
+
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #d6d3d1;
+        }
+
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #44403c;
+        }
+
+        details>summary {
+            list-style: none;
+        }
+
+        details>summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .range-slider-container {
+            position: relative;
+            height: 24px;
+            display: flex;
+            align-items: center;
+        }
+
+        .range-slider-track {
+            position: absolute;
+            width: 100%;
+            height: 3px;
+            background-color: #d6d3d1;
+            z-index: 1;
+        }
+
+        .dark .range-slider-track {
+            background-color: #44403c;
+        }
+
+        .range-slider-container input[type=range] {
+            position: absolute;
+            width: 100%;
+            background: none;
+            pointer-events: none;
+            appearance: none;
+            -webkit-appearance: none;
+            z-index: 2;
+            margin: 0;
+        }
+
+        .range-slider-container input[type=range]::-webkit-slider-thumb {
+            height: 14px;
+            width: 14px;
+            border-radius: 0%;
+            background: #881337;
+            pointer-events: auto;
+            appearance: none;
+            -webkit-appearance: none;
+            cursor: pointer;
+            border: 1px solid #ffffff;
+        }
+
+        .journal-border {
+            border: 1px solid #d6d3d1;
+        }
+
+        .dark .journal-border {
+            border: 1px solid #292524;
+        }
+
+        .journal-border-double {
+            border-top: 3px double #1c1917;
+            border-bottom: 3px double #1c1917;
+        }
+
+        .dark .journal-border-double {
+            border-top: 3px double #f4f0ea;
+            border-bottom: 3px double #f4f0ea;
+        }
     </style>
 </head>
+
 <body class="min-h-screen flex flex-col justify-between custom-scrollbar transition-colors duration-300">
 
     <!-- Header Estilo Revista / CineZine -->
-    <header class="border-b-2 border-stone-800 dark:border-stone-700 bg-stone-50/95 dark:bg-stone-950/95 backdrop-blur-md sticky top-0 z-40">
+    <header
+        class="border-b-2 border-stone-800 dark:border-stone-700 bg-stone-50/95 dark:bg-stone-950/95 backdrop-blur-md sticky top-0 z-40">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex flex-col items-center justify-center gap-3">
-            <div class="w-full flex items-center justify-between text-[11px] font-mono tracking-widest uppercase text-stone-500 dark:text-stone-400 border-b border-stone-200 dark:border-stone-800 pb-2">
+            <div
+                class="w-full flex items-center justify-between text-[11px] font-mono tracking-widest uppercase text-stone-500 dark:text-stone-400 border-b border-stone-200 dark:border-stone-800 pb-2">
                 <span>VOL. XXIV — NO. 412</span>
                 <span>EDICIÓN ESPECIAL DE CRÍTICA</span>
                 <span>2026</span>
@@ -88,259 +162,367 @@
                         <i class="fa-solid fa-film text-xl"></i>
                     </div>
                     <div>
-                        <h1 class="text-2xl sm:text-3xl font-extrabold tracking-wider font-heading uppercase">CineZine</h1>
-                        <span class="text-[10px] font-mono tracking-widest uppercase text-rose-700 dark:text-rose-500">Fanzine & Sorteo Cinematográfico</span>
+                        <h1 class="text-2xl sm:text-3xl font-extrabold tracking-wider font-heading uppercase">CineZine
+                        </h1>
+                        <span
+                            class="text-[10px] font-mono tracking-widest uppercase text-rose-700 dark:text-rose-500">Fanzine
+                            & Red Social de Crítica</span>
                     </div>
                 </div>
                 <div class="flex items-center space-x-2">
-                    <button onclick="toggleTheme()" class="flex items-center justify-center w-8 h-8 bg-stone-200 dark:bg-stone-900 hover:bg-stone-300 dark:hover:bg-stone-800 rounded-none journal-border transition" title="Cambiar Tema">
+                    <button onclick="toggleTheme()"
+                        class="flex items-center justify-center w-8 h-8 bg-stone-200 dark:bg-stone-900 hover:bg-stone-300 dark:hover:bg-stone-800 rounded-none journal-border transition"
+                        title="Cambiar Tema">
                         <i id="themeIcon" class="fa-solid fa-moon text-xs"></i>
                     </button>
-                    <button id="muteBtn" onclick="toggleMute()" class="flex items-center space-x-1.5 text-xs bg-stone-200 dark:bg-stone-900 hover:bg-stone-300 dark:hover:bg-stone-800 px-3 py-1.5 rounded-none journal-border transition font-serif">
+                    <button id="muteBtn" onclick="toggleMute()"
+                        class="flex items-center space-x-1.5 text-xs bg-stone-200 dark:bg-stone-900 hover:bg-stone-300 dark:hover:bg-stone-800 px-3 py-1.5 rounded-none journal-border transition font-serif">
                         <i id="muteIcon" class="fa-solid fa-volume-high text-rose-700"></i>
                         <span id="muteText" class="hidden sm:inline">Sonido On</span>
                     </button>
-                    <button onclick="toggleSettingsModal()" class="flex items-center space-x-1.5 text-xs bg-stone-200 dark:bg-stone-900 hover:bg-stone-300 dark:hover:bg-stone-800 px-3 py-1.5 rounded-none journal-border transition font-serif">
+                    <button onclick="toggleSettingsModal()"
+                        class="flex items-center space-x-1.5 text-xs bg-stone-200 dark:bg-stone-900 hover:bg-stone-300 dark:hover:bg-stone-800 px-3 py-1.5 rounded-none journal-border transition font-serif">
                         <i class="fa-solid fa-sliders text-stone-700 dark:text-stone-300"></i>
                         <span class="hidden sm:inline">Ajustes</span>
                     </button>
-                    <!-- Agrega este botón dentro de la barra superior donde están Ajustes y Mute -->
-                    <button onclick="toggleProfileDrawer()" class="flex items-center space-x-2 bg-stone-200 dark:bg-stone-900 hover:bg-stone-300 dark:hover:bg-stone-800 px-2.5 py-1.5 rounded-none journal-border transition font-serif">
-                        <img id="headerProfileAvatar" src="https://api.dicebear.com/7.x/bottts/svg?seed=Dante" alt="Avatar" class="w-5 h-5 rounded-full journal-border bg-stone-300 dark:bg-stone-800">
+                    <button onclick="toggleProfileDrawer()"
+                        class="flex items-center space-x-2 bg-stone-200 dark:bg-stone-900 hover:bg-stone-300 dark:hover:bg-stone-800 px-2.5 py-1.5 rounded-none journal-border transition font-serif">
+                        <img id="headerProfileAvatar" src="https://api.dicebear.com/7.x/bottts/svg?seed=Dante"
+                            alt="Avatar" class="w-5 h-5 rounded-full journal-border bg-stone-300 dark:bg-stone-800">
                         <span id="headerUsername" class="hidden sm:inline text-xs font-mono font-bold">Dante</span>
                     </button>
-                    <div id="apiStatus" class="hidden sm:flex items-center space-x-1.5 text-[10px] font-mono tracking-wider uppercase bg-emerald-700/10 text-emerald-700 dark:text-emerald-400 journal-border px-2 py-1.5">
+                    <div id="apiStatus"
+                        class="hidden sm:flex items-center space-x-1.5 text-[10px] font-mono tracking-wider uppercase bg-emerald-700/10 text-emerald-700 dark:text-emerald-400 journal-border px-2 py-1.5">
                         <span class="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
                         <span>TMDb API</span>
                     </div>
                 </div>
             </div>
         </div>
+
+        <!-- Pestañas de Navegación Principal -->
+        <div
+            class="max-w-7xl mx-auto px-4 sm:px-6 pt-2 pb-2 flex items-center justify-center space-x-2 sm:space-x-4 border-t border-stone-200 dark:border-stone-800 font-mono text-xs">
+            <button id="navMuralBtn" onclick="switchMainTab('mural')"
+                class="px-4 py-2 journal-border bg-rose-900 text-stone-100 font-bold uppercase tracking-wider transition">
+                <i class="fa-solid fa-newspaper mr-1.5"></i> Diario Mural
+            </button>
+            <button id="navCatalogBtn" onclick="switchMainTab('catalog')"
+                class="px-4 py-2 journal-border bg-stone-200 dark:bg-stone-800 text-stone-700 dark:text-stone-300 uppercase tracking-wider transition hover:bg-stone-300">
+                <i class="fa-solid fa-book-open mr-1.5"></i> Cartelera y Catálogo
+            </button>
+            <button id="navRouletteBtn" onclick="switchMainTab('roulette')"
+                class="px-4 py-2 journal-border bg-stone-200 dark:bg-stone-800 text-stone-700 dark:text-stone-300 uppercase tracking-wider transition hover:bg-stone-300">
+                <i class="fa-solid fa-rotate mr-1.5"></i> Sorteo y Ruleta
+            </button>
+        </div>
     </header>
 
-    <!-- Main Container Layout -->
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 py-8 w-full flex-grow grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        
-        <!-- COLUMNA 1 (IZQUIERDA): MÁQUINA DE SORTEO -->
-        <section class="lg:col-span-4 flex flex-col items-center space-y-6 lg:sticky lg:top-28">
-            <div class="w-full text-center pb-1 journal-border-double">
-                <h3 class="font-heading font-bold text-lg tracking-wider uppercase">Sorteo Editorial</h3>
-            </div>
-            <div class="relative w-full max-w-[320px] aspect-square flex items-center justify-center p-3 bg-stone-100 dark:bg-stone-900 journal-border shadow-inner transition-all">
-                <div id="roulettePointer" class="absolute -top-3 z-20 text-rose-800 dark:text-rose-600 drop-shadow flex flex-col items-center transition-transform duration-75">
-                    <i class="fa-solid fa-caret-down text-4xl"></i>
+    <!-- Main Container Layout con Vistas Principales -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 py-8 w-full flex-grow">
+
+        <!-- VISTA 1: DIARIO MURAL -->
+        <section id="mainViewMural" class="space-y-6">
+            <div class="bg-stone-50 dark:bg-stone-900 journal-border p-6 space-y-4">
+                <div
+                    class="flex flex-col sm:flex-row sm:items-center justify-between border-b-2 border-stone-800 dark:border-stone-700 pb-3 gap-3">
+                    <div>
+                        <h2
+                            class="text-base font-heading font-bold uppercase tracking-widest text-rose-900 dark:text-rose-400 flex items-center space-x-2">
+                            <i class="fa-solid fa-newspaper"></i>
+                            <span>Diario Mural Editorial & Comunidad</span>
+                        </h2>
+                        <p class="text-xs font-serif text-stone-600 dark:text-stone-400">Espacio central de crítica
+                            cinematográfica, reseñas públicas y debates abiertos.</p>
+                    </div>
                 </div>
-                <canvas id="rouletteCanvas" width="800" height="800" class="w-full h-full rounded-full cursor-pointer transition-transform duration-100"></canvas>
-                <button id="spinCenterBtn" onclick="spinWheel()" class="absolute z-10 w-20 h-20 bg-stone-900 dark:bg-stone-950 text-white font-heading font-bold text-xs tracking-widest uppercase rounded-full border-2 border-rose-800 shadow-2xl hover:scale-105 active:scale-95 transition-all flex flex-col items-center justify-center gap-0.5 group">
-                    <i class="fa-solid fa-play text-rose-500 text-sm translate-x-0.5"></i>
-                    <span class="text-[9px] font-mono">GIRAR</span>
-                </button>
-            </div>
-            <div class="w-full max-w-[320px] grid grid-cols-2 gap-2">
-                <button onclick="spinWheel()" class="w-full py-2.5 px-3 bg-rose-900 hover:bg-rose-800 text-stone-100 font-serif font-semibold rounded-none journal-border transition text-xs flex items-center justify-center space-x-2 uppercase tracking-wider">
-                    <i class="fa-solid fa-rotate text-xs"></i>
-                    <span>Girar Ruleta</span>
-                </button>
-                <button onclick="getRandomRecommendation()" class="w-full py-2.5 px-3 bg-stone-800 hover:bg-stone-700 text-stone-100 font-serif font-semibold rounded-none journal-border transition text-xs flex items-center justify-center space-x-2 uppercase tracking-wider">
-                    <i class="fa-solid fa-wand-magic-sparkles text-xs"></i>
-                    <span>Azar</span>
-                </button>
-            </div>
-            <div class="w-full max-w-[320px] bg-stone-50 dark:bg-stone-900 journal-border p-4 space-y-3">
-                <div class="flex items-center justify-between border-b border-stone-300 dark:border-stone-800 pb-2">
-                    <h3 class="font-heading font-bold text-xs uppercase tracking-widest flex items-center space-x-2">
-                        <i class="fa-solid fa-bookmark text-rose-800"></i>
-                        <span>En Selección Activa (<span id="movieCount" class="text-rose-800 dark:text-rose-500 font-mono">0</span>)</span>
-                    </h3>
-                    <button onclick="clearList()" class="text-[11px] font-mono text-stone-500 hover:text-rose-800 transition flex items-center space-x-1">
-                        <i class="fa-solid fa-trash-can"></i>
-                        <span>Vaciar</span>
-                    </button>
+
+                <!-- Filtros del Muro -->
+                <div class="flex items-center space-x-2 font-mono text-xs">
+                    <button onclick="filterMural('all')"
+                        class="mural-filter-btn active bg-stone-200 dark:bg-stone-800 px-3 py-1.5 journal-border">Todos</button>
+                    <button onclick="filterMural('reviews')"
+                        class="mural-filter-btn text-stone-500 hover:text-stone-900 dark:hover:text-white px-3 py-1.5 transition">Reseñas</button>
+                    <button onclick="filterMural('discussions')"
+                        class="mural-filter-btn text-stone-500 hover:text-stone-900 dark:hover:text-white px-3 py-1.5 transition">Debates</button>
                 </div>
-                <div id="movieChipsList" class="flex flex-wrap gap-1.5 max-h-48 overflow-y-auto custom-scrollbar pt-1 pr-1"></div>
+
+                <!-- Feed en grilla holgada -->
+                <div id="muralPostsFeed" class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+                    <!-- Se renderiza desde JS -->
+                </div>
             </div>
         </section>
 
-        <!-- COLUMNA 2 (CENTRO): BUSCADOR Y CATÁLOGO EDITORIAL -->
-        <section class="lg:col-span-5 space-y-6">
-            <div class="bg-stone-50 dark:bg-stone-900 journal-border p-4 space-y-2 relative">
-                <label class="block text-xs font-heading font-bold tracking-widest uppercase">
-                    <i class="fa-solid fa-magnifying-glass text-rose-800 mr-1.5"></i>Índice y Búsqueda de Obras
-                </label>
-                <div class="relative">
-                    <div class="relative flex items-center">
-                        <input type="text" id="manualMovieInput" oninput="handleAutocompleteInput(this.value)" placeholder="Buscar película por título..." class="w-full bg-stone-100 dark:bg-stone-950 journal-border rounded-none pl-3 pr-8 py-2 text-xs font-serif placeholder-stone-400 focus:outline-none focus:border-rose-800 transition">
-                        <i id="autocompleteSpinner" class="fa-solid fa-circle-notch fa-spin absolute right-3 text-stone-400 text-xs hidden"></i>
+        <!-- VISTA 2: CARTELERA Y CATÁLOGO -->
+        <section id="mainViewCatalog" class="space-y-6 hidden">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+
+                <!-- Columna Izquierda: Buscador, Filtros y Catálogo -->
+                <div class="lg:col-span-8 space-y-6">
+                    <!-- Buscador -->
+                    <div class="bg-stone-50 dark:bg-stone-900 journal-border p-5 space-y-3 relative">
+                        <label class="block text-xs font-heading font-bold tracking-widest uppercase">
+                            <i class="fa-solid fa-magnifying-glass text-rose-800 mr-1.5"></i>Índice y Búsqueda de Obras
+                        </label>
+                        <div class="relative">
+                            <div class="relative flex items-center">
+                                <input type="text" id="manualMovieInput" oninput="handleAutocompleteInput(this.value)"
+                                    placeholder="Buscar película por título..."
+                                    class="w-full bg-stone-100 dark:bg-stone-950 journal-border rounded-none pl-3 pr-8 py-2.5 text-xs font-serif placeholder-stone-400 focus:outline-none focus:border-rose-800 transition">
+                                <i id="autocompleteSpinner"
+                                    class="fa-solid fa-circle-notch fa-spin absolute right-3 text-stone-400 text-xs hidden"></i>
+                            </div>
+                            <div id="autocompleteDropdown"
+                                class="absolute left-0 right-0 top-full mt-1 bg-stone-50 dark:bg-stone-900 journal-border shadow-2xl z-50 max-h-64 overflow-y-auto custom-scrollbar hidden">
+                            </div>
+                        </div>
                     </div>
-                    <div id="autocompleteDropdown" class="absolute left-0 right-0 top-full mt-1 bg-stone-50 dark:bg-stone-900 journal-border shadow-2xl z-50 max-h-64 overflow-y-auto custom-scrollbar hidden"></div>
+
+                    <!-- Cartelera y Filtros Completos -->
+                    <div class="bg-stone-50 dark:bg-stone-900 journal-border p-5 space-y-4">
+                        <div
+                            class="flex items-center justify-between border-b-2 border-stone-800 dark:border-stone-700 pb-3">
+                            <div
+                                class="flex items-center space-x-2 font-heading font-bold text-xs uppercase tracking-widest">
+                                <i class="fa-solid fa-book-open text-rose-800"></i>
+                                <span>Cartelera y Archivo Crítico</span>
+                            </div>
+                            <button onclick="addAllFilteredToRoulette()"
+                                class="text-xs font-mono bg-stone-200 dark:bg-stone-800 hover:bg-rose-900 hover:text-white px-3 py-1.5 journal-border transition font-semibold">
+                                + Cargar Visibles al Sorteo
+                            </button>
+                        </div>
+
+                        <!-- Filtros del catálogo -->
+                        <div class="space-y-3">
+                            <div class="relative">
+                                <input type="text" id="catalogSearchFilter" oninput="applyCatalogFilters()"
+                                    placeholder="Filtrar colección actual..."
+                                    class="w-full bg-stone-100 dark:bg-stone-950 journal-border rounded-none pl-8 pr-3 py-1.5 text-xs font-serif placeholder-stone-400 focus:border-rose-800 transition">
+                                <i class="fa-solid fa-filter absolute left-2.5 top-2.5 text-stone-400 text-[10px]"></i>
+                            </div>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs font-serif">
+                                <div>
+                                    <label
+                                        class="block font-mono text-[10px] text-stone-500 uppercase mb-1">Género</label>
+                                    <select id="genreSelect" onchange="resetAndFetchFilteredMovies()"
+                                        class="w-full bg-stone-100 dark:bg-stone-950 journal-border rounded-none px-2 py-1.5 focus:border-rose-800">
+                                        <option value="">Todos los géneros</option>
+                                        <option value="10749">❤️ Romance</option>
+                                        <option value="35">😂 Comedia</option>
+                                        <option value="18">🎭 Drama</option>
+                                        <option value="28">🔥 Acción</option>
+                                        <option value="878">🚀 Sci-Fi</option>
+                                        <option value="27">😱 Terror</option>
+                                        <option value="53">🔪 Thriller</option>
+                                        <option value="16">🎨 Animación</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label
+                                        class="block font-mono text-[10px] text-stone-500 uppercase mb-1">Criterio</label>
+                                    <select id="sortBySelect" onchange="resetAndFetchFilteredMovies()"
+                                        class="w-full bg-stone-100 dark:bg-stone-950 journal-border rounded-none px-2 py-1.5 focus:border-rose-800">
+                                        <option value="popularity.desc">Popularidad</option>
+                                        <option value="vote_average.desc" selected>Calificación</option>
+                                        <option value="primary_release_date.desc">Estrenos</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label
+                                        class="block font-mono text-[10px] text-stone-500 uppercase mb-1">Vistas</label>
+                                    <select id="watchedFilterSelect" onchange="applyCatalogFilters()"
+                                        class="w-full bg-stone-100 dark:bg-stone-950 journal-border rounded-none px-2 py-1.5 focus:border-rose-800">
+                                        <option value="ALL">Todas</option>
+                                        <option value="UNWATCHED" selected>No Vistas</option>
+                                        <option value="WATCHED">Solo Vistas</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Slider Dual de Puntuación -->
+                            <div class="space-y-1 pt-1 font-serif text-xs">
+                                <div class="flex justify-between font-mono text-[11px]">
+                                    <span class="text-stone-500">Rango de Puntuación</span>
+                                    <span class="text-rose-800 dark:text-rose-400 font-bold"><span
+                                            id="minRatingVal">6.0</span> - <span id="maxRatingVal">8.5</span></span>
+                                </div>
+                                <div class="range-slider-container">
+                                    <div class="range-slider-track"></div>
+                                    <input type="range" id="minRatingInput" min="1.0" max="10.0" step="0.5" value="6.0"
+                                        oninput="handleRangeInput(); debounceFetchFilteredMovies()">
+                                    <input type="range" id="maxRatingInput" min="1.0" max="10.0" step="0.5" value="8.5"
+                                        oninput="handleRangeInput(); debounceFetchFilteredMovies()">
+                                </div>
+                            </div>
+
+                            <!-- Votos Mínimos e Indicador -->
+                            <div class="flex items-center justify-between pt-1 text-xs font-mono">
+                                <span class="text-stone-500">Votos Mín.:</span>
+                                <select id="minVotes" onchange="resetAndFetchFilteredMovies()"
+                                    class="bg-stone-100 dark:bg-stone-950 journal-border rounded-none px-2 py-1 text-[11px]">
+                                    <option value="200">+200</option>
+                                    <option value="500" selected>+500</option>
+                                    <option value="2000">+2,000</option>
+                                </select>
+                                <span id="catalogCountIndicator"
+                                    class="text-stone-400 text-[11px] italic">Cargando...</span>
+                            </div>
+                        </div>
+
+                        <!-- Grilla amplia de películas -->
+                        <div class="pt-3">
+                            <div id="resultsGrid"
+                                class="grid grid-cols-2 sm:grid-cols-4 gap-4 max-h-[500px] overflow-y-auto custom-scrollbar pr-1">
+                            </div>
+                            <button id="loadMoreBtn" onclick="loadNextFilteredPage()"
+                                class="w-full mt-4 py-2.5 bg-stone-200 dark:bg-stone-800 hover:bg-stone-300 dark:hover:bg-stone-700 text-xs font-mono font-semibold journal-border hidden uppercase tracking-wider">
+                                <i class="fa-solid fa-angles-down mr-1"></i> Cargar más reseñas
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Archivo Histórico de Óscars -->
+                    <details class="group bg-stone-50 dark:bg-stone-900 journal-border overflow-hidden transition-all">
+                        <summary
+                            class="flex items-center justify-between p-3.5 cursor-pointer select-none bg-stone-100 dark:bg-stone-950 hover:bg-stone-200/50 transition">
+                            <div
+                                class="flex items-center space-x-2 font-heading font-bold text-xs uppercase tracking-widest text-amber-700 dark:text-amber-500">
+                                <i class="fa-solid fa-trophy text-xs"></i>
+                                <span>Archivo Histórico de la Academia (Óscars)</span>
+                            </div>
+                            <i
+                                class="fa-solid fa-chevron-down text-stone-400 text-xs transition-transform group-open:rotate-180"></i>
+                        </summary>
+                        <div class="p-3.5 space-y-3 border-t border-stone-200 dark:border-stone-800">
+                            <div class="grid grid-cols-2 gap-2 bg-stone-200 dark:bg-stone-950 p-1 journal-border">
+                                <button id="btnFilterWinners" onclick="setOscarFilterMode('WINNERS')"
+                                    class="py-1 rounded-none text-xs font-serif font-semibold bg-amber-600 text-stone-50 transition">🏆
+                                    Ganadoras</button>
+                                <button id="btnFilterAll" onclick="setOscarFilterMode('ALL')"
+                                    class="py-1 rounded-none text-xs font-serif font-semibold text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white transition">🎬
+                                    Nominadas</button>
+                            </div>
+                            <div id="oscarListContainer"
+                                class="space-y-2 max-h-[220px] overflow-y-auto custom-scrollbar pr-1"></div>
+                            <button onclick="addAllOscarsToRoulette()"
+                                class="w-full py-1.5 bg-amber-600/10 hover:bg-amber-600/20 text-amber-700 dark:text-amber-400 journal-border text-xs font-serif font-semibold transition uppercase tracking-wider">
+                                + Añadir Selección al Sorteo
+                            </button>
+                        </div>
+                    </details>
+                </div>
+
+                <!-- Columna Derecha: Cuadernos y Listas -->
+                <div class="lg:col-span-4 space-y-6">
+                    <div class="bg-stone-50 dark:bg-stone-900 journal-border p-5 space-y-4">
+                        <div
+                            class="flex items-center justify-between border-b-2 border-stone-800 dark:border-stone-700 pb-2">
+                            <h3
+                                class="font-heading font-bold text-xs uppercase tracking-widest flex items-center space-x-2">
+                                <i class="fa-solid fa-feather text-rose-800"></i>
+                                <span>Cuadernos de Listas</span>
+                            </h3>
+                        </div>
+                        <div class="flex gap-1.5">
+                            <input type="text" id="newListInput" placeholder="Nueva libreta..."
+                                class="flex-grow bg-stone-100 dark:bg-stone-950 journal-border rounded-none px-2.5 py-1.5 text-xs font-serif placeholder-stone-400 focus:outline-none focus:border-rose-800 transition">
+                            <button onclick="createNewList()"
+                                class="bg-rose-900 hover:bg-rose-800 text-stone-100 px-2.5 py-1.5 rounded-none text-xs font-mono font-semibold transition flex-shrink-0 journal-border">
+                                <i class="fa-solid fa-plus"></i>
+                            </button>
+                        </div>
+                        <div id="customListsContainer"
+                            class="space-y-3 max-h-[400px] overflow-y-auto custom-scrollbar pr-1">
+                            <div class="text-center py-6 text-stone-400 text-xs font-serif italic">Sin cuadernos
+                                creados.</div>
+                        </div>
+                    </div>
                 </div>
             </div>
-
-            <div class="bg-stone-50 dark:bg-stone-900 journal-border p-4 space-y-4">
-                <div class="flex items-center justify-between border-b-2 border-stone-800 dark:border-stone-700 pb-2.5">
-                    <div class="flex items-center space-x-2 font-heading font-bold text-xs uppercase tracking-widest">
-                        <i class="fa-solid fa-book-open text-rose-800"></i>
-                        <span>Cartelera y Archivo Crítico</span>
-                    </div>
-                    <button onclick="addAllFilteredToRoulette()" class="text-[11px] font-mono bg-stone-200 dark:bg-stone-800 hover:bg-rose-900 hover:text-white px-2.5 py-1 journal-border transition font-semibold">
-                        + Cargar Visibles
-                    </button>
-                </div>
-                <div class="space-y-3">
-                    <div class="relative">
-                        <input type="text" id="catalogSearchFilter" oninput="applyCatalogFilters()" placeholder="Filtrar colección actual..." class="w-full bg-stone-100 dark:bg-stone-950 journal-border rounded-none pl-8 pr-3 py-1.5 text-xs font-serif placeholder-stone-400 focus:border-rose-800 transition">
-                        <i class="fa-solid fa-filter absolute left-2.5 top-2.5 text-stone-400 text-[10px]"></i>
-                    </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs font-serif">
-                        <div>
-                            <label class="block font-mono text-[10px] text-stone-500 uppercase mb-1">Género</label>
-                            <select id="genreSelect" onchange="resetAndFetchFilteredMovies()" class="w-full bg-stone-100 dark:bg-stone-950 journal-border rounded-none px-2 py-1.5 focus:border-rose-800">
-                                <option value="">Todos</option>
-                                <option value="10749">❤️ Romance</option>
-                                <option value="35">😂 Comedia</option>
-                                <option value="18">🎭 Drama</option>
-                                <option value="28">🔥 Acción</option>
-                                <option value="878">🚀 Sci-Fi</option>
-                                <option value="27">😱 Terror</option>
-                                <option value="53">🔪 Thriller</option>
-                                <option value="16">🎨 Animación</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block font-mono text-[10px] text-stone-500 uppercase mb-1">Criterio</label>
-                            <select id="sortBySelect" onchange="resetAndFetchFilteredMovies()" class="w-full bg-stone-100 dark:bg-stone-950 journal-border rounded-none px-2 py-1.5 focus:border-rose-800">
-                                <option value="popularity.desc">Popularidad</option>
-                                <option value="vote_average.desc" selected>Calificación</option>
-                                <option value="primary_release_date.desc">Estrenos</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block font-mono text-[10px] text-stone-500 uppercase mb-1">Vistas</label>
-                            <select id="watchedFilterSelect" onchange="applyCatalogFilters()" class="w-full bg-stone-100 dark:bg-stone-950 journal-border rounded-none px-2 py-1.5 focus:border-rose-800">
-                                <option value="ALL">Todas</option>
-                                <option value="UNWATCHED" selected>No Vistas</option>
-                                <option value="WATCHED">Solo Vistas</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-                <div class="space-y-1 pt-1 font-serif text-xs">
-                    <div class="flex justify-between font-mono text-[11px]">
-                        <span class="text-stone-500">Rango de Puntuación</span>
-                        <span class="text-rose-800 dark:text-rose-400 font-bold"><span id="minRatingVal">6.0</span> - <span id="maxRatingVal">8.5</span></span>
-                    </div>
-                    <div class="range-slider-container">
-                        <div class="range-slider-track"></div>
-                        <input type="range" id="minRatingInput" min="1.0" max="10.0" step="0.5" value="6.0" oninput="handleRangeInput(); debounceFetchFilteredMovies()">
-                        <input type="range" id="maxRatingInput" min="1.0" max="10.0" step="0.5" value="8.5" oninput="handleRangeInput(); debounceFetchFilteredMovies()">
-                    </div>
-                </div>
-                <div class="flex items-center justify-between pt-1 text-xs font-mono">
-                    <span class="text-stone-500">Votos Mín.:</span>
-                    <select id="minVotes" onchange="resetAndFetchFilteredMovies()" class="bg-stone-100 dark:bg-stone-950 journal-border rounded-none px-2 py-1 text-[11px]">
-                        <option value="200">+200</option>
-                        <option value="500" selected>+500</option>
-                        <option value="2000">+2,000</option>
-                    </select>
-                    <span id="catalogCountIndicator" class="text-stone-400 text-[11px] italic">Cargando...</span>
-                </div>
-                <div class="pt-2">
-                    <div id="resultsGrid" class="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-[380px] overflow-y-auto custom-scrollbar pr-1"></div>
-                    <button id="loadMoreBtn" onclick="loadNextFilteredPage()" class="w-full mt-3 py-2 bg-stone-200 dark:bg-stone-800 hover:bg-stone-300 dark:hover:bg-stone-700 rounded-none text-xs font-mono font-semibold journal-border hidden uppercase tracking-wider">
-                        <i class="fa-solid fa-angles-down mr-1"></i> Cargar más reseñas
-                    </button>
-                </div>
-            </div>
-
-            <details class="group bg-stone-50 dark:bg-stone-900 journal-border overflow-hidden transition-all">
-                <summary class="flex items-center justify-between p-3.5 cursor-pointer select-none bg-stone-100 dark:bg-stone-950 hover:bg-stone-200/50 transition">
-                    <div class="flex items-center space-x-2 font-heading font-bold text-xs uppercase tracking-widest text-amber-700 dark:text-amber-500">
-                        <i class="fa-solid fa-trophy text-xs"></i>
-                        <span>Archivo Histórico de la Academia (Óscars)</span>
-                    </div>
-                    <i class="fa-solid fa-chevron-down text-stone-400 text-xs transition-transform group-open:rotate-180"></i>
-                </summary>
-                <div class="p-3.5 space-y-3 border-t border-stone-200 dark:border-stone-800">
-                    <div class="grid grid-cols-2 gap-2 bg-stone-200 dark:bg-stone-950 p-1 journal-border">
-                        <button id="btnFilterWinners" onclick="setOscarFilterMode('WINNERS')" class="py-1 rounded-none text-xs font-serif font-semibold bg-amber-600 text-stone-50 transition">🏆 Ganadoras</button>
-                        <button id="btnFilterAll" onclick="setOscarFilterMode('ALL')" class="py-1 rounded-none text-xs font-serif font-semibold text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white transition">🎬 Nominadas</button>
-                    </div>
-                    <div id="oscarListContainer" class="space-y-2 max-h-[220px] overflow-y-auto custom-scrollbar pr-1"></div>
-                    <button onclick="addAllOscarsToRoulette()" class="w-full py-1.5 bg-amber-600/10 hover:bg-amber-600/20 text-amber-700 dark:text-amber-400 journal-border text-xs font-serif font-semibold transition uppercase tracking-wider">
-                        + Añadir Selección al Sorteo
-                    </button>
-                </div>
-            </details>
         </section>
 
-        <!-- COLUMNA 3 (DERECHA): CUADERNOS, BITÁCORA, HISTORIAL Y DIARIO MURAL -->
-        <section class="lg:col-span-3 space-y-6">
-            <div class="bg-stone-50 dark:bg-stone-900 journal-border p-4 space-y-4">
-                <div class="flex border-b border-stone-300 dark:border-stone-800 pb-2 text-[11px]">
-                    <button id="tabBitacoraBtn" onclick="switchRightTab('bitacora')" class="flex-1 text-center font-heading font-bold uppercase tracking-wider text-rose-800 dark:text-rose-500 border-b-2 border-rose-800 pb-1">
-                        <i class="fa-solid fa-star mr-1"></i>Bitácora
-                    </button>
-                    <button id="tabMuralBtn" onclick="switchRightTab('mural')" class="flex-1 text-center font-heading font-bold uppercase tracking-wider text-stone-400 hover:text-stone-800 dark:hover:text-stone-200 pb-1">
-                        <i class="fa-solid fa-newspaper mr-1"></i>Mural
-                    </button>
-                    <button id="tabVistasBtn" onclick="switchRightTab('vistas')" class="flex-1 text-center font-heading font-bold uppercase tracking-wider text-stone-400 hover:text-stone-800 dark:hover:text-stone-200 pb-1">
-                        <i class="fa-solid fa-eye mr-1"></i>Vistas (<span id="watchedCountHeader">0</span>)
-                    </button>
+        <!-- VISTA 3: SORTEO Y RULETA -->
+        <section id="mainViewRoulette" class="space-y-6 hidden max-w-xl mx-auto text-center">
+            <div class="bg-stone-50 dark:bg-stone-900 journal-border p-8 space-y-6">
+                <div class="w-full pb-2 journal-border-double">
+                    <h2 class="font-heading font-bold text-xl tracking-wider uppercase">Sorteo y Ruleta Cinematográfica
+                    </h2>
                 </div>
-                <div id="tabBitacoraContent" class="space-y-3">
-                    <div id="personalReviewsContainer" class="space-y-2 max-h-[240px] overflow-y-auto custom-scrollbar pr-1"></div>
-                </div>
-                <div id="tabMuralContent" class="space-y-3 hidden">
-                    <div id="diarioMuralContainer" class="space-y-2 max-h-[240px] overflow-y-auto custom-scrollbar pr-1"></div>
-                </div>
-                <div id="tabVistasContent" class="space-y-3 hidden">
-                    <div id="watchedMoviesListContainer" class="space-y-2 max-h-[240px] overflow-y-auto custom-scrollbar pr-1"></div>
-                </div>
-            </div>
-
-            <div class="bg-stone-50 dark:bg-stone-900 journal-border p-4 space-y-3">
-                <div class="flex items-center justify-between border-b-2 border-stone-800 dark:border-stone-700 pb-2">
-                    <h3 class="font-heading font-bold text-xs uppercase tracking-widest flex items-center space-x-2">
-                        <i class="fa-solid fa-feather text-rose-800"></i>
-                        <span>Cuadernos de Listas</span>
-                    </h3>
-                </div>
-                <div class="flex gap-1.5">
-                    <input type="text" id="newListInput" placeholder="Nueva libreta..." class="flex-grow bg-stone-100 dark:bg-stone-950 journal-border rounded-none px-2.5 py-1.5 text-xs font-serif placeholder-stone-400 focus:outline-none focus:border-rose-800 transition">
-                    <button onclick="createNewList()" class="bg-rose-900 hover:bg-rose-800 text-stone-100 px-2.5 py-1.5 rounded-none text-xs font-mono font-semibold transition flex-shrink-0 journal-border">
-                        <i class="fa-solid fa-plus"></i>
+                <div
+                    class="relative w-full max-w-[360px] aspect-square mx-auto flex items-center justify-center p-4 bg-stone-100 dark:bg-stone-950 journal-border shadow-inner">
+                    <div id="roulettePointer"
+                        class="absolute -top-3 z-20 text-rose-800 dark:text-rose-600 drop-shadow flex flex-col items-center">
+                        <i class="fa-solid fa-caret-down text-4xl"></i>
+                    </div>
+                    <canvas id="rouletteCanvas" width="800" height="800"
+                        class="w-full h-full rounded-full cursor-pointer"></canvas>
+                    <button id="spinCenterBtn" onclick="spinWheel()"
+                        class="absolute z-10 w-24 h-24 bg-stone-900 text-white font-heading font-bold text-xs tracking-widest uppercase rounded-full border-2 border-rose-800 shadow-2xl hover:scale-105 transition-all flex flex-col items-center justify-center">
+                        <i class="fa-solid fa-play text-rose-500 text-base"></i>
+                        <span class="text-[10px] font-mono mt-1">GIRAR</span>
                     </button>
                 </div>
-                <div id="customListsContainer" class="space-y-3 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
-                    <div class="text-center py-6 text-stone-400 text-xs font-serif italic">Sin cuadernos creados.</div>
+                <div class="grid grid-cols-2 gap-4 max-w-[360px] mx-auto">
+                    <button onclick="spinWheel()"
+                        class="py-3 bg-rose-900 hover:bg-rose-800 text-white font-serif font-semibold journal-border text-xs uppercase">Girar
+                        Ruleta</button>
+                    <button onclick="getRandomRecommendation()"
+                        class="py-3 bg-stone-800 hover:bg-stone-700 text-white font-serif font-semibold journal-border text-xs uppercase">Azar
+                        Directo</button>
+                </div>
+                <div class="bg-stone-100 dark:bg-stone-950 journal-border p-4 text-left space-y-2">
+                    <div class="flex items-center justify-between text-xs font-mono border-b border-stone-800 pb-2">
+                        <span>En Selección Activa (<span id="movieCount"
+                                class="text-rose-500 font-bold">0</span>)</span>
+                        <button onclick="clearList()" class="text-stone-400 hover:text-rose-500"><i
+                                class="fa-solid fa-trash-can mr-1"></i>Vaciar</button>
+                    </div>
+                    <div id="movieChipsList"
+                        class="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto custom-scrollbar pt-1"></div>
                 </div>
             </div>
         </section>
+
     </main>
 
     <!-- MENÚ FLOTANTE DE LISTAS RÁPIDAS -->
-    <div id="quickListDropdown" class="fixed bg-stone-50 dark:bg-stone-900 journal-border p-2 shadow-2xl z-[100] hidden w-52 space-y-1">
-        <div class="text-[10px] font-mono font-bold text-rose-800 dark:text-rose-400 uppercase px-2 pb-1 border-b border-stone-300 dark:border-stone-700 flex items-center justify-between">
+    <div id="quickListDropdown"
+        class="fixed bg-stone-50 dark:bg-stone-900 journal-border p-2 shadow-2xl z-[100] hidden w-52 space-y-1">
+        <div
+            class="text-[10px] font-mono font-bold text-rose-800 dark:text-rose-400 uppercase px-2 pb-1 border-b border-stone-300 dark:border-stone-700 flex items-center justify-between">
             <span>Fichar en cuaderno:</span>
-            <button onclick="closeQuickListDropdown()" class="text-stone-400 hover:text-stone-200 text-xs"><i class="fa-solid fa-xmark"></i></button>
+            <button onclick="closeQuickListDropdown()" class="text-stone-400 hover:text-stone-200 text-xs"><i
+                    class="fa-solid fa-xmark"></i></button>
         </div>
         <div id="quickListItemsContainer" class="max-h-40 overflow-y-auto custom-scrollbar space-y-1 pt-1"></div>
     </div>
 
     <!-- MODALES -->
-    <div id="detailModal" class="fixed inset-0 bg-stone-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-        <div class="bg-stone-50 dark:bg-stone-900 journal-border rounded-none max-w-lg w-full p-6 space-y-4 text-left relative shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar">
-            <button onclick="closeDetailModal()" class="absolute top-4 right-4 text-stone-400 hover:text-stone-800 dark:hover:text-white text-lg p-1 transition"><i class="fa-solid fa-xmark"></i></button>
+    <div id="detailModal"
+        class="fixed inset-0 bg-stone-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div
+            class="bg-stone-50 dark:bg-stone-900 journal-border rounded-none max-w-lg w-full p-6 space-y-4 text-left relative shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar">
+            <button onclick="closeDetailModal()"
+                class="absolute top-4 right-4 text-stone-400 hover:text-stone-800 dark:hover:text-white text-lg p-1 transition"><i
+                    class="fa-solid fa-xmark"></i></button>
             <div class="flex flex-col sm:flex-row gap-4 items-start">
                 <div class="relative flex-shrink-0 mx-auto sm:mx-0">
                     <img id="detailPoster" src="" alt="Poster" class="w-32 h-48 object-cover journal-border shadow-md">
-                    <button id="detailWatchedBtn" onclick="" class="absolute top-2 right-2 p-1.5 rounded-none text-xs backdrop-blur-md transition journal-border shadow-md"><i id="detailWatchedIcon" class="fa-solid fa-eye"></i></button>
+                    <button id="detailWatchedBtn" onclick=""
+                        class="absolute top-2 right-2 p-1.5 rounded-none text-xs backdrop-blur-md transition journal-border shadow-md"><i
+                            id="detailWatchedIcon" class="fa-solid fa-eye"></i></button>
                 </div>
                 <div class="space-y-2 flex-grow min-w-0">
-                    <div id="detailTag" class="inline-block bg-stone-200 dark:bg-stone-800 text-stone-800 dark:text-stone-300 journal-border px-2.5 py-0.5 text-[10px] font-mono font-bold uppercase tracking-widest">Reseña Crítica</div>
+                    <div id="detailTag"
+                        class="inline-block bg-stone-200 dark:bg-stone-800 text-stone-800 dark:text-stone-300 journal-border px-2.5 py-0.5 text-[10px] font-mono font-bold uppercase tracking-widest">
+                        Reseña Crítica</div>
                     <h2 id="detailTitle" class="text-xl font-extrabold font-heading leading-tight">Título</h2>
                     <div class="flex items-center space-x-3 text-xs font-mono text-stone-600 dark:text-stone-400">
-                        <span id="detailRating" class="text-amber-700 dark:text-amber-500 font-bold"><i class="fa-solid fa-star mr-1"></i>8.5</span>
+                        <span id="detailRating" class="text-amber-700 dark:text-amber-500 font-bold"><i
+                                class="fa-solid fa-star mr-1"></i>8.5</span>
                         <span id="detailVotes"><i class="fa-solid fa-users mr-1"></i>120k votos</span>
                     </div>
                     <p class="text-xs font-mono text-stone-500" id="detailYear">Año: 2024</p>
@@ -348,112 +530,178 @@
             </div>
             <div class="space-y-1">
                 <h4 class="text-xs font-heading font-bold uppercase tracking-wider">Sinopsis Editorial</h4>
-                <div id="detailOverview" class="text-xs font-serif text-stone-700 dark:text-stone-300 bg-stone-100 dark:bg-stone-950 p-3 journal-border max-h-24 overflow-y-auto custom-scrollbar leading-relaxed">Sinopsis no disponible.</div>
+                <div id="detailOverview"
+                    class="text-xs font-serif text-stone-700 dark:text-stone-300 bg-stone-100 dark:bg-stone-950 p-3 journal-border max-h-24 overflow-y-auto custom-scrollbar leading-relaxed">
+                    Sinopsis no disponible.</div>
             </div>
-            
+
             <div class="bg-stone-100 dark:bg-stone-950 journal-border p-3.5 space-y-3">
                 <div class="flex items-center justify-between">
-                    <h4 class="text-xs font-heading font-bold text-rose-900 dark:text-rose-400 flex items-center space-x-1.5">
+                    <h4
+                        class="text-xs font-heading font-bold text-rose-900 dark:text-rose-400 flex items-center space-x-1.5">
                         <i class="fa-solid fa-star text-amber-500"></i><span>Bitácora y Calificación Personal</span>
                     </h4>
-                    <button onclick="clearPersonalRating()" class="text-[10px] font-mono text-stone-500 hover:text-rose-800 transition">Borrar nota</button>
+                    <button onclick="clearPersonalRating()"
+                        class="text-[10px] font-mono text-stone-500 hover:text-rose-800 transition">Borrar nota</button>
                 </div>
                 <div class="space-y-1">
                     <div class="flex items-center justify-between text-xs font-mono">
-                        <span class="text-stone-500">Nota del crítico: <strong id="starRatingText" class="text-amber-600">0.0</strong> / 10</span>
+                        <span class="text-stone-500">Nota del crítico: <strong id="starRatingText"
+                                class="text-amber-600">0.0</strong> / 10</span>
                     </div>
-                    <div id="starContainer" class="flex flex-wrap gap-1 items-center bg-stone-50 dark:bg-stone-900 p-2 journal-border"></div>
+                    <div id="starContainer"
+                        class="flex flex-wrap gap-1 items-center bg-stone-50 dark:bg-stone-900 p-2 journal-border">
+                    </div>
                 </div>
+
+                <!-- Titular opcional para la reseña -->
+                <div class="space-y-1">
+                    <label class="block text-[10px] font-mono uppercase text-stone-500">Titular de la reseña
+                        (Opcional):</label>
+                    <input type="text" id="userReviewTitleInput" placeholder="Ej: Una obra maestra visual..."
+                        class="w-full bg-stone-50 dark:bg-stone-900 journal-border rounded-none px-3 py-1.5 text-xs font-serif placeholder-stone-400 focus:outline-none focus:border-rose-800 transition">
+                </div>
+
                 <div>
-                    <textarea id="userPersonalReview" placeholder="Escribe tus notas al margen, impresiones o fecha de función..." rows="2" class="w-full bg-stone-50 dark:bg-stone-900 journal-border rounded-none p-2.5 text-xs font-serif placeholder-stone-400 focus:outline-none focus:border-rose-800 custom-scrollbar transition"></textarea>
+                    <textarea id="userPersonalReview"
+                        placeholder="Escribe tus notas al margen, impresiones o fecha de función..." rows="2"
+                        class="w-full bg-stone-50 dark:bg-stone-900 journal-border rounded-none p-2.5 text-xs font-serif placeholder-stone-400 focus:outline-none focus:border-rose-800 custom-scrollbar transition"></textarea>
                 </div>
-                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between pt-1 border-t border-stone-200 dark:border-stone-800 gap-2">
-                    <label class="flex items-center space-x-2 text-xs font-serif text-stone-600 dark:text-stone-400 cursor-pointer select-none">
-                        <!-- Casilla marcada por defecto -->
+                <div
+                    class="flex flex-col sm:flex-row items-start sm:items-center justify-between pt-1 border-t border-stone-200 dark:border-stone-800 gap-2">
+                    <label
+                        class="flex items-center space-x-2 text-xs font-serif text-stone-600 dark:text-stone-400 cursor-pointer select-none">
                         <input type="checkbox" id="userPublicReviewCheck" checked class="rounded-none accent-rose-800">
                         <span>Publicar en Diario Mural</span>
                     </label>
                     <div class="flex items-center space-x-2 w-full sm:w-auto justify-end">
-                        <span id="saveStatusIndicator" class="text-[11px] font-mono text-emerald-600 dark:text-emerald-400 hidden"><i class="fa-solid fa-check mr-1"></i>Guardado</span>
-                        <button onclick="savePersonalReview()" class="py-1.5 px-4 bg-stone-800 hover:bg-stone-700 dark:bg-stone-800 text-stone-100 journal-border text-xs font-mono font-semibold transition uppercase tracking-wider">Guardar Apunte</button>
+                        <span id="saveStatusIndicator"
+                            class="text-[11px] font-mono text-emerald-600 dark:text-emerald-400 hidden"><i
+                                class="fa-solid fa-check mr-1"></i>Guardado</span>
+                        <button onclick="savePersonalReview()"
+                            class="py-1.5 px-4 bg-stone-800 hover:bg-stone-700 dark:bg-stone-800 text-stone-100 journal-border text-xs font-mono font-semibold transition uppercase tracking-wider">Guardar
+                            Apunte</button>
                     </div>
                 </div>
             </div>
 
             <!-- Críticas públicas de la comunidad para la película -->
             <div class="space-y-2 border-t border-stone-200 dark:border-stone-800 pt-3">
-                <h4 class="text-xs font-heading font-bold uppercase tracking-wider flex items-center space-x-1.5 text-amber-700 dark:text-amber-500">
+                <h4
+                    class="text-xs font-heading font-bold uppercase tracking-wider flex items-center space-x-1.5 text-amber-700 dark:text-amber-500">
                     <i class="fa-solid fa-newspaper text-xs"></i><span>Comentarios del Diario Mural</span>
                 </h4>
-                <div id="detailPublicReviewsContainer" class="space-y-2 max-h-36 overflow-y-auto custom-scrollbar pr-1"></div>
+                <div id="detailPublicReviewsContainer" class="space-y-2 max-h-36 overflow-y-auto custom-scrollbar pr-1">
+                </div>
             </div>
 
             <div class="grid grid-cols-2 gap-3 pt-1">
-                <button onclick='openQuickListMenuFromDetail(event)' class="py-2 bg-stone-200 dark:bg-stone-800 hover:bg-stone-300 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 font-serif font-semibold rounded-none text-xs journal-border transition flex items-center justify-center space-x-1.5 uppercase tracking-wider">
+                <button onclick='openQuickListMenuFromDetail(event)'
+                    class="py-2 bg-stone-200 dark:bg-stone-800 hover:bg-stone-300 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 font-serif font-semibold rounded-none text-xs journal-border transition flex items-center justify-center space-x-1.5 uppercase tracking-wider">
                     <i class="fa-solid fa-folder-plus"></i><span>Fichar en Cuaderno</span>
                 </button>
-                <button id="detailAddBtn" onclick="" class="py-2 bg-rose-900 hover:bg-rose-800 text-white font-serif font-semibold rounded-none text-xs journal-border transition flex items-center justify-center space-x-1.5 uppercase tracking-wider">
+                <button id="detailAddBtn" onclick=""
+                    class="py-2 bg-rose-900 hover:bg-rose-800 text-white font-serif font-semibold rounded-none text-xs journal-border transition flex items-center justify-center space-x-1.5 uppercase tracking-wider">
                     <i class="fa-solid fa-plus"></i><span>Añadir a Sorteo</span>
                 </button>
             </div>
         </div>
     </div>
 
-    <div id="confirmModal" class="fixed inset-0 bg-stone-950/75 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-        <div class="bg-stone-50 dark:bg-stone-900 journal-border rounded-none max-w-sm w-full p-6 space-y-4 text-center relative shadow-2xl">
-            <div class="w-12 h-12 bg-rose-900/10 text-rose-800 rounded-full flex items-center justify-center mx-auto text-xl journal-border"><i class="fa-solid fa-triangle-exclamation"></i></div>
+    <!-- Modales adicionales de confirmación, ajustes y perfil -->
+    <div id="confirmModal"
+        class="fixed inset-0 bg-stone-950/75 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div
+            class="bg-stone-50 dark:bg-stone-900 journal-border rounded-none max-w-sm w-full p-6 space-y-4 text-center relative shadow-2xl">
+            <div
+                class="w-12 h-12 bg-rose-900/10 text-rose-800 rounded-full flex items-center justify-center mx-auto text-xl journal-border">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
             <div class="space-y-1">
                 <h3 class="text-base font-heading font-bold">¿Descartar Cuaderno?</h3>
-                <p id="confirmModalText" class="text-xs font-serif text-stone-500">Esta acción eliminará permanentemente la libreta.</p>
+                <p id="confirmModalText" class="text-xs font-serif text-stone-500">Esta acción eliminará permanentemente
+                    la libreta.</p>
             </div>
             <div class="grid grid-cols-2 gap-2 pt-2">
-                <button onclick="closeConfirmModal()" class="py-2 bg-stone-200 dark:bg-stone-800 text-stone-800 dark:text-stone-300 font-mono font-semibold rounded-none text-xs journal-border transition">Conservar</button>
-                <button id="confirmDeleteBtn" onclick="" class="py-2 bg-rose-900 hover:bg-rose-800 text-white font-mono font-semibold rounded-none text-xs journal-border transition">Descartar</button>
+                <button onclick="closeConfirmModal()"
+                    class="py-2 bg-stone-200 dark:bg-stone-800 text-stone-800 dark:text-stone-300 font-mono font-semibold rounded-none text-xs journal-border transition">Conservar</button>
+                <button id="confirmDeleteBtn" onclick=""
+                    class="py-2 bg-rose-900 hover:bg-rose-800 text-white font-mono font-semibold rounded-none text-xs journal-border transition">Descartar</button>
             </div>
         </div>
     </div>
 
-    <div id="winnerModal" class="fixed inset-0 bg-stone-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-        <div class="bg-stone-50 dark:bg-stone-900 journal-border rounded-none max-w-md w-full p-6 space-y-4 text-center relative shadow-2xl">
-            <button onclick="closeModal()" class="absolute top-4 right-4 text-stone-400 hover:text-stone-800 dark:hover:text-white text-lg p-1 transition"><i class="fa-solid fa-xmark"></i></button>
-            <div class="inline-block bg-amber-600/10 text-amber-700 dark:text-amber-400 journal-border px-3 py-1 text-xs font-mono font-bold uppercase tracking-wider" id="modalTag">🏆 Selección del Sorteo</div>
+    <!-- Modal de Ganador de Ruleta -->
+    <div id="winnerModal"
+        class="fixed inset-0 bg-stone-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div
+            class="bg-stone-50 dark:bg-stone-900 journal-border rounded-none max-w-md w-full p-6 space-y-4 text-center relative shadow-2xl">
+            <button onclick="closeModal()"
+                class="absolute top-4 right-4 text-stone-400 hover:text-stone-800 dark:hover:text-white text-lg p-1 transition"><i
+                    class="fa-solid fa-xmark"></i></button>
+            <div class="inline-block bg-amber-600/10 text-amber-700 dark:text-amber-400 journal-border px-3 py-1 text-xs font-mono font-bold uppercase tracking-wider"
+                id="modalTag">🏆 Selección del Sorteo</div>
             <div class="space-y-1">
                 <h2 id="modalTitle" class="text-2xl font-extrabold font-heading">Título</h2>
                 <div class="flex items-center justify-center space-x-3 text-xs font-mono text-stone-500">
-                    <span id="modalRating" class="text-amber-700 dark:text-amber-500 font-bold"><i class="fa-solid fa-star mr-1"></i>8.5</span>
+                    <span id="modalRating" class="text-amber-700 dark:text-amber-500 font-bold"><i
+                            class="fa-solid fa-star mr-1"></i>8.5</span>
                     <span id="modalVotes"><i class="fa-solid fa-users mr-1"></i>120k votos</span>
                 </div>
             </div>
             <div class="relative w-32 mx-auto">
                 <img id="modalPoster" src="" alt="Poster" class="w-32 h-48 object-cover journal-border shadow-md">
-                <button id="winnerWatchedBtn" onclick="" class="absolute top-2 right-2 p-1.5 rounded-none text-xs backdrop-blur-md transition journal-border shadow-md"><i id="winnerWatchedIcon" class="fa-solid fa-eye"></i></button>
+                <button id="winnerWatchedBtn" onclick=""
+                    class="absolute top-2 right-2 p-1.5 rounded-none text-xs backdrop-blur-md transition journal-border shadow-md"><i
+                        id="winnerWatchedIcon" class="fa-solid fa-eye"></i></button>
             </div>
-            <div id="modalOverview" class="text-xs font-serif text-stone-700 dark:text-stone-300 text-left bg-stone-100 dark:bg-stone-950 p-3 journal-border max-h-28 overflow-y-auto custom-scrollbar leading-relaxed">Sinopsis no disponible.</div>
+            <div id="modalOverview"
+                class="text-xs font-serif text-stone-700 dark:text-stone-300 text-left bg-stone-100 dark:bg-stone-950 p-3 journal-border max-h-28 overflow-y-auto custom-scrollbar leading-relaxed">
+                Sinopsis no disponible.</div>
             <div class="grid grid-cols-2 gap-2 pt-1">
-                <button id="winnerAddListBtn" onclick="" class="py-2 bg-stone-200 dark:bg-stone-800 hover:bg-stone-300 text-stone-800 dark:text-stone-200 font-serif font-semibold rounded-none text-xs journal-border transition flex items-center justify-center space-x-1.5 uppercase tracking-wider">
+                <button id="winnerAddListBtn" onclick=""
+                    class="py-2 bg-stone-200 dark:bg-stone-800 hover:bg-stone-300 text-stone-800 dark:text-stone-200 font-serif font-semibold rounded-none text-xs journal-border transition flex items-center justify-center space-x-1.5 uppercase tracking-wider">
                     <i class="fa-solid fa-folder-plus"></i><span>Fichar en Cuaderno</span>
                 </button>
-                <button onclick="getRandomRecommendation()" class="py-2 bg-rose-900 hover:bg-rose-800 text-white font-serif font-semibold rounded-none text-xs journal-border transition flex items-center justify-center space-x-1.5 uppercase tracking-wider">
+                <button onclick="getRandomRecommendation()"
+                    class="py-2 bg-rose-900 hover:bg-rose-800 text-white font-serif font-semibold rounded-none text-xs journal-border transition flex items-center justify-center space-x-1.5 uppercase tracking-wider">
                     <i class="fa-solid fa-shuffle"></i><span>Sortear Otra</span>
                 </button>
             </div>
         </div>
     </div>
 
-    <div id="settingsModal" class="fixed inset-0 bg-stone-950/75 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-        <div class="bg-stone-50 dark:bg-stone-900 journal-border rounded-none max-w-sm w-full p-6 space-y-4 text-left relative shadow-2xl">
-            <button onclick="toggleSettingsModal()" class="absolute top-4 right-4 text-stone-400 hover:text-stone-800 dark:hover:text-white text-lg p-1 transition"><i class="fa-solid fa-xmark"></i></button>
+    <!-- Modal de Ajustes -->
+    <div id="settingsModal"
+        class="fixed inset-0 bg-stone-950/75 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div
+            class="bg-stone-50 dark:bg-stone-900 journal-border rounded-none max-w-sm w-full p-6 space-y-4 text-left relative shadow-2xl">
+            <button onclick="toggleSettingsModal()"
+                class="absolute top-4 right-4 text-stone-400 hover:text-stone-800 dark:hover:text-white text-lg p-1 transition"><i
+                    class="fa-solid fa-xmark"></i></button>
             <div class="flex items-center space-x-2 font-heading font-bold text-lg">
                 <i class="fa-solid fa-sliders text-rose-800"></i><span>Ajustes de Edición</span>
             </div>
             <div class="space-y-3 text-sm font-serif">
                 <div>
                     <label class="block text-xs font-mono text-stone-500 mb-1">Nombre de Usuario (Firmante)</label>
-                    <input type="text" id="usernameInput" onchange="updateUsername(this.value)" placeholder="Tu nombre o seudónimo..." class="w-full bg-stone-100 dark:bg-stone-950 journal-border rounded-none px-3 py-2 text-xs font-serif focus:border-rose-800">
+                    <input type="text" id="usernameInput" onchange="updateUsername(this.value)"
+                        placeholder="Tu nombre o seudónimo..."
+                        class="w-full bg-stone-100 dark:bg-stone-950 journal-border rounded-none px-3 py-2 text-xs font-serif focus:border-rose-800">
+                </div>
+                <div>
+                    <label class="block text-xs font-mono text-stone-500 mb-1">Pantalla de Inicio Predeterminada</label>
+                    <select id="startPageSelect" onchange="setStartPage(this.value)"
+                        class="w-full bg-stone-100 dark:bg-stone-950 journal-border rounded-none px-3 py-2 text-xs font-serif focus:border-rose-800">
+                        <option value="mural">📰 Diario Mural</option>
+                        <option value="catalog">🎬 Cartelera y Catálogo</option>
+                        <option value="roulette">🎯 Sorteo y Ruleta</option>
+                    </select>
                 </div>
                 <div>
                     <label class="block text-xs font-mono text-stone-500 mb-1">Idioma de Títulos y Carátulas</label>
-                    <select id="titleLangSelect" onchange="changeTitleLanguage(this.value)" class="w-full bg-stone-100 dark:bg-stone-950 journal-border rounded-none px-3 py-2 text-xs font-serif focus:border-rose-800">
+                    <select id="titleLangSelect" onchange="changeTitleLanguage(this.value)"
+                        class="w-full bg-stone-100 dark:bg-stone-950 journal-border rounded-none px-3 py-2 text-xs font-serif focus:border-rose-800">
                         <option value="en-US" selected>Inglés / Título Original</option>
                         <option value="es-MX">Español Latino (América Latina)</option>
                         <option value="es-ES">Español de España</option>
@@ -461,123 +709,164 @@
                 </div>
                 <div>
                     <label class="block text-xs font-mono text-stone-500 mb-1">Idioma de Sinopsis e Interfaz</label>
-                    <select id="languageSelect" onchange="changeLanguage(this.value)" class="w-full bg-stone-100 dark:bg-stone-950 journal-border rounded-none px-3 py-2 text-xs font-serif focus:border-rose-800">
+                    <select id="languageSelect" onchange="changeLanguage(this.value)"
+                        class="w-full bg-stone-100 dark:bg-stone-950 journal-border rounded-none px-3 py-2 text-xs font-serif focus:border-rose-800">
                         <option value="es-MX" selected>Español Latino (América Latina)</option>
                         <option value="es-ES">Español de España</option>
                         <option value="en-US">Inglés</option>
                     </select>
                 </div>
             </div>
-            <button onclick="toggleSettingsModal()" class="w-full py-2 bg-stone-900 hover:bg-stone-800 text-white font-mono text-xs journal-border transition mt-2 uppercase tracking-wider">Guardar Ajustes</button>
+            <button onclick="toggleSettingsModal()"
+                class="w-full py-2 bg-stone-900 hover:bg-stone-800 text-white font-mono text-xs journal-border transition mt-2 uppercase tracking-wider">Guardar
+                Ajustes</button>
         </div>
     </div>
 
-    <!-- Importar la lógica de JavaScript separada -->
-    <script src="script.js"></script>
     <!-- PANEL LATERAL DE PERFIL (DRAWER) -->
-<div id="profileDrawerBackdrop" onclick="toggleProfileDrawer()" class="fixed inset-0 bg-stone-950/60 backdrop-blur-sm z-50 hidden transition-opacity duration-300"></div>
+    <div id="profileDrawerBackdrop" onclick="toggleProfileDrawer()"
+        class="fixed inset-0 bg-stone-950/60 backdrop-blur-sm z-50 hidden transition-opacity duration-300"></div>
 
-<aside id="profileDrawer" class="fixed top-0 right-0 h-full w-80 sm:w-96 bg-stone-50 dark:bg-stone-950 journal-border border-l-2 z-50 transform translate-x-full transition-transform duration-300 ease-in-out flex flex-col justify-between shadow-2xl overflow-y-auto custom-scrollbar">
-    <div>
-        <!-- Cabecera del Panel -->
-        <div class="p-4 border-b-2 border-stone-800 dark:border-stone-700 flex items-center justify-between bg-stone-100 dark:bg-stone-900">
-            <div class="flex items-center space-x-2 font-heading font-bold text-xs uppercase tracking-widest text-rose-900 dark:text-rose-400">
-                <i class="fa-solid fa-id-card"></i>
-                <span>Ficha de Redacción</span>
-            </div>
-            <button onclick="toggleProfileDrawer()" class="text-stone-400 hover:text-stone-800 dark:hover:text-white p-1 text-base transition">
-                <i class="fa-solid fa-xmark"></i>
-            </button>
-        </div>
-
-        <!-- Tarjeta de Usuario / Perfil -->
-        <div class="p-5 border-b border-stone-200 dark:border-stone-800 space-y-4 text-center bg-stone-50 dark:bg-stone-950">
-            <div class="relative w-20 h-20 mx-auto group">
-                <img id="drawerProfileAvatar" src="https://api.dicebear.com/7.x/bottts/svg?seed=Dante" alt="Foto de perfil" class="w-20 h-20 rounded-full journal-border shadow-md object-cover bg-stone-200 dark:bg-stone-900">
-                <button onclick="changeAvatarPreset()" title="Cambiar avatar" class="absolute bottom-0 right-0 w-6 h-6 bg-rose-900 text-stone-100 rounded-full journal-border flex items-center justify-center text-[10px] hover:scale-110 transition">
-                    <i class="fa-solid fa-camera"></i>
+    <aside id="profileDrawer"
+        class="fixed top-0 right-0 h-full w-80 sm:w-96 bg-stone-50 dark:bg-stone-950 journal-border border-l-2 z-50 transform translate-x-full transition-transform duration-300 ease-in-out flex flex-col justify-between shadow-2xl overflow-y-auto custom-scrollbar">
+        <div>
+            <div
+                class="p-4 border-b-2 border-stone-800 dark:border-stone-700 flex items-center justify-between bg-stone-100 dark:bg-stone-900">
+                <div
+                    class="flex items-center space-x-2 font-heading font-bold text-xs uppercase tracking-widest text-rose-900 dark:text-rose-400">
+                    <i class="fa-solid fa-id-card"></i>
+                    <span>Ficha de Redacción</span>
+                </div>
+                <button onclick="toggleProfileDrawer()"
+                    class="text-stone-400 hover:text-stone-800 dark:hover:text-white p-1 text-base transition">
+                    <i class="fa-solid fa-xmark"></i>
                 </button>
             </div>
-            <div class="space-y-0.5">
-                <h3 id="drawerUsername" class="font-heading font-bold text-lg text-stone-900 dark:text-stone-100">Dante</h3>
-                <span class="inline-block text-[10px] font-mono tracking-widest uppercase bg-rose-900/10 text-rose-800 dark:text-rose-400 journal-border px-2 py-0.5">Crítico Principal / Editor</span>
+
+            <div
+                class="p-5 border-b border-stone-200 dark:border-stone-800 space-y-3 text-center bg-stone-50 dark:bg-stone-950">
+                <div class="relative w-24 h-24 mx-auto group">
+                    <img id="drawerProfileAvatar" src="https://api.dicebear.com/7.x/bottts/svg?seed=Dante"
+                        alt="Foto de perfil" onclick="openAvatarPreviewModal()"
+                        class="w-24 h-24 rounded-full journal-border shadow-md object-cover bg-stone-200 dark:bg-stone-900 cursor-pointer hover:opacity-90 hover:scale-105 transition duration-200"
+                        title="Ver foto en grande">
+                    <button onclick="setAvatarByWordPrompt()" title="Opciones de avatar"
+                        class="absolute bottom-0 right-0 w-7 h-7 bg-rose-900 text-stone-100 rounded-full journal-border flex items-center justify-center text-xs hover:scale-110 transition shadow-lg">
+                        <i class="fa-solid fa-camera"></i>
+                    </button>
+                </div>
+
+                <div class="space-y-1">
+                    <h3 id="drawerUsername" class="font-heading font-bold text-lg text-stone-900 dark:text-stone-100">
+                        Dante</h3>
+                    <span
+                        class="inline-block text-[10px] font-mono tracking-widest uppercase bg-rose-900/10 text-rose-800 dark:text-rose-400 journal-border px-2 py-0.5">Crítico
+                        Principal / Editor</span>
+
+                    <div class="pt-2 relative group">
+                        <textarea id="drawerUserBioInput" onblur="saveUserBioFromDrawer(this.value)"
+                            placeholder="Escribe tu bio o manifiesto de crítico..." rows="2"
+                            class="w-full bg-stone-100/70 dark:bg-stone-900/70 journal-border rounded-none p-2 text-xs font-serif italic text-stone-700 dark:text-stone-300 focus:outline-none focus:border-rose-800 focus:bg-stone-100 dark:focus:bg-stone-900 resize-none transition leading-relaxed text-center"></textarea>
+                    </div>
+                </div>
+
+                <div
+                    class="grid grid-cols-3 gap-2 pt-2 border-t border-stone-200 dark:border-stone-800 text-center font-mono">
+                    <div onclick="openWatchedMoviesModal()"
+                        class="bg-stone-100 dark:bg-stone-900 p-2 journal-border cursor-pointer hover:border-amber-600 transition group"
+                        title="Ver historial de películas vistas">
+                        <span id="statWatchedCount"
+                            class="block text-sm font-bold text-amber-600 group-hover:scale-105 transition">0</span>
+                        <span class="text-[9px] text-stone-500 uppercase">Vistas</span>
+                    </div>
+                    <div onclick="openPersonalNotesModal()"
+                        class="bg-stone-100 dark:bg-stone-900 p-2 journal-border cursor-pointer hover:border-rose-800 transition group"
+                        title="Ver mis apuntes y reseñas">
+                        <span id="statBitacoraCount"
+                            class="block text-sm font-bold text-rose-800 dark:text-rose-400 group-hover:scale-105 transition">0</span>
+                        <span class="text-[9px] text-stone-500 uppercase">Apuntes</span>
+                    </div>
+                    <div onclick="goToCustomLists()"
+                        class="bg-stone-100 dark:bg-stone-900 p-2 journal-border cursor-pointer hover:border-stone-400 dark:hover:border-stone-500 transition group"
+                        title="Ir a mis cuadernos de listas">
+                        <span id="statListsCount"
+                            class="block text-sm font-bold text-stone-700 dark:text-stone-300 group-hover:scale-105 transition">0</span>
+                        <span class="text-[9px] text-stone-500 uppercase">Cuadernos</span>
+                    </div>
+                </div>
             </div>
 
-            <!-- Resumen de Estadísticas del Cineasta -->
-            <div class="grid grid-cols-3 gap-2 pt-2 border-t border-stone-200 dark:border-stone-800 text-center font-mono">
-                <div class="bg-stone-100 dark:bg-stone-900 p-2 journal-border">
-                    <span id="statWatchedCount" class="block text-sm font-bold text-amber-600">0</span>
-                    <span class="text-[9px] text-stone-500 uppercase">Vistas</span>
-                </div>
-                <div class="bg-stone-100 dark:bg-stone-900 p-2 journal-border">
-                    <span id="statBitacoraCount" class="block text-sm font-bold text-rose-800 dark:text-rose-400">0</span>
-                    <span class="text-[9px] text-stone-500 uppercase">Apuntes</span>
-                </div>
-                <div class="bg-stone-100 dark:bg-stone-900 p-2 journal-border">
-                    <span id="statListsCount" class="block text-sm font-bold text-stone-700 dark:text-stone-300">0</span>
-                    <span class="text-[9px] text-stone-500 uppercase">Cuadernos</span>
-                </div>
+            <div class="p-4 space-y-1.5 font-serif text-xs">
+                <div class="text-[10px] font-mono text-stone-400 uppercase tracking-widest px-2 pb-1">Navegación
+                    Personal</div>
+                <button onclick="switchMainTab('mural'); toggleProfileDrawer();"
+                    class="w-full text-left px-3 py-2 journal-border bg-stone-100 dark:bg-stone-900 hover:bg-stone-200 dark:hover:bg-stone-800 transition flex items-center justify-between group">
+                    <span class="flex items-center space-x-2.5">
+                        <i class="fa-solid fa-newspaper text-rose-800 dark:text-rose-400 w-4"></i>
+                        <span>Diario Mural (Comunidad)</span>
+                    </span>
+                    <i
+                        class="fa-solid fa-chevron-right text-[10px] text-stone-400 group-hover:translate-x-0.5 transition"></i>
+                </button>
+                <button onclick="switchMainTab('catalog'); toggleProfileDrawer();"
+                    class="w-full text-left px-3 py-2 journal-border bg-stone-100 dark:bg-stone-900 hover:bg-stone-200 dark:hover:bg-stone-800 transition flex items-center justify-between group">
+                    <span class="flex items-center space-x-2.5">
+                        <i class="fa-solid fa-book-open text-stone-700 dark:text-stone-300 w-4"></i>
+                        <span>Cartelera y Catálogo</span>
+                    </span>
+                    <i
+                        class="fa-solid fa-chevron-right text-[10px] text-stone-400 group-hover:translate-x-0.5 transition"></i>
+                </button>
+                <button onclick="switchMainTab('roulette'); toggleProfileDrawer();"
+                    class="w-full text-left px-3 py-2 journal-border bg-stone-100 dark:bg-stone-900 hover:bg-stone-200 dark:hover:bg-stone-800 transition flex items-center justify-between group">
+                    <span class="flex items-center space-x-2.5">
+                        <i class="fa-solid fa-rotate text-amber-500 w-4"></i>
+                        <span>Sorteo y Ruleta</span>
+                    </span>
+                    <i
+                        class="fa-solid fa-chevron-right text-[10px] text-stone-400 group-hover:translate-x-0.5 transition"></i>
+                </button>
             </div>
         </div>
 
-        <!-- Opciones y Menú de Perfil -->
-        <div class="p-4 space-y-1.5 font-serif text-xs">
-            <div class="text-[10px] font-mono text-stone-400 uppercase tracking-widest px-2 pb-1">Navegación Personal</div>
-            
-            <button onclick="switchRightTab('bitacora'); toggleProfileDrawer();" class="w-full text-left px-3 py-2 journal-border bg-stone-100 dark:bg-stone-900 hover:bg-stone-200 dark:hover:bg-stone-800 transition flex items-center justify-between group">
-                <span class="flex items-center space-x-2.5">
-                    <i class="fa-solid fa-star text-amber-500 w-4"></i>
-                    <span>Mi Bitácora de Reseñas</span>
-                </span>
-                <i class="fa-solid fa-chevron-right text-[10px] text-stone-400 group-hover:translate-x-0.5 transition"></i>
-            </button>
-
-            <button onclick="switchRightTab('mural'); toggleProfileDrawer();" class="w-full text-left px-3 py-2 journal-border bg-stone-100 dark:bg-stone-900 hover:bg-stone-200 dark:hover:bg-stone-800 transition flex items-center justify-between group">
-                <span class="flex items-center space-x-2.5">
-                    <i class="fa-solid fa-newspaper text-rose-800 dark:text-rose-400 w-4"></i>
-                    <span>Mis Publicaciones en Mural</span>
-                </span>
-                <i class="fa-solid fa-chevron-right text-[10px] text-stone-400 group-hover:translate-x-0.5 transition"></i>
-            </button>
-
-            <button onclick="switchRightTab('vistas'); toggleProfileDrawer();" class="w-full text-left px-3 py-2 journal-border bg-stone-100 dark:bg-stone-900 hover:bg-stone-200 dark:hover:bg-stone-800 transition flex items-center justify-between group">
-                <span class="flex items-center space-x-2.5">
-                    <i class="fa-solid fa-eye text-emerald-600 w-4"></i>
-                    <span>Histórico de Películas Vistas</span>
-                </span>
-                <i class="fa-solid fa-chevron-right text-[10px] text-stone-400 group-hover:translate-x-0.5 transition"></i>
-            </button>
-
-            <div class="text-[10px] font-mono text-stone-400 uppercase tracking-widest px-2 pt-3 pb-1">Colecciones y Clasificación</div>
-
-            <button onclick="scrollToLists(); toggleProfileDrawer();" class="w-full text-left px-3 py-2 journal-border bg-stone-100 dark:bg-stone-900 hover:bg-stone-200 dark:hover:bg-stone-800 transition flex items-center justify-between group">
-                <span class="flex items-center space-x-2.5">
-                    <i class="fa-solid fa-feather text-stone-700 dark:text-stone-300 w-4"></i>
-                    <span>Mis Cuadernos y Listas (TOP 10)</span>
-                </span>
-                <i class="fa-solid fa-chevron-right text-[10px] text-stone-400 group-hover:translate-x-0.5 transition"></i>
-            </button>
-
-            <button onclick="toggleSettingsModal(); toggleProfileDrawer();" class="w-full text-left px-3 py-2 journal-border bg-stone-100 dark:bg-stone-900 hover:bg-stone-200 dark:hover:bg-stone-800 transition flex items-center justify-between group">
-                <span class="flex items-center space-x-2.5">
-                    <i class="fa-solid fa-sliders text-stone-500 w-4"></i>
-                    <span>Ajustes de Perfil e Idioma</span>
-                </span>
-                <i class="fa-solid fa-chevron-right text-[10px] text-stone-400 group-hover:translate-x-0.5 transition"></i>
+        <div class="p-4 border-t border-stone-200 dark:border-stone-800 bg-stone-100 dark:bg-stone-900 space-y-2">
+            <button onclick="toggleSettingsModal(); toggleProfileDrawer();"
+                class="w-full py-1.5 bg-stone-800 hover:bg-stone-700 text-stone-100 font-mono text-xs journal-border transition uppercase tracking-wider">
+                <i class="fa-solid fa-gear mr-1"></i> Configurar Perfil
             </button>
         </div>
-    </div>
-
-    <!-- Pie del Panel (Estado de Cuenta / Futuro Login) -->
-    <div class="p-4 border-t border-stone-200 dark:border-stone-800 bg-stone-100 dark:bg-stone-900 space-y-2">
-        <div class="flex items-center justify-between text-[11px] font-mono text-stone-500">
-            <span>Estado de Cuenta:</span>
-            <span class="text-emerald-600 font-bold flex items-center"><i class="fa-solid fa-circle text-[8px] mr-1"></i>Perfil Local</span>
-        </div>
-        <button onclick="toggleSettingsModal(); toggleProfileDrawer();" class="w-full py-1.5 bg-stone-800 hover:bg-stone-700 text-stone-100 font-mono text-xs journal-border transition uppercase tracking-wider">
-            <i class="fa-solid fa-gear mr-1"></i> Configurar Perfil
-        </button>
-    </div>
     </aside>
+
+    <!-- MODAL PARA PALABRA CLAVE DE AVATAR (Reemplazo del prompt nativo) -->
+    <div id="avatarWordModal"
+        class="fixed inset-0 bg-stone-950/80 backdrop-blur-sm z-[115] hidden flex items-center justify-center p-4">
+        <div
+            class="bg-stone-50 dark:bg-stone-900 journal-border rounded-none max-w-sm w-full p-6 space-y-4 text-left relative shadow-2xl">
+            <button onclick="closeAvatarWordModal()"
+                class="absolute top-4 right-4 text-stone-400 hover:text-stone-800 dark:hover:text-white text-lg"><i
+                    class="fa-solid fa-xmark"></i></button>
+            <div
+                class="flex items-center space-x-2 font-heading font-bold text-sm uppercase tracking-wider text-rose-900 dark:text-rose-400">
+                <i class="fa-solid fa-key"></i>
+                <span>Generar Avatar por Palabra</span>
+            </div>
+            <p class="text-xs font-serif text-stone-600 dark:text-stone-400">Escribe un concepto, seudónimo o palabra
+                clave
+                para generar tu identidad gráfica:</p>
+            <input type="text" id="avatarWordPromptInput" placeholder="Ej: CinéfiloNoir..."
+                class="w-full bg-stone-100 dark:bg-stone-950 journal-border rounded-none px-3 py-2 text-xs font-serif focus:outline-none focus:border-rose-800"
+                onkeydown="if(event.key === 'Enter') confirmAvatarWordPrompt()">
+            <div class="grid grid-cols-2 gap-2 pt-2">
+                <button onclick="closeAvatarWordModal()"
+                    class="py-2 bg-stone-200 dark:bg-stone-800 text-stone-800 dark:text-stone-300 font-mono text-xs journal-border">Cancelar</button>
+                <button onclick="confirmAvatarWordPrompt()"
+                    class="py-2 bg-rose-900 hover:bg-rose-800 text-white font-mono text-xs journal-border uppercase">Generar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Script principal unificado -->
+    <script src="script.js"></script>
 </body>
+
 </html>
