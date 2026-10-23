@@ -12,11 +12,12 @@ let watchedMovies = JSON.parse(localStorage.getItem('cine_watched_movies') || '[
 let watchedMoviesData = JSON.parse(localStorage.getItem('cine_watched_movies_data') || '{}');
 let personalReviews = JSON.parse(localStorage.getItem('cine_personal_reviews') || '{}');
 let customLists = JSON.parse(localStorage.getItem('cine_custom_lists') || '[]');
-let currentUsername = localStorage.getItem('cine_username') || 'Dante';
+let currentUsername = localStorage.getItem('cine_username') || 'Invitado/a';
+let sortDirection = "desc";
 
 let currentUserBio = localStorage.getItem('cine_user_bio') || 'Apasionado del cine de autor y el análisis fílmico.';
 let currentAvatarCustomUrl = localStorage.getItem('cine_avatar_custom_url') || null;
-let currentAvatarSeed = localStorage.getItem('cine_avatar_seed') || 'Dante';
+let currentAvatarSeed = localStorage.getItem('cine_avatar_seed') || 'Invitado/a';
 let defaultMainTab = localStorage.getItem('cine_default_tab') || 'mural';
 
 let currentDetailMenuMovie = null;
@@ -53,6 +54,63 @@ function getAudioContext() {
     return audioCtx;
 }
 
+function makeModalDraggable(modalId, headerId) {
+    const modal = document.getElementById(modalId);
+    const header = document.getElementById(headerId);
+    if (!modal || !header) return;
+
+    let isDragging = false;
+    let startX, startY, initialLeft, initialTop;
+
+    header.style.cursor = 'move';
+
+    header.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        startX = e.clientX;
+        startY = e.clientY;
+
+        const rect = modal.firstElementChild.getBoundingClientRect();
+        initialLeft = rect.left;
+        initialTop = rect.top;
+
+        modal.firstElementChild.style.position = 'absolute';
+        modal.firstElementChild.style.margin = '0';
+        modal.firstElementChild.style.left = initialLeft + 'px';
+        modal.firstElementChild.style.top = initialTop + 'px';
+
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+        e.preventDefault();
+    });
+
+    function onMouseMove(e) {
+        if (!isDragging) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+
+        modal.firstElementChild.style.left = (initialLeft + dx) + 'px';
+        modal.firstElementChild.style.top = (initialTop + dy) + 'px';
+    }
+
+    function onMouseUp() {
+        isDragging = false;
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+    }
+}
+
+function resetModalPosition(modalId) {
+    const modal = document.getElementById(modalId);
+    if (!modal) return;
+    const contentEl = modal.querySelector('.draggable-modal-content') || modal.firstElementChild;
+    if (contentEl) {
+        contentEl.style.position = '';
+        contentEl.style.margin = '';
+        contentEl.style.left = '';
+        contentEl.style.top = '';
+    }
+}
+
 function playTickSound() {
     if (!soundEnabled) return;
     try {
@@ -69,6 +127,17 @@ function playTickSound() {
         osc.start();
         osc.stop(ctx.currentTime + 0.04);
     } catch (e) { }
+}
+
+function toggleSortDirection() {
+    sortDirection = sortDirection === "desc" ? "asc" : "desc";
+    const icon = document.getElementById('sortDirectionIcon');
+    if (icon) {
+        icon.className = sortDirection === "desc"
+            ? "fa-solid fa-arrow-down-wide-short"
+            : "fa-solid fa-arrow-up-short-wide";
+    }
+    resetAndFetchFilteredMovies();
 }
 
 function playVictorySound() {
@@ -126,6 +195,7 @@ function toggleMute() {
 }
 
 function toggleSettingsModal() {
+    resetModalPosition('settingsModal');
     const modal = document.getElementById('settingsModal');
     const uInput = document.getElementById('usernameInput');
     const startPageSelect = document.getElementById('startPageSelect');
@@ -182,7 +252,7 @@ function switchMainTab(tabName) {
     if (tabName === 'mural') {
         if (viewMural) {
             viewMural.classList.remove('hidden');
-            renderMuralFeed('all'); // Asegura la carga automática
+            renderMuralFeed('all');
         }
         if (btnMural) btnMural.className = activeClasses;
     } else if (tabName === 'catalog') {
@@ -360,7 +430,7 @@ function openUserProfileModal(username, avatarSeed, role) {
                 </div>
             </div>
 
-            <button onclick="document.getElementById('userProfileModal').classList.add('hidden')" class="w-full py-2 bg-stone-800 hover:bg-stone-700 text-stone-100 font-mono text-xs journal-border transition uppercase tracking-wider">Cerrar Ficha</button>
+            <button onclick="document.getElementById('userProfileModal').classList.add('hidden')" class="w-full py-2 bg-stone-800 hover:bg-stone-700 text-stone-100 font-mono text-xs journal-border transition uppercase tracking-wider">Cerrar ficha</button>
         </div>
     `;
     modal.classList.remove('hidden');
@@ -380,7 +450,7 @@ async function openUserStatsDetail(username, type) {
     let contentHtml = "";
 
     if (type === 'watched') {
-        titleHeader = `Películas Vistas de ${username}`;
+        titleHeader = `Películas vistas de ${username}`;
         let items = [];
         if (isMe) {
             items = watchedMovies.map(id => watchedMoviesData[id] || { id: id, title: `Película ID: ${id}`, poster: 'https://via.placeholder.com/150' });
@@ -409,7 +479,7 @@ async function openUserStatsDetail(username, type) {
             contentHtml += `</ul>`;
         }
     } else if (type === 'reviews') {
-        titleHeader = `Apuntes y Reseñas de ${username}`;
+        titleHeader = `Apuntes y reseñas de ${username}`;
         let revs = [];
         if (isMe) {
             const allPosts = getCommunityAndUserPosts();
@@ -421,7 +491,7 @@ async function openUserStatsDetail(username, type) {
             }));
         } else {
             revs = [
-                { postId: 'comm_2', reviewTitle: "¿El cine de autor está perdiendo espacio?", review: "Abro debate: cada vez cuesta más encontrar películas independientes en salas tradicionales...", movieTitle: "Muro de Debate" }
+                { postId: 'comm_2', reviewTitle: "¿El cine de autor está perdiendo espacio?", review: "Abro debate: cada vez cuesta más encontrar películas independientes en salas tradicionales...", movieTitle: "Muro de debate" }
             ];
         }
 
@@ -434,7 +504,7 @@ async function openUserStatsDetail(username, type) {
                     <div onclick="closeUserStatsDetailModal(); openMuralPostModal('${r.postId}')" class="bg-stone-100 dark:bg-stone-950 p-3 journal-border space-y-1 text-xs cursor-pointer hover:border-rose-900 transition">
                         <div class="flex items-center justify-between font-mono text-[10px] text-stone-400">
                             <span>${r.movieTitle}</span>
-                            <span class="text-rose-800 dark:text-rose-400 font-bold">Ver en Mural →</span>
+                            <span class="text-rose-800 dark:text-rose-400 font-bold">Ver en mural →</span>
                         </div>
                         <h5 class="font-heading font-bold text-rose-900 dark:text-rose-400">${r.reviewTitle}</h5>
                         <p class="font-serif italic text-stone-700 dark:text-stone-300 line-clamp-2">"${r.review}"</p>
@@ -444,14 +514,14 @@ async function openUserStatsDetail(username, type) {
             contentHtml += `</div>`;
         }
     } else if (type === 'lists') {
-        titleHeader = `Cuadernos Temáticos de ${username}`;
+        titleHeader = `Cuadernos temáticos de ${username}`;
         let lists = [];
         if (isMe) {
             lists = customLists;
         } else {
             lists = [
-                { name: "Cine de Autor Contemporáneo", movies: [{ id: 872585, title: "Oppenheimer", poster: "https://image.tmdb.org/t/p/w500/8Gxv8gSFCU0XGDykEGv7zR1n2ua.jpg" }, { id: 792307, title: "Pobres Criaturas", poster: "https://image.tmdb.org/t/p/w500/kCGlIMHnOm8JPXq3rXM6c5wMxcT.jpg" }] },
-                { name: "Joyas Ocultas de los 90s", movies: [{ id: 680, title: "Pulp Fiction", poster: "https://image.tmdb.org/t/p/w500/fIE3L2c322LFi2M3R2921.jpg" }, { id: 275, title: "Fargo", poster: "https://image.tmdb.org/t/p/w500/52531.jpg" }] }
+                { name: "Cine de autor contemporáneo", movies: [{ id: 872585, title: "Oppenheimer", poster: "https://image.tmdb.org/t/p/w500/8Gxv8gSFCU0XGDykEGv7zR1n2ua.jpg" }, { id: 792307, title: "Pobres Criaturas", poster: "https://image.tmdb.org/t/p/w500/kCGlIMHnOm8JPXq3rXM6c5wMxcT.jpg" }] },
+                { name: "Joyas ocultas de los 90s", movies: [{ id: 680, title: "Pulp Fiction", poster: "https://image.tmdb.org/t/p/w500/fIE3L2c322LFi2M3R2921.jpg" }, { id: 275, title: "Fargo", poster: "https://image.tmdb.org/t/p/w500/52531.jpg" }] }
             ];
         }
 
@@ -540,7 +610,6 @@ function closeUserListContentModal() {
     if (profileModal) profileModal.classList.add('hidden');
 }
 
-// FUNCIÓN PARA MARCAR / DESMARCAR PELÍCULA COMO VISTA DESDE EL MODAL DE DETALLE
 function toggleWatchedStatus(movieId) {
     if (!movieId) return;
 
@@ -569,6 +638,12 @@ function toggleWatchedStatus(movieId) {
     renderResultsGrid();
 }
 
+function autoResizeTextarea(textarea) {
+    if (!textarea) return;
+    textarea.style.height = 'auto';
+    textarea.style.height = (textarea.scrollHeight) + 'px';
+}
+
 function updateWatchedBtnUI(movieId) {
     const btn = document.getElementById('detailWatchedBtn');
     if (!btn) return;
@@ -586,9 +661,20 @@ function updateWatchedBtnUI(movieId) {
 }
 
 function openDetailModal(movie, tag) {
+    resetModalPosition('detailModal');
+
+    // Resetea cualquier tamaño personalizado previo para que nazca con su tamaño original
+    const modalContent = document.querySelector('#detailModal .draggable-modal-content');
+    if (modalContent) {
+        modalContent.style.width = '';
+        modalContent.style.height = '';
+        modalContent.style.maxWidth = '';
+        modalContent.style.maxHeight = '';
+    }
+
     currentDetailMovie = movie;
     const detailTag = document.getElementById('detailTag');
-    if (detailTag) detailTag.innerText = tag || "Reseña Crítica";
+    if (detailTag) detailTag.innerText = tag || "Reseña crítica";
 
     const detailTitle = document.getElementById('detailTitle');
     if (detailTitle) detailTitle.innerHTML = movie.title;
@@ -596,7 +682,28 @@ function openDetailModal(movie, tag) {
     const detailPoster = document.getElementById('detailPoster');
     if (detailPoster) detailPoster.src = movie.poster;
 
-    // Conectar botón de visto
+    const detailRating = document.getElementById('detailRating');
+    if (detailRating) {
+        detailRating.innerHTML = `<i class="fa-solid fa-star mr-1"></i>${movie.rating || 'N/A'}`;
+    }
+
+    const detailVotes = document.getElementById('detailVotes');
+    if (detailVotes) {
+        detailVotes.innerHTML = `<i class="fa-solid fa-users mr-1"></i>${movie.votes || 0} votos`;
+    }
+
+    const detailYear = document.getElementById('detailYear');
+    if (detailYear) {
+        const movieYear = movie.year ? movie.year : 'N/A';
+        detailYear.innerText = `Año: ${movieYear}`;
+    }
+
+    const detailOverview = document.getElementById('detailOverview');
+    if (detailOverview) {
+        detailOverview.style.height = ''; // Limpia alturas fijas guardadas
+        detailOverview.innerText = movie.overview || 'Sin descripción disponible.';
+    }
+
     const watchedBtn = document.getElementById('detailWatchedBtn');
     if (watchedBtn) {
         watchedBtn.onclick = () => toggleWatchedStatus(movie.id);
@@ -607,7 +714,11 @@ function openDetailModal(movie, tag) {
     renderStarSelector(pReview ? pReview.rating : 0);
 
     const userReviewInput = document.getElementById('userPersonalReview');
-    if (userReviewInput) userReviewInput.value = pReview ? pReview.review || '' : '';
+    if (userReviewInput) {
+        userReviewInput.value = pReview ? pReview.review || '' : '';
+        // Ajusta la altura del textarea según el texto que se acaba de inyectar
+        setTimeout(() => autoResizeTextarea(userReviewInput), 50);
+    }
 
     const userReviewTitleInput = document.getElementById('userReviewTitleInput');
     if (userReviewTitleInput) userReviewTitleInput.value = pReview ? pReview.reviewTitle || '' : '';
@@ -623,6 +734,40 @@ function openDetailModal(movie, tag) {
 function closeDetailModal() {
     const detailModal = document.getElementById('detailModal');
     if (detailModal) detailModal.classList.add('hidden');
+}
+
+function showWinnerModal(movie) {
+    resetModalPosition('winnerModal');
+    currentWinnerMovie = movie;
+
+    const modalTitle = document.getElementById('modalTitle');
+    if (modalTitle) modalTitle.innerText = movie.title;
+
+    const modalPoster = document.getElementById('modalPoster');
+    if (modalPoster) modalPoster.src = movie.poster;
+
+    const modalRating = document.getElementById('modalRating');
+    if (modalRating) {
+        modalRating.innerHTML = `<i class="fa-solid fa-star mr-1"></i>${movie.rating || 'N/A'}`;
+    }
+
+    const modalVotes = document.getElementById('modalVotes');
+    if (modalVotes) {
+        modalVotes.innerHTML = `<i class="fa-solid fa-users mr-1"></i>${movie.votes || 0} votos`;
+    }
+
+    const modalOverview = document.getElementById('modalOverview');
+    if (modalOverview) {
+        modalOverview.innerText = movie.overview || 'Sin descripción disponible.';
+    }
+
+    const modal = document.getElementById('winnerModal');
+    if (modal) modal.classList.remove('hidden');
+}
+
+function closeModal() {
+    const modal = document.getElementById('winnerModal');
+    if (modal) modal.classList.add('hidden');
 }
 
 function renderStarSelector(val) {
@@ -686,16 +831,164 @@ function renderCustomLists() {
     const container = document.getElementById('customListsContainer');
     if (!container) return;
     container.innerHTML = '';
+
     if (customLists.length === 0) {
         container.innerHTML = `<div class="text-center py-6 text-stone-400 text-xs font-serif italic">Sin cuadernos creados.</div>`;
         return;
     }
-    customLists.forEach(list => {
+
+    customLists.forEach((list, listIndex) => {
         const item = document.createElement('div');
-        item.className = "bg-stone-100 dark:bg-stone-950 journal-border p-2.5 space-y-2";
-        item.innerHTML = `<h4 class="text-xs font-heading font-bold text-rose-900">${list.name} (${list.movies.length})</h4>`;
+        item.className = "bg-stone-100 dark:bg-stone-950 journal-border overflow-hidden transition-all";
+
+        let headerHtml = `
+            <div class="p-3 flex items-center justify-between bg-stone-100 dark:bg-stone-950 hover:bg-stone-200/50 dark:hover:bg-stone-900 transition select-none">
+                <div onclick="toggleListAccordion(${listIndex})" class="flex items-center space-x-2 flex-grow cursor-pointer">
+                    <i class="fa-solid fa-book text-rose-800 text-xs"></i>
+                    <h4 class="text-xs font-heading font-bold text-rose-900 dark:text-rose-400">${list.name}</h4>
+                </div>
+                <div class="flex items-center space-x-2 flex-shrink-0">
+                    <span class="text-[10px] font-mono bg-stone-200 dark:bg-stone-900 px-2 py-0.5 journal-border">${list.movies ? list.movies.length : 0} obras</span>
+                    <button onclick="confirmDeleteCustomList(${listIndex})" title="Eliminar cuaderno" class="text-stone-400 hover:text-rose-600 px-1 py-0.5 text-xs transition"><i class="fa-solid fa-trash-can"></i></button>
+                    <button onclick="toggleListAccordion(${listIndex})" class="text-stone-400 hover:text-stone-800 dark:hover:text-white text-xs px-1">
+                        <i id="listChevron_${listIndex}" class="fa-solid fa-chevron-down transition-transform"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+
+        let moviesContentHtml = `<div id="listBody_${listIndex}" class="hidden border-t border-stone-200 dark:border-stone-800 p-2.5 space-y-2 bg-stone-50 dark:bg-stone-900/50">`;
+
+        if (!list.movies || list.movies.length === 0) {
+            moviesContentHtml += `<p class="text-[11px] font-serif italic text-stone-400 text-center py-3">Este cuaderno está vacío. Añade obras desde su detalle.</p>`;
+        } else {
+            moviesContentHtml += `<div class="space-y-1.5 max-h-56 overflow-y-auto custom-scrollbar pr-1">`;
+            list.movies.forEach((m, mIndex) => {
+                const mTitle = m.title || m;
+                const movieId = m.id || 872585;
+                const poster = m.poster || 'https://via.placeholder.com/150';
+
+                moviesContentHtml += `
+                    <div draggable="true" 
+                         ondragstart="onDragStartMovie(event, ${listIndex}, ${mIndex})" 
+                         ondragover="onDragOverMovie(event)" 
+                         ondrop="onDropMovie(event, ${listIndex}, ${mIndex})" 
+                         class="flex items-center justify-between bg-stone-100 dark:bg-stone-950 p-2 journal-border text-xs group cursor-grab active:cursor-grabbing hover:border-rose-800 transition">
+                        <div class="flex items-center space-x-2 overflow-hidden flex-grow" onclick="openDetailModal({id: ${movieId}, title: '${mTitle}', poster: '${poster}', rating: '${m.rating || '8.5'}', overview: '${m.overview || 'Sin descripción'}'}, 'Cuaderno: ${list.name}')">
+                            <i class="fa-solid fa-grip-vertical text-stone-400 text-[10px] group-hover:text-stone-700 dark:group-hover:text-stone-200"></i>
+                            <span class="font-mono text-[10px] text-stone-400 w-4 text-right">${mIndex + 1}.</span>
+                            <span class="font-serif font-bold text-stone-800 dark:text-stone-200 truncate hover:text-rose-800 dark:hover:text-rose-400 transition">${mTitle}</span>
+                        </div>
+                        <button onclick="confirmRemoveMovieFromList(${listIndex}, ${movieId})" title="Quitar de la lista" class="text-stone-400 hover:text-rose-600 px-1.5 py-0.5 text-xs transition"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                `;
+            });
+            moviesContentHtml += `</div>`;
+        }
+        moviesContentHtml += `</div>`;
+
+        item.innerHTML = headerHtml + moviesContentHtml;
         container.appendChild(item);
     });
+}
+
+function toggleListAccordion(listIndex) {
+    const body = document.getElementById(`listBody_${listIndex}`);
+    const chevron = document.getElementById(`listChevron_${listIndex}`);
+    if (!body) return;
+
+    if (body.classList.contains('hidden')) {
+        body.classList.remove('hidden');
+        if (chevron) chevron.classList.add('rotate-180');
+    } else {
+        body.classList.add('hidden');
+        if (chevron) chevron.classList.remove('rotate-180');
+    }
+}
+
+function confirmDeleteCustomList(listIndex) {
+    const listName = customLists[listIndex].name;
+    showDeleteConfirmationModal(() => {
+        customLists.splice(listIndex, 1);
+        saveAndRenderCustomLists();
+    }, `¿Eliminar el cuaderno "${listName}"? Se perderán las obras guardadas en él.`);
+}
+
+function confirmRemoveMovieFromList(listIndex, movieId) {
+    showDeleteConfirmationModal(() => {
+        customLists[listIndex].movies = customLists[listIndex].movies.filter(m => m.id !== movieId);
+        saveAndRenderCustomLists();
+        setTimeout(() => mantenerAcordeonAbierto(listIndex), 50);
+    }, `¿Quitar esta obra del cuaderno?`);
+}
+
+let draggedMovieInfo = null;
+
+function onDragStartMovie(e, listIndex, movieIndex) {
+    draggedMovieInfo = { listIndex, movieIndex };
+    e.dataTransfer.effectAllowed = 'move';
+}
+
+function onDragOverMovie(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+}
+
+function onDropMovie(e, targetListIndex, targetMovieIndex) {
+    e.preventDefault();
+    if (!draggedMovieInfo) return;
+    if (draggedMovieInfo.listIndex !== targetListIndex) return;
+
+    const listIndex = targetListIndex;
+    const sourceIndex = draggedMovieInfo.movieIndex;
+    const destIndex = targetMovieIndex;
+
+    if (sourceIndex === destIndex) return;
+
+    const movies = customLists[listIndex].movies;
+    const [movedMovie] = movies.splice(sourceIndex, 1);
+    movies.splice(destIndex, 0, movedMovie);
+
+    draggedMovieInfo = null;
+    saveAndRenderCustomLists();
+    setTimeout(() => mantenerAcordeonAbierto(listIndex), 50);
+}
+
+function mantenerAcordeonAbierto(listIndex) {
+    const body = document.getElementById(`listBody_${listIndex}`);
+    const chevron = document.getElementById(`listChevron_${listIndex}`);
+    if (body) body.classList.remove('hidden');
+    if (chevron) chevron.classList.add('rotate-180');
+}
+
+function moveMovieInList(listIndex, movieIndex, direction) {
+    const targetIndex = movieIndex + direction;
+    if (targetIndex < 0 || targetIndex >= customLists[listIndex].movies.length) return;
+
+    const movies = customLists[listIndex].movies;
+    const temp = movies[movieIndex];
+    movies[movieIndex] = movies[targetIndex];
+    movies[targetIndex] = temp;
+
+    saveAndRenderCustomLists();
+    // Mantener abierto el acordeón tras ordenar
+    setTimeout(() => {
+        const body = document.getElementById(`listBody_${listIndex}`);
+        const chevron = document.getElementById(`listChevron_${listIndex}`);
+        if (body) body.classList.remove('hidden');
+        if (chevron) chevron.classList.add('rotate-180');
+    }, 50);
+}
+
+function removeMovieFromList(listIndex, movieId) {
+    customLists[listIndex].movies = customLists[listIndex].movies.filter(m => m.id !== movieId);
+    saveAndRenderCustomLists();
+    setTimeout(() => {
+        const body = document.getElementById(`listBody_${listIndex}`);
+        const chevron = document.getElementById(`listChevron_${listIndex}`);
+        if (body) body.classList.remove('hidden');
+        if (chevron) chevron.classList.add('rotate-180');
+    }, 50);
 }
 
 function toggleEmojiPicker(inputId) {
@@ -860,6 +1153,7 @@ function clearReplyTarget(postId) {
 }
 
 function openMuralPostModal(postId) {
+    resetModalPosition('muralPostModal');
     const allPosts = getCommunityAndUserPosts();
     let post = allPosts.find(p => p.id === postId);
     if (!post) return;
@@ -887,7 +1181,7 @@ function openMuralPostModal(postId) {
         if (fetchedMovieObj) {
             const score = post.rating || fetchedMovieObj.rating || 'N/A';
             const optionalTitleHtml = (post.reviewTitle && post.reviewTitle.trim() !== '')
-                ? `<h3 class="font-heading font-bold text-base text-rose-900 dark:text-rose-400 mt-2">${post.reviewTitle}</h3>`
+                ? `<h3 class="font-heading font-bold text-sm text-rose-900 dark:text-rose-400 mt-1">${post.reviewTitle}</h3>`
                 : '';
 
             const movieDataJson = JSON.stringify({
@@ -899,13 +1193,13 @@ function openMuralPostModal(postId) {
             }).replace(/"/g, '&quot;');
 
             headerBlockHtml = `
-                <div class="space-y-2">
-                    <div onclick="openDetailModal(${movieDataJson}, 'Reseña Cinematográfica')" 
-                         class="flex items-center space-x-3 bg-stone-200 dark:bg-stone-900 p-2.5 journal-border cursor-pointer hover:border-rose-900 transition group">
-                        <img src="${fetchedMovieObj.poster}" onerror="this.src='https://via.placeholder.com/150'" class="w-12 h-16 object-cover journal-border flex-shrink-0 group-hover:opacity-90 transition">
+                <div class="space-y-1.5">
+                    <div onclick="openDetailModal(${movieDataJson}, 'Reseña cinematográfica')" 
+                         class="flex items-center space-x-3 bg-stone-200 dark:bg-stone-900 p-2 journal-border cursor-pointer hover:border-rose-900 transition group">
+                        <img src="${fetchedMovieObj.poster}" onerror="this.src='https://via.placeholder.com/150'" class="w-10 h-14 object-cover journal-border flex-shrink-0 group-hover:opacity-90 transition">
                         <div>
-                            <span class="text-[10px] font-mono uppercase tracking-wider text-rose-800 dark:text-rose-400 font-bold">Reseña Cinematográfica</span>
-                            <h4 class="font-serif font-bold text-sm text-stone-900 dark:text-stone-100 group-hover:text-rose-800 dark:group-hover:text-rose-400 transition">${fetchedMovieObj.title}</h4>
+                            <span class="text-[9px] font-mono uppercase tracking-wider text-rose-800 dark:text-rose-400 font-bold">Reseña cinematográfica</span>
+                            <h4 class="font-serif font-bold text-xs text-stone-900 dark:text-stone-100 group-hover:text-rose-800 dark:group-hover:text-rose-400 transition">${fetchedMovieObj.title}</h4>
                             <span class="text-amber-600 text-xs font-mono"><i class="fa-solid fa-star"></i> ${score}/10</span>
                         </div>
                     </div>
@@ -914,65 +1208,68 @@ function openMuralPostModal(postId) {
             `;
         }
     } else if (post.title) {
-        headerBlockHtml = `<h3 class="font-heading font-bold text-base text-rose-900 dark:text-rose-400">${post.title}</h3>`;
+        headerBlockHtml = `<h3 class="font-heading font-bold text-sm text-rose-900 dark:text-rose-400">${post.title}</h3>`;
     }
 
-    // Botón de editar visible solo si el post es tuyo
     let editButtonHtml = '';
     if (post.author === currentUsername) {
         editButtonHtml = `<button onclick="enableEditMuralPost('${post.id}')" class="text-xs font-mono text-stone-500 hover:text-rose-800 dark:hover:text-rose-400 transition ml-auto mr-3"><i class="fa-solid fa-pen mr-1"></i>Editar</button>`;
     }
 
     modal.innerHTML = `
-        <div class="bg-stone-50 dark:bg-stone-900 journal-border rounded-none max-w-xl w-full p-6 space-y-4 text-left relative shadow-2xl max-h-[85vh] overflow-y-auto custom-scrollbar">
-            <button onclick="document.getElementById('muralPostModal').classList.add('hidden')" class="absolute top-4 right-4 text-stone-400 hover:text-stone-800 dark:hover:text-white text-lg p-1 transition"><i class="fa-solid fa-xmark"></i></button>
+        <div class="bg-stone-50 dark:bg-stone-900 journal-border rounded-none max-w-xl w-full p-5 space-y-3 text-left relative shadow-2xl draggable-modal-content flex flex-col">
+            <div id="muralPostHeader" class="modal-header-drag flex items-center justify-between border-b border-stone-300 dark:border-stone-800 pb-2 flex-shrink-0">
+                <span class="text-xs font-mono text-stone-500 uppercase tracking-widest flex items-center gap-2"><i class="fa-solid fa-grip-lines text-stone-400"></i> Detalle de debate</span>
+                <button onclick="document.getElementById('muralPostModal').classList.add('hidden')" class="text-stone-400 hover:text-stone-800 dark:hover:text-white text-lg p-1 transition"><i class="fa-solid fa-xmark"></i></button>
+            </div>
             
-            <div class="flex items-center justify-between border-b-2 border-stone-800 dark:border-stone-700 pb-3">
-                <div class="flex items-center space-x-3 cursor-pointer hover:opacity-80 transition" onclick="openUserProfileModal('${post.author}', '${post.avatarSeed || post.author}', '${post.role || 'Crítico'}')">
-                    <img src="https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(post.avatarSeed || post.author)}" class="w-9 h-9 rounded-full journal-border bg-stone-300">
+            <div class="flex items-center justify-between border-b border-stone-200 dark:border-stone-800 pb-2 flex-shrink-0">
+                <div class="flex items-center space-x-2.5 cursor-pointer hover:opacity-80 transition" onclick="openUserProfileModal('${post.author}', '${post.avatarSeed || post.author}', '${post.role || 'Crítico'}')">
+                    <img src="https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(post.avatarSeed || post.author)}" class="w-8 h-8 rounded-full journal-border bg-stone-300">
                     <div>
-                        <h4 class="font-heading font-bold text-sm hover:underline">${post.author}</h4>
-                        <span class="text-[10px] font-mono text-stone-500 uppercase">${post.role || 'Crítico'}</span>
+                        <h4 class="font-heading font-bold text-xs hover:underline">${post.author}</h4>
+                        <span class="text-[9px] font-mono text-stone-500 uppercase">${post.role || 'Crítico'}</span>
                     </div>
                 </div>
                 ${editButtonHtml}
                 <span class="text-xs font-mono text-stone-400">${post.date}</span>
             </div>
 
-            <div class="space-y-3">
+            <div class="space-y-2 flex-shrink-0">
                 ${headerBlockHtml}
-                <p class="font-serif text-xs text-stone-700 dark:text-stone-300 leading-relaxed italic bg-stone-100 dark:bg-stone-950 p-3 journal-border">"${post.content}"</p>
+                <p class="font-serif text-xs text-stone-700 dark:text-stone-300 leading-relaxed italic bg-stone-100 dark:bg-stone-950 p-2.5 journal-border">"${post.content}"</p>
             </div>
 
-            <div class="flex items-center space-x-3 pt-2 text-xs font-mono">
-                <button onclick="reactToMuralPost('${post.id}', 'agree')" class="px-3 py-1.5 bg-stone-200 dark:bg-stone-800 hover:bg-emerald-700/25 text-stone-700 dark:text-stone-300 journal-border transition flex items-center space-x-1.5 cursor-pointer ${agreeActive}">
+            <div class="flex items-center space-x-3 text-xs font-mono flex-shrink-0">
+                <button onclick="reactToMuralPost('${post.id}', 'agree')" class="px-2.5 py-1 bg-stone-200 dark:bg-stone-800 hover:bg-emerald-700/25 text-stone-700 dark:text-stone-300 journal-border transition flex items-center space-x-1.5 cursor-pointer ${agreeActive}">
                     <i class="fa-solid fa-thumbs-up text-emerald-600"></i>
                     <span>Acuerdo (${reactions.agree || 0})</span>
                 </button>
-                <button onclick="reactToMuralPost('${post.id}', 'disagree')" class="px-3 py-1.5 bg-stone-200 dark:bg-stone-800 hover:bg-rose-700/25 text-stone-700 dark:text-stone-300 journal-border transition flex items-center space-x-1.5 cursor-pointer ${disagreeActive}">
+                <button onclick="reactToMuralPost('${post.id}', 'disagree')" class="px-2.5 py-1 bg-stone-200 dark:bg-stone-800 hover:bg-rose-700/25 text-stone-700 dark:text-stone-300 journal-border transition flex items-center space-x-1.5 cursor-pointer ${disagreeActive}">
                     <i class="fa-solid fa-thumbs-down text-rose-600"></i>
                     <span>Discrepo (${reactions.disagree || 0})</span>
                 </button>
             </div>
 
-            <div class="space-y-3 pt-3 border-t border-stone-200 dark:border-stone-800">
-                <h4 class="font-heading font-bold text-xs uppercase tracking-wider text-stone-600 dark:text-stone-400"><i class="fa-solid fa-comments mr-1.5 text-rose-800"></i>Debate y Comentarios (${comments.length})</h4>
+            <div class="space-y-2 pt-2 border-t border-stone-200 dark:border-stone-800 flex-grow flex flex-col min-h-0">
+                <h4 class="font-heading font-bold text-xs uppercase tracking-wider text-stone-600 dark:text-stone-400 flex-shrink-0"><i class="fa-solid fa-comments mr-1.5 text-rose-800"></i>Debate y comentarios (${comments.length})</h4>
                 
-                <div id="muralCommentsList_${post.id}" class="space-y-2 max-h-52 overflow-y-auto custom-scrollbar pr-1">
+                <div id="muralCommentsList_${post.id}" class="space-y-2 flex-grow overflow-y-auto custom-scrollbar pr-1 min-h-[80px]">
                     ${commentsTreeHtml}
                 </div>
 
-                <div class="space-y-1 pt-2">
+                <div class="space-y-1 pt-2 flex-shrink-0">
                     <div id="replyIndicator_${post.id}" class="text-[11px] font-mono text-stone-500 hidden"></div>
                     <div class="flex items-center space-x-2 relative">
-                        <input type="text" id="newCommentInput_${postId}" placeholder="Añadir un apunte al debate..." class="flex-grow bg-stone-100 dark:bg-stone-950 journal-border px-3 py-2 text-xs font-serif focus:outline-none focus:border-rose-800" onkeydown="if(event.key === 'Enter') submitMuralComment('${post.id}')">
-                        <button type="button" id="emojiBtn_newCommentInput_${postId}" onclick="toggleEmojiPicker('newCommentInput_${postId}')" class="px-2.5 py-2 bg-stone-200 dark:bg-stone-800 hover:bg-stone-300 text-stone-700 dark:text-stone-300 journal-border text-xs transition" title="Añadir Emoji">🎬</button>
-                        <button onclick="submitMuralComment('${post.id}')" class="px-4 py-2 bg-rose-900 hover:bg-rose-800 text-stone-100 font-mono text-xs journal-border transition uppercase">Comentar</button>
+                        <input type="text" id="newCommentInput_${postId}" placeholder="Añadir un apunte al debate..." class="flex-grow bg-stone-100 dark:bg-stone-950 journal-border px-3 py-1.5 text-xs font-serif focus:outline-none focus:border-rose-800" onkeydown="if(event.key === 'Enter') submitMuralComment('${post.id}')">
+                        <button type="button" id="emojiBtn_newCommentInput_${postId}" onclick="toggleEmojiPicker('newCommentInput_${postId}')" class="px-2 py-1.5 bg-stone-200 dark:bg-stone-800 hover:bg-stone-300 text-stone-700 dark:text-stone-300 journal-border text-xs transition" title="Añadir Emoji">🎬</button>
+                        <button onclick="submitMuralComment('${post.id}')" class="px-3.5 py-1.5 bg-rose-900 hover:bg-rose-800 text-stone-100 font-mono text-xs journal-border transition uppercase">Comentar</button>
                     </div>
                 </div>
             </div>
         </div>
     `;
+    makeModalDraggable('muralPostModal', 'muralPostHeader');
     modal.classList.remove('hidden');
 }
 
@@ -1025,8 +1322,7 @@ function submitMuralComment(postId) {
     }
 }
 
-// MODAL DE CONFIRMACIÓN PERSONALIZADO PARA ELIMINAR COMENTARIOS
-function showDeleteConfirmationModal(onConfirm) {
+function showDeleteConfirmationModal(onConfirm, customTitle = "Eliminar apunte", customText = "¿Estás seguro de que deseas eliminar este comentario? Esta acción no se puede deshacer.") {
     let confirmModal = document.getElementById('customConfirmModal');
     if (!confirmModal) {
         confirmModal = document.createElement('div');
@@ -1041,8 +1337,8 @@ function showDeleteConfirmationModal(onConfirm) {
                 <i class="fa-solid fa-triangle-exclamation"></i>
             </div>
             <div class="space-y-1">
-                <h4 class="font-heading font-bold text-sm text-stone-900 dark:text-stone-100 uppercase tracking-wider">Eliminar Apunte</h4>
-                <p class="font-serif text-xs text-stone-600 dark:text-stone-400">¿Estás seguro de que deseas eliminar este comentario? Esta acción no se puede deshacer.</p>
+                <h4 class="font-heading font-bold text-sm text-stone-900 dark:text-stone-100 uppercase tracking-wider">${customTitle}</h4>
+                <p class="font-serif text-xs text-stone-600 dark:text-stone-400">${customText}</p>
             </div>
             <div class="grid grid-cols-2 gap-2 pt-2 border-t border-stone-200 dark:border-stone-800 font-mono text-xs">
                 <button id="cancelConfirmBtn" class="py-2 bg-stone-200 dark:bg-stone-800 hover:bg-stone-300 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 journal-border transition uppercase tracking-wider">
@@ -1069,7 +1365,22 @@ function showDeleteConfirmationModal(onConfirm) {
     };
 }
 
-// FUNCIÓN DE BORRADO USANDO EL MODAL PERSONALIZADO
+function confirmDeleteCustomList(listIndex) {
+    const listName = customLists[listIndex].name;
+    showDeleteConfirmationModal(() => {
+        customLists.splice(listIndex, 1);
+        saveAndRenderCustomLists();
+    }, "Eliminar cuaderno", `¿Estás seguro de que deseas eliminar el cuaderno "${listName}"? Se perderán todas las obras guardadas en él.`);
+}
+
+function confirmRemoveMovieFromList(listIndex, movieId) {
+    showDeleteConfirmationModal(() => {
+        customLists[listIndex].movies = customLists[listIndex].movies.filter(m => m.id !== movieId);
+        saveAndRenderCustomLists();
+        setTimeout(() => mantenerAcordeonAbierto(listIndex), 50);
+    }, "Quitar obra", "¿Estás seguro de que deseas quitar esta película del cuaderno?");
+}
+
 function deleteMuralComment(postId, commentId) {
     showDeleteConfirmationModal(() => {
         let savedMural = JSON.parse(localStorage.getItem('cine_diario_mural_posts') || '[]');
@@ -1093,7 +1404,6 @@ function deleteMuralComment(postId, commentId) {
     });
 }
 
-// HABILITA LA EDICIÓN DE LA RESEÑA EN EL MODAL DEL MURO
 function enableEditMuralPost(postId) {
     let savedMural = JSON.parse(localStorage.getItem('cine_diario_mural_posts') || '[]');
     let post = savedMural.find(p => p.id === postId);
@@ -1112,13 +1422,12 @@ function enableEditMuralPost(postId) {
     const modalContentArea = document.querySelector('#muralPostModal .space-y-3');
     if (!modalContentArea) return;
 
-    // Guardamos el contenido actual para rellenar el input/textarea
     const currentText = post.content || '';
     const currentReviewTitle = post.reviewTitle || '';
 
     modalContentArea.innerHTML = `
         <div class="space-y-3 bg-stone-100 dark:bg-stone-950 p-3 journal-border">
-            <span class="text-[10px] font-mono uppercase tracking-wider text-rose-800 dark:text-rose-400 font-bold">Editando Apunte / Reseña</span>
+            <span class="text-[10px] font-mono uppercase tracking-wider text-rose-800 dark:text-rose-400 font-bold">Editando apunte / reseña</span>
             
             <div class="space-y-1">
                 <label class="text-[10px] font-mono text-stone-500 uppercase">Título del apunte</label>
@@ -1132,13 +1441,12 @@ function enableEditMuralPost(postId) {
 
             <div class="flex items-center justify-end space-x-2 pt-1 font-mono text-xs">
                 <button onclick="openMuralPostModal('${postId}')" class="px-3 py-1 bg-stone-300 dark:bg-stone-800 text-stone-700 dark:text-stone-300 journal-border transition">Cancelar</button>
-                <button onclick="saveEditedMuralPost('${postId}')" class="px-3 py-1 bg-rose-900 hover:bg-rose-800 text-stone-100 journal-border transition font-bold">Guardar Cambios</button>
+                <button onclick="saveEditedMuralPost('${postId}')" class="px-3 py-1 bg-rose-900 hover:bg-rose-800 text-stone-100 journal-border transition font-bold">Guardar cambios</button>
             </div>
         </div>
     `;
 }
 
-// GUARDA LOS CAMBIOS DE LA RESEÑA EDITADA
 function saveEditedMuralPost(postId) {
     const titleInput = document.getElementById(`editPostTitleInput_${postId}`);
     const contentInput = document.getElementById(`editPostContentInput_${postId}`);
@@ -1166,7 +1474,6 @@ function saveEditedMuralPost(postId) {
 
         localStorage.setItem('cine_diario_mural_posts', JSON.stringify(savedMural));
 
-        // Refrescar modal y feed principal
         openMuralPostModal(postId);
         renderMuralFeed();
     }
@@ -1324,7 +1631,7 @@ function getCommunityAndUserPosts() {
             id: 'comm_2',
             author: "Martín_Cine",
             avatarSeed: "Martin",
-            role: "Crítico Invitado",
+            role: "Crítico Invitado/a",
             type: "discussion",
             tmdbMovieId: null,
             title: "¿El cine de autor está perdiendo espacio en cartelera?",
@@ -1440,19 +1747,19 @@ window.onload = async () => {
         const movie = await fetchDualLanguageMovie(`/movie/${id}`);
         if (movie) moviesList.push(movie);
     }
-    
+
     resetAndFetchFilteredMovies();
     loadOscarMovies();
     renderCustomLists();
     updateProfileDrawerStats();
 
-    // Establecer la pestaña inicial y renderizar el muro de forma inmediata
     switchMainTab(defaultMainTab);
-
-    // Forzar la carga del feed del muro con un pequeño retardo de seguridad para el DOM
-    
     renderMuralFeed('all');
-    
+
+    makeModalDraggable('detailModal', 'detailModalHeader');
+    makeModalDraggable('smartPublishModal', 'smartPublishHeader');
+    makeModalDraggable('winnerModal', 'winnerModalHeader');
+    makeModalDraggable('settingsModal', 'settingsHeader');
 };
 
 async function fetchDualLanguageMovie(endpoint) {
@@ -1479,7 +1786,8 @@ async function fetchDualLanguageMovie(endpoint) {
             rating: dataOverview.vote_average ? dataOverview.vote_average.toFixed(1) : '8.0',
             votes: dataOverview.vote_count > 1000 ? (dataOverview.vote_count / 1000).toFixed(0) + 'k' : dataOverview.vote_count,
             poster: posterPath ? `https://image.tmdb.org/t/p/w500${posterPath}` : 'https://via.placeholder.com/150',
-            overview: dataOverview.overview || 'Sin descripción disponible.'
+            overview: dataOverview.overview || 'Sin descripción disponible.',
+            year: dataOverview.release_date ? dataOverview.release_date.split('-')[0] : 'N/A'
         };
     } catch (err) {
         return null;
@@ -1503,7 +1811,8 @@ async function fetchMultipleFilteredPages() {
     const genre = document.getElementById('genreSelect').value;
     const minRating = parseFloat(document.getElementById('minRatingInput').value);
     const maxRating = parseFloat(document.getElementById('maxRatingInput').value);
-    const sortBy = document.getElementById('sortBySelect').value;
+    const baseSortBy = document.getElementById('sortBySelect').value;
+    const sortBy = `${baseSortBy}.${sortDirection}`;
     const minVotes = document.getElementById('minVotes').value;
 
     let baseEs = `/discover/movie?language=${currentLang}&sort_by=${sortBy}&vote_average.gte=${minRating}&vote_average.lte=${maxRating}&vote_count.gte=${minVotes}`;
@@ -1531,7 +1840,8 @@ async function fetchMultipleFilteredPages() {
                     rating: mEs.vote_average ? mEs.vote_average.toFixed(1) : 'N/A',
                     votes: mEs.vote_count > 1000 ? (mEs.vote_count / 1000).toFixed(0) + 'k' : (mEs.vote_count || 0),
                     poster: posterPath ? `https://image.tmdb.org/t/p/w500${posterPath}` : 'https://via.placeholder.com/150',
-                    overview: mEs.overview || 'Sin descripción disponible.'
+                    overview: mEs.overview || 'Sin descripción disponible.',
+                    year: mEs.release_date ? mEs.release_date.split('-')[0] : 'N/A'
                 };
             });
             fetchedResults = [...fetchedResults, ...mapped];
@@ -1539,6 +1849,11 @@ async function fetchMultipleFilteredPages() {
     });
 
     renderResultsGrid();
+
+    const countIndicator = document.getElementById('catalogCountIndicator');
+    if (countIndicator) {
+        countIndicator.innerText = `${fetchedResults.length} obras`;
+    }
 }
 
 function renderResultsGrid() {
@@ -1551,10 +1866,7 @@ function renderResultsGrid() {
         const pReview = personalReviews[movie.id];
         const personalRating = pReview && pReview.rating ? pReview.rating : null;
 
-        // Insignia general de TMDb (arriba a la izquierda)
         const tmdbBadgeHtml = `<span class="bg-stone-900/85 backdrop-blur-md text-stone-100 px-1.5 py-0.5 text-[10px] font-mono journal-border shadow-md flex items-center space-x-1"><i class="fa-solid fa-star text-amber-500"></i><span>${movie.rating}</span></span>`;
-
-        // Tu nota personal (abajo a la izquierda sobre el póster, solo si existe)
         const personalBadgeHtml = personalRating !== null
             ? `<span class="bg-rose-900/90 backdrop-blur-md text-stone-100 px-1.5 py-0.5 text-[10px] font-mono journal-border shadow-md flex items-center space-x-1" title="Tu nota personal"><i class="fa-solid fa-feather text-amber-300"></i><span>${personalRating.toFixed(1)} (Tú)</span></span>`
             : '';
@@ -1565,23 +1877,20 @@ function renderResultsGrid() {
 
         const card = document.createElement('div');
         card.className = `bg-stone-50 dark:bg-stone-900 journal-border p-2.5 flex flex-col justify-between transition group relative cursor-pointer shadow-sm ${isWatched ? 'opacity-60' : 'hover:border-rose-900'}`;
-        card.onclick = (e) => { if (!e.target.closest('button')) openDetailModal(movie, "Reseña de Catálogo"); };
+        card.onclick = (e) => { if (!e.target.closest('button')) openDetailModal(movie, "Reseña de catálogo"); };
 
         card.innerHTML = `
             <div class="relative aspect-[2/3] w-full overflow-hidden journal-border bg-stone-200 dark:bg-stone-950 mb-2">
                 <img src="${movie.poster}" onerror="this.src='https://via.placeholder.com/150'" class="w-full h-full object-cover group-hover:scale-105 transition duration-300">
                 
-                <!-- Insignia TMDb (arriba a la izquierda) -->
                 <div class="absolute top-2 left-2 z-10">
                     ${tmdbBadgeHtml}
                 </div>
 
-                <!-- Tu nota personal (abajo a la izquierda) -->
                 <div class="absolute bottom-2 left-2 z-10">
                     ${personalBadgeHtml}
                 </div>
 
-                <!-- Botón de ojo (arriba a la derecha) -->
                 <button onclick="event.stopPropagation(); toggleWatchedStatus(${movie.id}); renderResultsGrid();" 
                     class="absolute top-2 right-2 z-10 p-1.5 bg-stone-900/80 hover:bg-rose-900 text-stone-100 journal-border text-xs transition shadow-md cursor-pointer ${isWatched ? '!bg-emerald-800' : ''}" 
                     title="${isWatched ? 'Marcar como no vista' : 'Marcar como vista'}">
@@ -1591,7 +1900,8 @@ function renderResultsGrid() {
             <div class="space-y-1">
                 <h5 class="text-xs font-serif font-semibold truncate group-hover:text-rose-800 dark:group-hover:text-rose-400 transition">${movie.title}</h5>
                 ${subTitleHtml}
-                <div class="flex items-center justify-end pt-1 border-t border-stone-200 dark:border-stone-800 text-[10px] font-mono text-stone-400">
+                <div class="flex items-center justify-between pt-1 border-t border-stone-200 dark:border-stone-800 text-[10px] font-mono text-stone-400">
+                    <span>${movie.year || 'N/A'}</span>
                     <span>${movie.votes} votos</span>
                 </div>
             </div>
@@ -1600,7 +1910,6 @@ function renderResultsGrid() {
     });
 }
 
-// ACTUALIZA LOS VALORES VISUALES DEL TEXTO SEGÚN EL SLIDER DUAL
 function handleRangeInput() {
     const minInput = document.getElementById('minRatingInput');
     const maxInput = document.getElementById('maxRatingInput');
@@ -1612,9 +1921,7 @@ function handleRangeInput() {
     let minVal = parseFloat(minInput.value);
     let maxVal = parseFloat(maxInput.value);
 
-    // Evitar que el mínimo cruce al máximo y viceversa
     if (minVal > maxVal) {
-        // Si el usuario arrastra el mínimo por encima del máximo, los igualamos o invertimos
         minInput.value = maxVal;
         minVal = maxVal;
     }
@@ -1623,13 +1930,12 @@ function handleRangeInput() {
     if (maxValSpan) maxValSpan.innerText = maxVal.toFixed(1);
 }
 
-// CONTROL DE RETARDO (DEBOUNCE) PARA EVITAR LLAMADAS EXCESIVAS A LA API AL MOVER EL SLIDER
 let sliderDebounceTimer = null;
 function debounceFetchFilteredMovies() {
     clearTimeout(sliderDebounceTimer);
     sliderDebounceTimer = setTimeout(() => {
         resetAndFetchFilteredMovies();
-    }, 400); // Espera 400ms después de soltar o mover el slider para buscar
+    }, 400);
 }
 
 async function loadOscarMovies() {
@@ -1640,4 +1946,225 @@ async function loadOscarMovies() {
         return null;
     }));
     currentOscarList = results.filter(m => m !== null);
+}
+
+function handleAutocompleteInput(query) {
+    clearTimeout(autocompleteDebounceTimer);
+    const spinner = document.getElementById('autocompleteSpinner');
+    const dropdown = document.getElementById('autocompleteDropdown');
+
+    if (!query || query.trim() === '') {
+        if (dropdown) dropdown.classList.add('hidden');
+        if (spinner) spinner.classList.add('hidden');
+        resetAndFetchFilteredMovies();
+        return;
+    }
+
+    if (spinner) spinner.classList.remove('hidden');
+
+    autocompleteDebounceTimer = setTimeout(async () => {
+        const encoded = encodeURIComponent(query.trim());
+        const data = await fetchFromTMDb(`/search/movie?query=${encoded}&language=${currentLang}`);
+
+        if (spinner) spinner.classList.add('hidden');
+
+        if (data && data.results && data.results.length > 0) {
+            if (dropdown) {
+                dropdown.innerHTML = '';
+                data.results.slice(0, 5).forEach(m => {
+                    const poster = m.poster_path ? `https://image.tmdb.org/t/p/w92${m.poster_path}` : 'https://via.placeholder.com/92';
+                    const year = m.release_date ? m.release_date.split('-')[0] : 'N/A';
+                    const title = m.title || m.original_title;
+
+                    const item = document.createElement('div');
+                    item.className = "flex items-center space-x-3 p-2 hover:bg-stone-200 dark:hover:bg-stone-800 cursor-pointer transition border-b border-stone-200 dark:border-stone-800 last:border-b-0";
+                    item.innerHTML = `
+                        <img src="${poster}" class="w-8 h-12 object-cover journal-border flex-shrink-0">
+                        <div class="overflow-hidden">
+                            <h5 class="text-xs font-serif font-bold truncate">${title} (${year})</h5>
+                            <span class="text-[10px] font-mono text-stone-500"><i class="fa-solid fa-star text-amber-500"></i> ${m.vote_average ? m.vote_average.toFixed(1) : 'N/A'}</span>
+                        </div>
+                    `;
+                    item.onclick = () => {
+                        dropdown.classList.add('hidden');
+                        document.getElementById('manualMovieInput').value = title;
+                        const movieObj = {
+                            id: m.id,
+                            title: title,
+                            subtitle: m.original_title !== title ? m.original_title : '',
+                            rating: m.vote_average ? m.vote_average.toFixed(1) : 'N/A',
+                            votes: m.vote_count > 1000 ? (m.vote_count / 1000).toFixed(0) + 'k' : (m.vote_count || 0),
+                            poster: m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : 'https://via.placeholder.com/150',
+                            overview: m.overview || 'Sin descripción disponible.'
+                        };
+                        openDetailModal(movieObj, "Búsqueda directa");
+                    };
+                    dropdown.appendChild(item);
+                });
+                dropdown.classList.remove('hidden');
+            }
+        } else {
+            if (dropdown) {
+                dropdown.innerHTML = `<div class="p-3 text-xs font-serif italic text-stone-400 text-center">No se encontraron obras.</div>`;
+                dropdown.classList.remove('hidden');
+            }
+        }
+    }, 400);
+}
+
+let currentPublishMode = 'review';
+let modalAutocompleteTimer = null;
+let cachedSelectedMovieObj = null;
+
+function toggleRedactionMenu(e) {
+    e.stopPropagation();
+    const dropdown = document.getElementById('redactionDropdown');
+    if (dropdown) {
+        dropdown.classList.toggle('hidden');
+    }
+}
+
+window.addEventListener('click', () => {
+    const dropdown = document.getElementById('redactionDropdown');
+    if (dropdown && !dropdown.classList.contains('hidden')) {
+        dropdown.classList.add('hidden');
+    }
+});
+
+function openRedactionChoice(mode) {
+    resetModalPosition('smartPublishModal');
+    currentPublishMode = mode;
+    const modal = document.getElementById('smartPublishModal');
+    const titleEl = document.getElementById('smartModalTitle');
+    const movieContainer = document.getElementById('movieSelectContainer');
+    const ratingContainer = document.getElementById('ratingContainer');
+    const titleLabel = document.getElementById('titleFieldLabel');
+    const titleInput = document.getElementById('smartPostTitle');
+
+    const form = document.getElementById('smartPublishForm');
+    if (form) form.reset();
+
+    const selectedIdInput = document.getElementById('selectedTmdbMovieId');
+    if (selectedIdInput) selectedIdInput.value = '';
+    cachedSelectedMovieObj = null;
+
+    if (mode === 'review') {
+        if (titleEl) titleEl.innerText = "✍️ Redactar reseña cinematográfica";
+        if (movieContainer) movieContainer.classList.remove('hidden');
+        if (ratingContainer) ratingContainer.classList.remove('hidden');
+        if (titleLabel) titleLabel.innerText = "Titular de la reseña (Opcional)";
+        if (titleInput) titleInput.removeAttribute('required');
+    } else {
+        if (titleEl) titleEl.innerText = "💬 Abrir debate en el muro";
+        if (movieContainer) movieContainer.classList.add('hidden');
+        if (ratingContainer) ratingContainer.classList.add('hidden');
+        if (titleLabel) titleLabel.innerText = "Pregunta o tema del debate";
+        if (titleInput) titleInput.setAttribute('required', 'true');
+    }
+
+    if (modal) modal.classList.remove('hidden');
+}
+
+function closeSmartPublishModal() {
+    const modal = document.getElementById('smartPublishModal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function handleModalMovieAutocomplete(query) {
+    clearTimeout(modalAutocompleteTimer);
+    const dropdown = document.getElementById('modalMovieDropdown');
+
+    if (!query || query.trim() === '') {
+        if (dropdown) dropdown.classList.add('hidden');
+        return;
+    }
+
+    modalAutocompleteTimer = setTimeout(async () => {
+        const encoded = encodeURIComponent(query.trim());
+        const data = await fetchFromTMDb(`/search/movie?query=${encoded}&language=${currentLang}`);
+
+        if (data && data.results && data.results.length > 0) {
+            if (dropdown) {
+                dropdown.innerHTML = '';
+                data.results.slice(0, 5).forEach(m => {
+                    const poster = m.poster_path ? `https://image.tmdb.org/t/p/w92${m.poster_path}` : 'https://via.placeholder.com/92';
+                    const year = m.release_date ? m.release_date.split('-')[0] : 'N/A';
+                    const title = m.title || m.original_title;
+
+                    const item = document.createElement('div');
+                    item.className = "flex items-center space-x-2 p-2 hover:bg-stone-200 dark:hover:bg-stone-800 cursor-pointer transition border-b border-stone-200 dark:border-stone-800 last:border-b-0 text-xs";
+                    item.innerHTML = `
+                        <img src="${poster}" class="w-7 h-10 object-cover journal-border flex-shrink-0">
+                        <div>
+                            <span class="font-serif font-bold">${title} (${year})</span>
+                        </div>
+                    `;
+                    item.onclick = () => {
+                        document.getElementById('modalMovieSearchInput').value = `${title} (${year})`;
+                        document.getElementById('selectedTmdbMovieId').value = m.id;
+                        cachedSelectedMovieObj = {
+                            id: m.id,
+                            title: title,
+                            poster: m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : 'https://via.placeholder.com/150',
+                            rating: m.vote_average ? m.vote_average.toFixed(1) : '8.0',
+                            overview: m.overview || 'Sin descripción disponible.'
+                        };
+                        dropdown.classList.add('hidden');
+                    };
+                    dropdown.appendChild(item);
+                });
+                dropdown.classList.remove('hidden');
+            }
+        } else {
+            if (dropdown) {
+                dropdown.innerHTML = `<div class="p-2 text-xs font-serif italic text-stone-400 text-center">No se encontró la película.</div>`;
+                dropdown.classList.remove('hidden');
+            }
+        }
+    }, 400);
+}
+
+function handleSmartPublishSubmit(e) {
+    e.preventDefault();
+
+    const titleVal = document.getElementById('smartPostTitle').value.trim();
+    const contentVal = document.getElementById('smartPostContent').value.trim();
+    const ratingVal = parseFloat(document.getElementById('smartPostRating').value);
+    const movieIdVal = document.getElementById('selectedTmdbMovieId').value;
+
+    let newPost = {
+        id: 'post_' + Date.now(),
+        author: currentUsername,
+        avatarSeed: currentUsername,
+        role: "Crítico principal / Editor",
+        type: currentPublishMode,
+        date: "Hace un momento",
+        reactions: { agree: 0, disagree: 0 },
+        userVotes: {},
+        comments: []
+    };
+
+    if (currentPublishMode === 'review') {
+        if (!movieIdVal || !cachedSelectedMovieObj) {
+            alert("Por favor selecciona una película del buscador para tu reseña.");
+            return;
+        }
+        newPost.tmdbMovieId = parseInt(movieIdVal);
+        newPost.movieObj = cachedSelectedMovieObj;
+        newPost.reviewTitle = titleVal;
+        newPost.rating = isNaN(ratingVal) ? null : ratingVal;
+        newPost.content = contentVal;
+        newPost.title = '';
+    } else {
+        newPost.title = titleVal;
+        newPost.content = contentVal;
+        newPost.tmdbMovieId = null;
+    }
+
+    let savedMural = JSON.parse(localStorage.getItem('cine_diario_mural_posts') || '[]');
+    savedMural.unshift(newPost);
+    localStorage.setItem('cine_diario_mural_posts', JSON.stringify(savedMural));
+
+    closeSmartPublishModal();
+    renderMuralFeed('all');
 }
