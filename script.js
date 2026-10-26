@@ -1,3 +1,509 @@
+// ===== SINCRONIZACIÓN CON LA NUBE (Firestore) =====
+// Todo lo que se guarda en estas claves de localStorage se replica automáticamente
+// en Firestore cuando hay una sesión iniciada (ver index.html: fbSaveData / fbInitLibrary).
+const CINE_SYNC_KEYS = [
+    'cine_watched_movies',
+    'cine_watched_movies_data',
+    'cine_personal_reviews',
+    'cine_custom_lists',
+    'cine_diario_mural_posts',
+    'cine_avatar_custom_url',
+    'cine_default_tab'
+];
+window.CINE_SYNC_KEYS = CINE_SYNC_KEYS;
+
+let muralSortDirection = "desc";
+
+function toggleMuralSortDirection() {
+    muralSortDirection = muralSortDirection === "desc" ? "asc" : "desc";
+    const icon = document.getElementById('muralSortDirectionIcon');
+    if (icon) {
+        icon.className = muralSortDirection === "desc"
+            ? "fa-solid fa-arrow-down-wide-short"
+            : "fa-solid fa-arrow-up-short-wide";
+    }
+    renderMuralFeed();
+}
+
+function getRelativeTime(item) {
+    let timestamp = 0;
+
+    // 1. Si viene de Firebase, tiene un objeto createdAt (Timestamp)
+    if (item.createdAt && typeof item.createdAt.toMillis === 'function') {
+        timestamp = item.createdAt.toMillis();
+    }
+    // 2. Si es un post local antiguo, extraemos los números de su ID (ej: post_1712345678901)
+    else if (item.id && typeof item.id === 'string') {
+        const match = item.id.match(/\d{13}/);
+        if (match) timestamp = parseInt(match[0]);
+    }
+
+    // Si no pudimos sacar la fecha, usamos la que estaba guardada por defecto
+    if (!timestamp) return item.date || "Hace un momento";
+
+    const now = Date.now();
+    const diffMs = now - timestamp;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMins < 1) return "Hace un momento";
+    if (diffMins < 60) return `Hace ${diffMins} minuto${diffMins !== 1 ? 's' : ''}`;
+    if (diffHours < 24) return `Hace ${diffHours} hora${diffHours !== 1 ? 's' : ''}`;
+    return `Hace ${diffDays} día${diffDays !== 1 ? 's' : ''}`;
+}
+
+const _rawSetItem = Storage.prototype.setItem;
+const _rawRemoveItem = Storage.prototype.removeItem;
+window.cineRawStorage = {
+    set: (k, v) => _rawSetItem.call(localStorage, k, v),
+    remove: (k) => _rawRemoveItem.call(localStorage, k)
+};
+
+function _cineQueueSync(key, value) {
+    if (!CINE_SYNC_KEYS.includes(key)) return;
+    if (window._suppressSync || !window._libraryReady || !window.currentUser || !window.fbSaveData) return;
+    window.fbSaveData(key, value);
+}
+Storage.prototype.setItem = function (k, v) {
+    _rawSetItem.call(this, k, v);
+    if (this === localStorage) _cineQueueSync(k, String(v));
+};
+Storage.prototype.removeItem = function (k) {
+    _rawRemoveItem.call(this, k);
+    if (this === localStorage) _cineQueueSync(k, null);
+};
+
+// Aplica un valor llegado de la nube (string JSON o null) a las variables en memoria
+window.cineApplyKey = function (key, raw) {
+    try {
+        switch (key) {
+            case 'cine_watched_movies': watchedMovies = raw ? JSON.parse(raw) : []; break;
+            case 'cine_watched_movies_data': watchedMoviesData = raw ? JSON.parse(raw) : {}; break;
+            case 'cine_personal_reviews': personalReviews = raw ? JSON.parse(raw) : {}; break;
+            case 'cine_custom_lists': customLists = raw ? JSON.parse(raw) : []; break;
+            case 'cine_avatar_custom_url':
+                currentAvatarCustomUrl = raw || null;
+                window.currentAvatarCustomUrl = currentAvatarCustomUrl;
+                break;
+            case 'cine_default_tab': defaultMainTab = raw || 'mural'; break;
+        }
+    } catch (e) {
+        console.warn('Dato inválido en', key, e);
+    }
+};
+
+window.cineRefreshAfterSync = function () {
+    const calls = [
+        () => renderCustomLists(),
+        () => renderResultsGrid(),
+        () => renderMuralFeed(),
+        () => updateProfileDrawerStats()
+    ];
+    calls.forEach(fn => { try { fn(); } catch (e) { console.warn(e); } });
+};
+// ===== FIN SINCRONIZACIÓN =====
+
+// ===== MODALES DEL PERFIL (vistas, apuntes, cuadernos) =====
+const _pmEsc = (t) => String(t ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let _pmItems = [];
+
+function _pmPoster(url, cls) {
+    const fallback = `<div class="${cls} flex items-center justify-center bg-stone-200 dark:bg-stone-800 text-stone-400"><i class="fa-solid fa-film"></i></div>`;
+    if (!url || /placeholder/.test(url)) return fallback;
+    return `<img src="${_pmEsc(url)}" loading="lazy" class="${cls} object-cover bg-stone-200 dark:bg-stone-800" onerror="this.outerHTML=this.dataset.fb" data-fb="${_pmEsc(fallback)}">`;
+}
+
+function openProfileModal(id) {
+    const drawer = document.getElementById('profileDrawer');
+    if (drawer && !drawer.classList.contains('translate-x-full')) toggleProfileDrawer();
+    const m = document.getElementById(id);
+    if (m) m.classList.remove('hidden');
+}
+function closeProfileModal(id) {
+    const m = document.getElementById(id);
+    if (m) m.classList.add('hidden');
+}
+function openProfileItem(i) {
+    const it = _pmItems[i];
+    if (it) openDetailModal({ id: it.id, title: it.title, poster: it.poster, rating: it.rating || '8.5', overview: it.overview || 'Sin descripción' }, it.tag || 'Mi perfil');
+}
+
+function _pmMovie(id) {
+    const d = watchedMoviesData[id] || (personalReviews[id] && personalReviews[id].movie) || null;
+    if (d) return { id: d.id ?? id, title: d.title || 'Sin título', poster: d.poster, rating: d.rating, overview: d.overview };
+    return { id, title: 'Película #' + id, poster: null };
+}
+
+function openWatchedMoviesModal() {
+    openProfileModal('watchedModal');
+    const inp = document.getElementById('watchedSearchInput');
+    if (inp) inp.value = '';
+    renderWatchedModal();
+}
+function renderWatchedModal() {
+    const body = document.getElementById('watchedModalBody');
+    if (!body) return;
+    const q = (document.getElementById('watchedSearchInput')?.value || '').trim().toLowerCase();
+    document.getElementById('watchedModalCount').innerText = watchedMovies.length;
+    const movies = [...watchedMovies].reverse().map(_pmMovie).filter(m => m.title.toLowerCase().includes(q));
+    _pmItems = movies.map(m => ({ ...m, tag: 'Vistas' }));
+    if (!movies.length) {
+        body.innerHTML = `<p class="text-center py-10 text-stone-400 text-xs italic">${watchedMovies.length ? 'Sin resultados.' : 'Aún no has marcado películas como vistas.'}</p>`;
+        return;
+    }
+    body.innerHTML = `<div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2.5">` + movies.map((m, i) => {
+        const r = personalReviews[m.id]?.rating;
+        return `<div onclick="openProfileItem(${i})" title="${_pmEsc(m.title)}" class="relative group cursor-pointer journal-border overflow-hidden hover:border-rose-800 transition">
+            ${_pmPoster(m.poster, 'w-full aspect-[2/3]')}
+            ${r ? `<span class="absolute top-1 right-1 text-[9px] font-mono font-bold bg-stone-950/80 text-amber-400 px-1.5 py-0.5"><i class="fa-solid fa-star"></i> ${Number(r).toFixed(1)}</span>` : ''}
+            <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-stone-950/95 to-transparent p-1.5 pt-6 opacity-0 group-hover:opacity-100 transition">
+                <span class="block text-[10px] font-heading font-bold text-stone-100 leading-tight">${_pmEsc(m.title)}</span>
+            </div></div>`;
+    }).join('') + `</div>`;
+}
+
+function openPersonalNotesModal() {
+    openProfileModal('notesModal');
+    const inp = document.getElementById('notesSearchInput');
+    if (inp) inp.value = '';
+    renderNotesModal();
+}
+function renderNotesModal() {
+    const body = document.getElementById('notesModalBody');
+    if (!body) return;
+    const q = (document.getElementById('notesSearchInput')?.value || '').trim().toLowerCase();
+    const all = Object.keys(personalReviews).reverse().map(id => ({ ...personalReviews[id], _m: _pmMovie(id) }))
+        .filter(n => n.review || n.reviewTitle || n.rating);
+    document.getElementById('notesModalCount').innerText = all.length;
+    const notes = all.filter(n => (n._m.title + ' ' + (n.reviewTitle || '')).toLowerCase().includes(q));
+    _pmItems = notes.map(n => ({ ...n._m, tag: 'Mis apuntes' }));
+    if (!notes.length) {
+        body.innerHTML = `<p class="text-center py-10 text-stone-400 text-xs italic">${all.length ? 'Sin resultados.' : 'Aún no has escrito apuntes. Hazlo desde el detalle de cualquier película.'}</p>`;
+        return;
+    }
+    body.innerHTML = `<div class="space-y-2.5">` + notes.map((n, i) => `
+        <div onclick="openProfileItem(${i})" class="flex gap-3 p-2.5 bg-stone-100 dark:bg-stone-950 journal-border cursor-pointer hover:border-rose-800 transition">
+            ${_pmPoster(n._m.poster, 'w-14 h-20 flex-shrink-0 journal-border')}
+            <div class="min-w-0 flex-grow">
+                <div class="flex items-start justify-between gap-2">
+                    <h4 class="font-heading font-bold text-xs text-rose-900 dark:text-rose-400 truncate">${_pmEsc(n.reviewTitle || n._m.title)}</h4>
+                    <span class="flex-shrink-0 text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 journal-border ${n.isPublic ? 'text-emerald-700 dark:text-emerald-400' : 'text-stone-500'}"><i class="fa-solid ${n.isPublic ? 'fa-earth-americas' : 'fa-lock'} mr-1"></i>${n.isPublic ? 'Público' : 'Privado'}</span>
+                </div>
+                <div class="text-[10px] font-mono text-stone-500 mt-0.5">${_pmEsc(n._m.title)}${n.rating ? ` · <span class="text-amber-600"><i class="fa-solid fa-star"></i> ${Number(n.rating).toFixed(1)}</span>` : ''}</div>
+                ${n.review ? `<p class="text-xs font-serif italic text-stone-700 dark:text-stone-300 mt-1.5 leading-relaxed" style="display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden">${_pmEsc(n.review)}</p>` : ''}
+            </div>
+        </div>`).join('') + `</div>`;
+}
+
+function openCustomListsModal() {
+    openProfileModal('listsModal');
+    renderListsModal();
+}
+function renderListsModal(openIdx) {
+    const body = document.getElementById('listsModalBody');
+    if (!body) return;
+    document.getElementById('listsModalCount').innerText = customLists.length;
+    if (!customLists.length) {
+        body.innerHTML = `<p class="text-center py-10 text-stone-400 text-xs italic">Sin cuadernos creados. Puedes crear uno desde el catálogo.</p>`;
+        return;
+    }
+    _pmItems = [];
+    body.innerHTML = `<div class="space-y-3">` + customLists.map((l, li) => {
+        const ms = (l.movies || []).map(m => ({ ...(typeof m === 'object' ? m : { title: m }), tag: 'Cuaderno: ' + l.name }));
+        const start = _pmItems.length;
+        _pmItems.push(...ms);
+        const thumbs = ms.slice(0, 4).map(m => _pmPoster(m.poster, 'w-8 h-12 journal-border')).join('');
+        const grid = ms.length
+            ? `<div class="grid grid-cols-4 sm:grid-cols-5 gap-2">${ms.map((m, mi) => `<div onclick="openProfileItem(${start + mi})" title="${_pmEsc(m.title)}" class="cursor-pointer group">
+                    <div class="journal-border overflow-hidden group-hover:border-rose-800 transition">${_pmPoster(m.poster, 'w-full aspect-[2/3]')}</div>
+                    <span class="block text-[9px] font-serif text-stone-600 dark:text-stone-400 truncate mt-0.5">${_pmEsc(m.title)}</span></div>`).join('')}</div>`
+            : `<p class="text-[11px] italic text-stone-400 text-center py-2">Este cuaderno está vacío.</p>`;
+        return `<div class="bg-stone-100 dark:bg-stone-950 journal-border">
+            <div onclick="document.getElementById('lmBody_${li}').classList.toggle('hidden')" class="p-3 flex items-center justify-between cursor-pointer hover:bg-stone-200/50 dark:hover:bg-stone-900 transition">
+                <div class="flex items-center gap-2 min-w-0"><i class="fa-solid fa-book text-rose-800 text-xs"></i><h4 class="text-xs font-heading font-bold text-rose-900 dark:text-rose-400 truncate">${_pmEsc(l.name)}</h4></div>
+                <div class="flex items-center gap-3 flex-shrink-0"><div class="hidden sm:flex gap-1">${thumbs}</div><span class="text-[10px] font-mono bg-stone-200 dark:bg-stone-900 px-2 py-0.5 journal-border">${ms.length} obras</span></div>
+            </div>
+            <div id="lmBody_${li}" class="${li === openIdx ? '' : 'hidden'} border-t border-stone-200 dark:border-stone-800 p-3 bg-stone-50 dark:bg-stone-900/50">${grid}</div>
+        </div>`;
+    }).join('') + `</div>`;
+}
+
+// Mantiene al día los modales abiertos si los datos cambian (p. ej. desde el detalle de una película)
+window.refreshOpenProfileModals = function () {
+    const open = (id) => { const m = document.getElementById(id); return m && !m.classList.contains('hidden'); };
+    if (open('watchedModal')) renderWatchedModal();
+    if (open('notesModal')) renderNotesModal();
+    if (open('listsModal')) {
+        const opened = customLists.findIndex((_, i) => { const b = document.getElementById('lmBody_' + i); return b && !b.classList.contains('hidden'); });
+        renderListsModal(opened);
+    }
+};
+// ===== FIN MODALES DEL PERFIL =====
+
+// ===== RULETA, ÓSCARS, FILTROS DEL CATÁLOGO Y AVATAR (reconstruido) =====
+const _movieReg = new Map();
+function _regMovie(m, tag) {
+    const key = tag + '|' + m.id;
+    if (!_movieReg.has(key)) _movieReg.set(key, { idx: _movieReg.size });
+    const e = _movieReg.get(key);
+    e.m = m; e.tag = tag;
+    return e.idx;
+}
+function openRegisteredMovie(i) {
+    for (const e of _movieReg.values()) {
+        if (e.idx === i) {
+            openDetailModal({ id: e.m.id, title: e.m.title, poster: e.m.poster, rating: e.m.rating || '8.5', overview: e.m.overview || 'Sin descripción', votes: e.m.votes, year: e.m.year }, e.tag);
+            return;
+        }
+    }
+}
+function _findMovieById(id) {
+    const pools = [
+        [currentDetailMovie, currentWinnerMovie],
+        fetchedResults, moviesList, currentOscarList,
+        customLists.flatMap(l => (l.movies || []).filter(m => typeof m === 'object')),
+        Object.values(personalReviews).map(r => r && r.movie)
+    ];
+    for (const pool of pools) {
+        const f = pool.find(m => m && String(m.id) === String(id));
+        if (f) return f;
+    }
+    return null;
+}
+
+// ----- Catálogo -----
+function getVisibleCatalogMovies() {
+    const q = (document.getElementById('catalogSearchFilter')?.value || '').trim().toLowerCase();
+    const w = document.getElementById('watchedFilterSelect')?.value || 'ALL';
+    const seen = new Set();
+    return fetchedResults.filter(m => {
+        if (seen.has(m.id)) return false;
+        seen.add(m.id);
+        const watched = watchedMovies.includes(m.id);
+        if (w === 'WATCHED' && !watched) return false;
+        if (w === 'UNWATCHED' && watched) return false;
+        if (q && !((m.title || '') + ' ' + (m.subtitle || '')).toLowerCase().includes(q)) return false;
+        return true;
+    });
+}
+function applyCatalogFilters() { renderResultsGrid(); }
+function loadNextFilteredPage() { return loadNextFilteredPageAutomatically(); }
+function updateCatalogCount() {
+    const el = document.getElementById('catalogCountIndicator');
+    if (el) el.innerText = `${getVisibleCatalogMovies().length} obras`;
+    const btn = document.getElementById('loadMoreBtn');
+    if (btn) btn.classList.toggle('hidden', currentFilterPage >= totalFilterPages);
+}
+
+// ----- Detalle -----
+function renderDetailPublicReviews(movie) {
+    const box = document.getElementById('detailPublicReviewsContainer');
+    if (!box) return;
+    let posts = [];
+    try {
+        posts = getCommunityAndUserPosts().filter(p => String(p.tmdbMovieId ?? (p.movieObj && p.movieObj.id)) === String(movie.id)).slice(0, 5);
+    } catch (e) { /* sin comentarios */ }
+    if (!posts.length) {
+        box.innerHTML = `<p class="text-[11px] font-serif italic text-stone-400 text-center py-2">Aún no hay comentarios sobre esta obra.</p>`;
+        return;
+    }
+    box.innerHTML = posts.map(p => `
+        <div onclick="closeDetailModal(); openMuralPostModal('${_pmEsc(p.id)}')" class="p-2 bg-stone-100 dark:bg-stone-950 journal-border cursor-pointer hover:border-rose-800 transition">
+            <div class="flex items-center justify-between text-[10px] font-mono text-stone-500">
+                <span class="font-bold text-rose-900 dark:text-rose-400">${_pmEsc(p.author)}</span>
+                ${p.rating ? `<span class="text-amber-600"><i class="fa-solid fa-star"></i> ${Number(p.rating).toFixed(1)}</span>` : ''}
+            </div>
+            <p class="text-[11px] font-serif italic text-stone-700 dark:text-stone-300 mt-1" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${_pmEsc(p.reviewTitle || p.title || p.content || '')}</p>
+        </div>`).join('');
+}
+function updateWinnerWatchedUI(movieId) {
+    const btn = document.getElementById('winnerWatchedBtn');
+    if (!btn) return;
+    const w = watchedMovies.includes(movieId);
+    btn.className = `absolute top-2 right-2 p-1.5 text-xs transition shadow-md journal-border cursor-pointer text-stone-100 ${w ? 'bg-emerald-800' : 'bg-stone-900/80 hover:bg-rose-900'}`;
+    btn.innerHTML = `<i id="winnerWatchedIcon" class="fa-${w ? 'solid fa-eye' : 'regular fa-eye-slash'}"></i>`;
+    btn.title = w ? 'Marcar como no vista' : 'Marcar como vista';
+}
+
+// ----- Ruleta -----
+const WHEEL_COLORS = ['#9f1239', '#44403c', '#b45309', '#78716c', '#be123c', '#a16207', '#57534e', '#881337'];
+
+function addMoviesToRoulette(list) {
+    const ids = new Set(moviesList.map(m => m.id));
+    let added = 0;
+    (list || []).forEach(m => { if (m && !ids.has(m.id)) { moviesList.push(m); ids.add(m.id); added++; } });
+    refreshRoulette();
+    return added;
+}
+function removeFromRoulette(id) { moviesList = moviesList.filter(m => m.id !== id); refreshRoulette(); }
+function clearList() { moviesList = []; refreshRoulette(); }
+
+function refreshRoulette() {
+    const count = document.getElementById('movieCount');
+    if (count) count.innerText = moviesList.length;
+    const chips = document.getElementById('movieChipsList');
+    if (chips) {
+        chips.innerHTML = moviesList.length
+            ? moviesList.map(m => `<span class="inline-flex items-center gap-1.5 bg-stone-200 dark:bg-stone-800 journal-border px-2 py-0.5 text-[10px] font-serif">${_pmEsc(m.title)}<button onclick="removeFromRoulette(${m.id})" class="text-stone-400 hover:text-rose-600" title="Quitar"><i class="fa-solid fa-xmark"></i></button></span>`).join('')
+            : `<span class="text-[11px] italic text-stone-400">Selección vacía. Añade obras desde el catálogo o los Óscars.</span>`;
+    }
+    drawWheel();
+}
+
+function drawWheel() {
+    const canvas = document.getElementById('rouletteCanvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const size = canvas.width, c = size / 2, r = c - 12;
+    const dark = document.documentElement.classList.contains('dark');
+    ctx.clearRect(0, 0, size, size);
+    const n = moviesList.length;
+
+    if (n === 0) {
+        ctx.beginPath(); ctx.arc(c, c, r, 0, Math.PI * 2);
+        ctx.fillStyle = dark ? '#1c1917' : '#e7e5e4'; ctx.fill();
+        ctx.lineWidth = 8; ctx.strokeStyle = dark ? '#44403c' : '#a8a29e'; ctx.stroke();
+        ctx.fillStyle = dark ? '#a8a29e' : '#57534e';
+        ctx.textAlign = 'center'; ctx.font = 'italic 38px serif';
+        ctx.fillText('Añade películas', c, c - 70);
+        ctx.fillText('al sorteo', c, c - 25);
+        return;
+    }
+
+    const arc = (Math.PI * 2) / n;
+    for (let i = 0; i < n; i++) {
+        const a0 = startAngle + i * arc;
+        ctx.beginPath(); ctx.moveTo(c, c); ctx.arc(c, c, r, a0, a0 + arc); ctx.closePath();
+        ctx.fillStyle = WHEEL_COLORS[i % WHEEL_COLORS.length]; ctx.fill();
+        ctx.lineWidth = 3; ctx.strokeStyle = dark ? '#0c0a09' : '#fafaf9'; ctx.stroke();
+
+        ctx.save();
+        ctx.translate(c, c); ctx.rotate(a0 + arc / 2);
+        ctx.fillStyle = '#fafaf9'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+        ctx.font = `bold ${Math.max(14, Math.min(32, Math.floor(r * arc * 0.45)))}px serif`;
+        const maxChars = n > 16 ? 12 : n > 8 ? 18 : 24;
+        let t = String(moviesList[i].title || '');
+        if (t.length > maxChars) t = t.slice(0, maxChars - 1) + '…';
+        ctx.fillText(t, r - 28, 0);
+        ctx.restore();
+    }
+    ctx.beginPath(); ctx.arc(c, c, r, 0, Math.PI * 2);
+    ctx.lineWidth = 8; ctx.strokeStyle = dark ? '#a8a29e' : '#1c1917'; ctx.stroke();
+}
+
+function wheelIndexAtPointer() {
+    const n = moviesList.length;
+    if (!n) return -1;
+    const TAU = Math.PI * 2;
+    const a = (((1.5 * Math.PI - startAngle) % TAU) + TAU) % TAU; // el puntero está arriba
+    return Math.min(n - 1, Math.floor(a / (TAU / n)));
+}
+
+function spinWheel() {
+    if (isSpinning) return;
+    if (moviesList.length === 0) { alert('Añade al menos una película al sorteo.'); return; }
+    if (moviesList.length === 1) { showWinnerModal(moviesList[0]); return; }
+
+    isSpinning = true;
+    const btn = document.getElementById('spinCenterBtn');
+    if (btn) btn.disabled = true;
+
+    const TAU = Math.PI * 2;
+    const from = startAngle;
+    const total = (5 + Math.random() * 3) * TAU + Math.random() * TAU;
+    const duration = 4500 + Math.random() * 1500;
+    const t0 = performance.now();
+
+    const frame = (now) => {
+        const t = Math.min(1, (now - t0) / duration);
+        startAngle = from + total * (1 - Math.pow(1 - t, 4));
+        drawWheel();
+        const idx = wheelIndexAtPointer();
+        if (idx !== lastSegmentIndex) { lastSegmentIndex = idx; playTickSound(); }
+        if (t < 1) { requestAnimationFrame(frame); return; }
+
+        startAngle = startAngle % TAU;
+        isSpinning = false;
+        if (btn) btn.disabled = false;
+        const winner = moviesList[wheelIndexAtPointer()];
+        playVictorySound();
+        if (typeof confetti === 'function') confetti({ particleCount: 120, spread: 70, origin: { y: 0.6 } });
+        if (winner) showWinnerModal(winner);
+    };
+    requestAnimationFrame(frame);
+}
+
+function getRandomRecommendation() {
+    const pool = moviesList.length ? moviesList : getVisibleCatalogMovies();
+    if (!pool.length) { alert('No hay películas disponibles. Añade obras al sorteo o espera a que cargue el catálogo.'); return; }
+    closeModal();
+    showWinnerModal(pool[Math.floor(Math.random() * pool.length)]);
+}
+
+function addAllFilteredToRoulette() {
+    const visible = getVisibleCatalogMovies();
+    if (!visible.length) { alert('No hay obras visibles para cargar.'); return; }
+    const MAX = 30; // más segmentos hacen la ruleta ilegible
+    const pick = visible.length > MAX ? [...visible].sort(() => Math.random() - 0.5).slice(0, MAX) : visible;
+    const added = addMoviesToRoulette(pick);
+    alert(`${added} obras añadidas al sorteo.` + (visible.length > MAX ? ` (Muestra aleatoria de ${MAX} entre ${visible.length} visibles.)` : ''));
+}
+
+// ----- Óscars -----
+async function setOscarFilterMode(mode) {
+    oscarMode = mode;
+    const on = 'py-1 rounded-none text-xs font-serif font-semibold bg-amber-600 text-stone-50 transition';
+    const off = 'py-1 rounded-none text-xs font-serif font-semibold text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white transition';
+    const w = document.getElementById('btnFilterWinners'), a = document.getElementById('btnFilterAll');
+    if (w) w.className = mode === 'WINNERS' ? on : off;
+    if (a) a.className = mode === 'ALL' ? on : off;
+    const c = document.getElementById('oscarListContainer');
+    if (c) c.innerHTML = `<p class="text-center py-4 text-stone-400 text-xs italic">Cargando...</p>`;
+    await loadOscarMovies();
+}
+
+function renderOscarList() {
+    const c = document.getElementById('oscarListContainer');
+    if (!c) return;
+    if (!currentOscarList.length) {
+        c.innerHTML = `<p class="text-center py-4 text-stone-400 text-xs italic">No se pudo cargar el archivo de la Academia.</p>`;
+        return;
+    }
+    c.innerHTML = currentOscarList.map(m => `
+        <div class="flex items-center gap-2.5 p-2 bg-stone-100 dark:bg-stone-950 journal-border hover:border-amber-600 transition">
+            <div onclick="openRegisteredMovie(${_regMovie(m, 'Archivo de la Academia')})" class="flex items-center gap-2.5 flex-grow min-w-0 cursor-pointer">
+                ${_pmPoster(m.poster, 'w-9 h-14 flex-shrink-0 journal-border')}
+                <div class="min-w-0">
+                    <span class="block text-xs font-heading font-bold truncate">${_pmEsc(m.title)}</span>
+                    <span class="block text-[10px] font-mono ${m.isWinner ? 'text-amber-600' : 'text-stone-500'}"><i class="fa-solid ${m.isWinner ? 'fa-trophy' : 'fa-award'} mr-1"></i>${m.isWinner ? 'Ganadora' : 'Nominada'} · ${m.oscarYear}</span>
+                </div>
+            </div>
+            <button onclick="addMoviesToRoulette([_findMovieById(${m.id})])" title="Añadir al sorteo" class="flex-shrink-0 text-stone-400 hover:text-amber-600 px-1.5 text-sm transition"><i class="fa-solid fa-plus"></i></button>
+        </div>`).join('');
+}
+
+function addAllOscarsToRoulette() {
+    if (!currentOscarList.length) { alert('La lista de los Óscars aún no ha cargado.'); return; }
+    const added = addMoviesToRoulette(currentOscarList);
+    alert(`${added} obras añadidas al sorteo.`);
+}
+
+// ----- Avatar ampliado -----
+function openAvatarPreviewModal() {
+    const img = document.getElementById('avatarPreviewImg');
+    const name = document.getElementById('avatarPreviewName');
+    if (img) img.src = getAvatarUrl();
+    if (name) name.innerText = currentUsername;
+    openProfileModal('avatarPreviewModal');
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const cv = document.getElementById('rouletteCanvas');
+    if (cv) cv.addEventListener('click', () => spinWheel());
+});
+// ===== FIN RULETA / ÓSCARS / FILTROS / AVATAR =====
+
 const TMDB_BEARER_TOKEN = "eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJjYjQwZTE1MTc4ZDYyNWY5N2Q5N2YxOWI1YTM5ZjE1NCIsIm5iZiI6MTc5MjEwMzE3Ni4wOTcsInN1YiI6IjZhZDE1MzA4MTg4NDAyOWU1ODE4ZTk3ZSIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.RUI9o-J4oFpIOCbXlLZ88KwBfN9WcWcf0bfOQUKq2dA";
 
 let currentLang = "es-MX";
@@ -14,7 +520,7 @@ let personalReviews = JSON.parse(localStorage.getItem('cine_personal_reviews') |
 let customLists = JSON.parse(localStorage.getItem('cine_custom_lists') || '[]');
 let currentUsername = localStorage.getItem('cine_username') || 'Invitado/a';
 let sortDirection = "desc";
-
+let isLoadingMore = false;
 let currentUserBio = localStorage.getItem('cine_user_bio') || 'Apasionado del cine de autor y el análisis fílmico.';
 let currentAvatarCustomUrl = localStorage.getItem('cine_avatar_custom_url') || null;
 let currentAvatarSeed = localStorage.getItem('cine_avatar_seed') || 'Invitado/a';
@@ -32,6 +538,11 @@ let lastSegmentIndex = -1;
 let soundEnabled = true;
 let autocompleteDebounceTimer = null;
 let replyingTargetMap = {};
+
+window.currentUsername = localStorage.getItem('cine_username') || 'Invitado/a';
+window.currentAvatarSeed = localStorage.getItem('cine_avatar_seed') || 'Invitado/a';
+window.currentUserBio = localStorage.getItem('cine_user_bio') || 'Apasionado del cine de autor y el análisis fílmico.';
+window.currentAvatarCustomUrl = localStorage.getItem('cine_avatar_custom_url') || null;
 
 const EMOJI_LIST = ["🎬", "🍿", "🔥", "❤️", "👏", "🧠", "😲", "☕", "👎", "⭐", "🎭", "🎥", "🏆", "💀", "🍷", "✨"];
 
@@ -208,6 +719,7 @@ function updateUsername(val) {
     if (val.trim()) {
         currentUsername = val.trim();
         localStorage.setItem('cine_username', currentUsername);
+        if (window.fbSaveProfile) window.fbSaveProfile({ username: currentUsername });
         updateProfileDrawerStats();
     }
 }
@@ -275,27 +787,86 @@ function filterMural(filter) {
     renderMuralFeed(filter);
 }
 
+let currentMuralRenderToken = 0;
+
 async function renderMuralFeed(filter = 'all') {
     const feedContainer = document.getElementById('muralPostsFeed');
     if (!feedContainer) return;
 
+    // 1. Limpiamos el contenedor inmediatamente para evitar duplicados visuales
     feedContainer.innerHTML = `<div class="col-span-full text-center py-6 text-stone-400 text-xs font-mono"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Cargando muro editorial...</div>`;
 
-    const allPosts = getCommunityAndUserPosts();
-    const filtered = allPosts.filter(p => {
+    // 2. Creamos un token único para esta ejecución
+    const thisRenderToken = ++currentMuralRenderToken;
+
+    let allPosts = [];
+    if (window.currentFirestorePosts && window.currentFirestorePosts.length > 0) {
+        allPosts = window.currentFirestorePosts;
+    } else {
+        allPosts = getCommunityAndUserPosts();
+    }
+
+    // 3. Filtrar por categoría
+    let filtered = allPosts.filter(p => {
         if (filter === 'reviews') return p.type === 'review';
         if (filter === 'discussions') return p.type === 'discussion';
         return true;
     });
 
+    // 4. Ocultar duplicados (misma película, mismo autor)
+    const uniquePosts = [];
+    const seenKeys = new Set();
+    filtered.forEach(p => {
+        if (p.type === 'review' && p.tmdbMovieId) {
+            const key = `${p.userId || p.author}_${p.tmdbMovieId}`;
+            if (seenKeys.has(key)) return;
+            seenKeys.add(key);
+        }
+        uniquePosts.push(p);
+    });
+
+    // 5. Ordenar
+    const sortMode = document.getElementById('muralSortSelect')?.value || 'date';
+    uniquePosts.sort((a, b) => {
+        const dateA = a.createdAt ? a.createdAt.toMillis() : (a.id ? parseInt(a.id.replace(/\D/g, '')) || 0 : 0);
+        const dateB = b.createdAt ? b.createdAt.toMillis() : (b.id ? parseInt(b.id.replace(/\D/g, '')) || 0 : 0);
+
+        if (sortMode === 'date') {
+            return muralSortDirection === 'desc' ? dateB - dateA : dateA - dateB;
+        }
+        if (sortMode === 'popular') {
+            const reactA = (a.reactions?.agree || 0) + (a.reactions?.disagree || 0);
+            const reactB = (b.reactions?.agree || 0) + (b.reactions?.disagree || 0);
+            return muralSortDirection === 'desc' ? reactB - reactA : reactA - reactB;
+        }
+        return 0;
+    });
+
+    // 6. Pre-cargamos los datos de las películas en paralelo para que el orden no se rompa
+    const postsWithMovies = await Promise.all(uniquePosts.map(async (post) => {
+        if (post.type === 'review' && (post.tmdbMovieId || post.movieObj)) {
+            let fetchedMovieObj = null;
+            if (post.tmdbMovieId) {
+                fetchedMovieObj = await fetchDualLanguageMovie(`/movie/${post.tmdbMovieId}`);
+            }
+            if (!fetchedMovieObj) fetchedMovieObj = post.movieObj;
+            return { ...post, _fetchedMovieObj: fetchedMovieObj };
+        }
+        return post;
+    }));
+
+    // Si mientras cargábamos los datos se lanzó otro render, abortamos este
+    if (thisRenderToken !== currentMuralRenderToken) return;
+
     feedContainer.innerHTML = '';
 
-    if (filtered.length === 0) {
+    if (postsWithMovies.length === 0) {
         feedContainer.innerHTML = `<div class="col-span-full text-center py-8 text-stone-400 text-xs font-serif italic">No hay publicaciones en esta categoría.</div>`;
         return;
     }
 
-    for (const post of filtered) {
+    // 7. Renderizamos las tarjetas
+    for (const post of postsWithMovies) {
         const card = document.createElement('article');
         card.className = "bg-stone-100 dark:bg-stone-950 journal-border p-4 space-y-3 flex flex-col justify-between hover:border-rose-900 transition cursor-pointer group";
         card.onclick = (e) => {
@@ -304,27 +875,25 @@ async function renderMuralFeed(filter = 'all') {
             }
         };
 
-        const avatarUrl = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(post.avatarSeed || post.author)}`;
+        const isMe = post.author === currentUsername;
+        const avatarUrl = isMe ? getAvatarUrl() : `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(post.avatarSeed || post.author)}`;
 
         let movieBox = '';
-        if (post.type === 'review' && (post.tmdbMovieId || post.movieObj)) {
-            let fetchedMovieObj = post.movieObj;
-            if (!fetchedMovieObj && post.tmdbMovieId) {
-                fetchedMovieObj = await fetchDualLanguageMovie(`/movie/${post.tmdbMovieId}`);
-            }
-
-            if (fetchedMovieObj) {
-                const score = post.rating || fetchedMovieObj.rating;
-                movieBox = `
-                    <div class="flex items-center space-x-3 bg-stone-200 dark:bg-stone-900 p-2 journal-border group-hover:border-rose-800 transition">
-                        <img src="${fetchedMovieObj.poster}" onerror="this.src='https://via.placeholder.com/150'" class="w-10 h-14 object-cover journal-border flex-shrink-0">
-                        <div>
-                            <h4 class="font-serif font-bold text-xs group-hover:text-rose-800 dark:group-hover:text-rose-400 transition">${fetchedMovieObj.title}</h4>
-                            <span class="text-amber-600 text-xs font-mono"><i class="fa-solid fa-star"></i> ${score}/10</span>
-                        </div>
+        if (post._fetchedMovieObj) {
+            const score = post.rating || post._fetchedMovieObj.rating;
+            // Añadimos una función onclick con event.stopPropagation() para que abra la ficha y no el debate
+            const movieJson = JSON.stringify(post._fetchedMovieObj).replace(/"/g, '&quot;');
+            movieBox = `
+                <div onclick="event.stopPropagation(); openDetailModal(${movieJson}, 'Reseña cinematográfica')" 
+                     class="flex items-center space-x-3 bg-stone-200 dark:bg-stone-900 p-2 journal-border group-hover:border-rose-800 transition cursor-pointer">
+                    <img src="${post._fetchedMovieObj.poster}" onerror="this.src='https://via.placeholder.com/150'" class="w-10 h-14 object-cover journal-border flex-shrink-0">
+                    <div>
+                        <h4 class="font-serif font-bold text-xs group-hover:text-rose-800 dark:group-hover:text-rose-400 transition">${post._fetchedMovieObj.title}</h4>
+                        ${post._fetchedMovieObj.subtitle ? `<span class="block text-[9px] font-serif text-stone-500 truncate">${post._fetchedMovieObj.subtitle}</span>` : ''}
+                        <span class="text-amber-600 text-xs font-mono"><i class="fa-solid fa-star"></i> ${score}/10</span>
                     </div>
-                `;
-            }
+                </div>
+            `;
         }
 
         let optionalTitleHeading = (post.reviewTitle && post.reviewTitle.trim() !== '')
@@ -337,7 +906,7 @@ async function renderMuralFeed(filter = 'all') {
             const lastComm = allComments[allComments.length - 1];
             previewCommentHtml = `
                 <div class="text-[11px] font-serif bg-stone-200/40 dark:bg-stone-900 p-2 journal-border border-dashed italic text-stone-600 dark:text-stone-400 truncate">
-                    <span class="font-bold not-italic text-stone-800 dark:text-stone-200 user-profile-trigger cursor-pointer hover:underline" onclick="event.stopPropagation(); openUserProfileModal('${lastComm.author}', '${lastComm.avatarSeed || lastComm.author}', 'Crítico')">${lastComm.author}:</span> "${lastComm.text}"
+                    <span class="font-bold not-italic text-stone-800 dark:text-stone-200 user-profile-trigger cursor-pointer hover:underline" onclick="event.stopPropagation(); openUserProfileModal('${lastComm.author}', '${lastComm.avatarSeed || lastComm.author}', 'Crítico', '${post.userId || ''}')">${lastComm.author}:</span> "${lastComm.text}"
                 </div>
             `;
         }
@@ -351,14 +920,14 @@ async function renderMuralFeed(filter = 'all') {
         card.innerHTML = `
             <div class="space-y-2">
                 <div class="flex items-center justify-between border-b border-stone-200 dark:border-stone-800 pb-2">
-                    <div class="flex items-center space-x-2 user-profile-trigger cursor-pointer hover:opacity-80 transition" onclick="openUserProfileModal('${post.author}', '${post.avatarSeed || post.author}', '${post.role || 'Crítico'}')">
+                    <div class="flex items-center space-x-2 user-profile-trigger cursor-pointer hover:opacity-80 transition" onclick="openUserProfileModal('${post.author}', '${post.avatarSeed || post.author}', '${post.role || 'Crítico'}', '${post.userId || ''}')">
                         <img src="${avatarUrl}" class="w-7 h-7 rounded-full journal-border bg-stone-300">
                         <div>
                             <span class="block font-heading text-xs font-bold hover:underline">${post.author}</span>
                             <span class="block text-[9px] font-mono text-stone-500 uppercase">${post.role || 'Crítico'}</span>
                         </div>
                     </div>
-                    <span class="text-[10px] font-mono text-stone-400">${post.date}</span>
+                    <span class="text-[10px] font-mono text-stone-400">${getRelativeTime(post)}</span>
                 </div>
                 ${movieBox}
                 ${optionalTitleHeading}
@@ -384,7 +953,7 @@ async function renderMuralFeed(filter = 'all') {
     }
 }
 
-function openUserProfileModal(username, avatarSeed, role) {
+async function openUserProfileModal(username, avatarSeed, role, userId) {
     let modal = document.getElementById('userProfileModal');
     if (!modal) {
         modal = document.createElement('div');
@@ -397,9 +966,47 @@ function openUserProfileModal(username, avatarSeed, role) {
     const bio = isMe ? currentUserBio : `Apasionado crítico de cine y analista de obras cinematográficas en CineZine.`;
     const avatarUrl = isMe ? getAvatarUrl() : `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(avatarSeed)}`;
 
-    const statWatched = isMe ? watchedMovies.length : 14;
-    const statReviews = isMe ? Object.keys(personalReviews).length : 6;
-    const statLists = isMe ? customLists.length : 3;
+    let statWatched = 0, statReviews = 0, statLists = 0;
+    let publicData = { watched: [], lists: [], reviews: {} };
+
+    if (isMe) {
+        statWatched = watchedMovies.length;
+        statReviews = Object.keys(personalReviews).length;
+        statLists = customLists.length;
+        publicData = {
+            watched: watchedMovies,
+            lists: customLists.filter(l => l.isPublic !== false),
+            reviews: personalReviews
+        };
+    } else {
+        // Buscamos sus posts en el muro (por userId o por nombre de autor para los antiguos)
+        const allPosts = window.currentFirestorePosts || [];
+        const userPosts = allPosts.filter(p => p.userId === userId || p.author === username);
+
+        // Contamos sus reseñas
+        statReviews = userPosts.filter(p => p.type === 'review').length;
+
+        // Traemos sus datos públicos de Firestore
+        if (userId && window.fbGetPublicStats) {
+            const fetched = await window.fbGetPublicStats(userId);
+            if (fetched) {
+                statWatched = fetched.publicWatched ? fetched.publicWatched.length : 0;
+                statLists = fetched.publicLists ? fetched.publicLists.length : 0;
+                publicData = {
+                    watched: fetched.publicWatched || [],
+                    lists: fetched.publicLists || [],
+                    reviews: fetched.publicPersonalReviews || {},
+                    watchedData: fetched.publicWatchedData || {}
+                };
+            }
+        }
+    }
+
+    // Guardamos esta info en la variable global
+    window._currentViewedUserStats = {
+        username, isMe, ...publicData, statWatched, statReviews, statLists,
+        authorPosts: !isMe ? (window.currentFirestorePosts || []).filter(p => p.author === username) : []
+    };
 
     modal.innerHTML = `
         <div class="bg-stone-50 dark:bg-stone-900 journal-border rounded-none max-w-sm w-full p-6 space-y-4 text-center relative shadow-2xl z-[155]">
@@ -416,15 +1023,15 @@ function openUserProfileModal(username, avatarSeed, role) {
             </div>
 
             <div class="grid grid-cols-3 gap-2 pt-2 border-t border-stone-200 dark:border-stone-800 text-center font-mono">
-                <div onclick="openUserStatsDetail('${username}', 'watched')" class="bg-stone-100 dark:bg-stone-950 p-2 journal-border cursor-pointer hover:border-rose-900 transition">
+                <div onclick="openUserStatsDetail('watched')" class="bg-stone-100 dark:bg-stone-950 p-2 journal-border cursor-pointer hover:border-rose-900 transition">
                     <span class="block text-sm font-bold text-amber-600">${statWatched}</span>
                     <span class="text-[9px] text-stone-500 uppercase">Vistas</span>
                 </div>
-                <div onclick="openUserStatsDetail('${username}', 'reviews')" class="bg-stone-100 dark:bg-stone-950 p-2 journal-border cursor-pointer hover:border-rose-900 transition">
+                <div onclick="openUserStatsDetail('reviews')" class="bg-stone-100 dark:bg-stone-950 p-2 journal-border cursor-pointer hover:border-rose-900 transition">
                     <span class="block text-sm font-bold text-rose-800 dark:text-rose-400">${statReviews}</span>
                     <span class="text-[9px] text-stone-500 uppercase">Apuntes</span>
                 </div>
-                <div onclick="openUserStatsDetail('${username}', 'lists')" class="bg-stone-100 dark:bg-stone-950 p-2 journal-border cursor-pointer hover:border-rose-900 transition">
+                <div onclick="openUserStatsDetail('lists')" class="bg-stone-100 dark:bg-stone-950 p-2 journal-border cursor-pointer hover:border-rose-900 transition">
                     <span class="block text-sm font-bold text-stone-700 dark:text-stone-300">${statLists}</span>
                     <span class="text-[9px] text-stone-500 uppercase">Cuadernos</span>
                 </div>
@@ -436,7 +1043,10 @@ function openUserProfileModal(username, avatarSeed, role) {
     modal.classList.remove('hidden');
 }
 
-async function openUserStatsDetail(username, type) {
+async function openUserStatsDetail(type) {
+    const stats = window._currentViewedUserStats;
+    if (!stats) return;
+
     let detailModal = document.getElementById('userStatsDetailModal');
     if (!detailModal) {
         detailModal = document.createElement('div');
@@ -445,33 +1055,23 @@ async function openUserStatsDetail(username, type) {
         document.body.appendChild(detailModal);
     }
 
-    const isMe = username === currentUsername;
     let titleHeader = "";
     let contentHtml = "";
 
     if (type === 'watched') {
-        titleHeader = `Películas vistas de ${username}`;
-        let items = [];
-        if (isMe) {
-            items = watchedMovies.map(id => watchedMoviesData[id] || { id: id, title: `Película ID: ${id}`, poster: 'https://via.placeholder.com/150' });
-        } else {
-            items = [
-                { id: 872585, title: "Oppenheimer", rating: "9.0", poster: "https://image.tmdb.org/t/p/w500/8Gxv8gSFCU0XGDykEGv7zR1n2ua.jpg", overview: "La historia del físico J. Robert Oppenheimer..." },
-                { id: 792307, title: "Pobres Criaturas", rating: "8.5", poster: "https://image.tmdb.org/t/p/w500/kCGlIMHnOm8JPXq3rXM6c5wMxcT.jpg", overview: "La fantástica evolución de Bella Baxter..." },
-                { id: 693134, title: "Dune: Parte Dos", rating: "9.2", poster: "https://image.tmdb.org/t/p/w500/5buioST91U2K64T6jVj2lW2k9y2.jpg", overview: "Paul Atreides se une a Chani y a los fremen..." }
-            ];
-        }
+        titleHeader = `Películas vistas de ${stats.username}`;
+        let items = stats.isMe
+            ? watchedMovies.map(id => watchedMoviesData[id] || { id, title: `ID: ${id}`, poster: '' })
+            : stats.watched.map(id => (stats.watchedData || {})[id] || { id, title: `ID: ${id}`, poster: '' });
 
         if (items.length === 0) {
             contentHtml = `<p class="text-xs font-serif italic text-stone-400 text-center py-6">No hay registros de películas vistas.</p>`;
         } else {
             contentHtml = `<ul class="space-y-2 max-h-60 overflow-y-auto custom-scrollbar pr-1">`;
             items.forEach(m => {
-                const titleStr = m.title || m;
-                const movieId = m.id || 872585;
                 contentHtml += `
-                    <li onclick="closeUserStatsDetailModal(); openDetailModal({id: ${movieId}, title: '${titleStr}', poster: '${m.poster || 'https://via.placeholder.com/150'}', rating: '${m.rating || '8.0'}', overview: '${m.overview || 'Sin descripción'}'}, 'Película de ${username}')" class="bg-stone-100 dark:bg-stone-950 p-2.5 journal-border text-xs font-serif flex items-center justify-between cursor-pointer hover:border-rose-900 transition">
-                        <span class="font-bold text-rose-900 dark:text-rose-400">🎬 ${titleStr}</span>
+                    <li onclick="closeUserStatsDetailModal(); openRegisteredMovie(${_regMovie({ id: m.id, title: m.title, poster: m.poster, rating: m.rating || '8.0', overview: m.overview || 'Sin descripción' }, 'Vistas de ' + stats.username)})" class="bg-stone-100 dark:bg-stone-950 p-2.5 journal-border text-xs font-serif flex items-center justify-between cursor-pointer hover:border-rose-900 transition">
+                        <span class="font-bold text-rose-900 dark:text-rose-400">🎬 ${_pmEsc(m.title)}</span>
                         <span class="text-[10px] font-mono text-stone-400">Ver detalle →</span>
                     </li>
                 `;
@@ -479,60 +1079,71 @@ async function openUserStatsDetail(username, type) {
             contentHtml += `</ul>`;
         }
     } else if (type === 'reviews') {
-        titleHeader = `Apuntes y reseñas de ${username}`;
+        titleHeader = `Apuntes de ${stats.username}`;
+
+        // Unificamos la lista de apuntes (sean tuyos o de otros)
         let revs = [];
-        if (isMe) {
-            const allPosts = getCommunityAndUserPosts();
-            revs = allPosts.filter(p => p.author === currentUsername && p.type === 'review').map(p => ({
-                postId: p.id,
-                reviewTitle: p.reviewTitle || 'Reseña de película',
-                review: p.content,
-                movieTitle: p.movieObj ? p.movieObj.title : 'Reseña'
-            }));
+        if (stats.isMe) {
+            revs = Object.keys(stats.reviews).map(id => ({ id, ...stats.reviews[id] })).filter(r => r.isPublic);
         } else {
-            revs = [
-                { postId: 'comm_2', reviewTitle: "¿El cine de autor está perdiendo espacio?", review: "Abro debate: cada vez cuesta más encontrar películas independientes en salas tradicionales...", movieTitle: "Muro de debate" }
-            ];
+            // Mapeamos los posts de otros usuarios para que tengan la misma estructura
+            revs = stats.authorPosts.filter(p => p.type === 'review').map(p => {
+                return {
+                    id: p.id, // ID del post en el muro
+                    movie: p.movieObj || { title: 'Película desconocida', poster: '' },
+                    reviewTitle: p.reviewTitle,
+                    review: p.content,
+                    rating: p.rating,
+                    isPost: true // Bandera para saber que viene del muro
+                };
+            });
         }
 
         if (revs.length === 0) {
-            contentHtml = `<p class="text-xs font-serif italic text-stone-400 text-center py-6">Este usuario aún no publica apuntes en su bitácora.</p>`;
+            contentHtml = `<p class="text-xs font-serif italic text-stone-400 text-center py-6">No hay apuntes públicos.</p>`;
         } else {
-            contentHtml = `<div class="space-y-2 max-h-60 overflow-y-auto custom-scrollbar pr-1">`;
+            contentHtml = `<div class="space-y-2.5 max-h-60 overflow-y-auto custom-scrollbar pr-1">`;
             revs.forEach(r => {
+                const poster = r.movie ? r.movie.poster : '';
+                const movieTitle = r.movie ? r.movie.title : 'Sin título';
+
+                // Si es un post ajeno, al hacer clic abrimos el debate. Si es tuyo, abrimos la película.
+                const clickAction = r.isPost
+                    ? `closeUserStatsDetailModal(); openMuralPostModal('${r.id}')`
+                    : `closeUserStatsDetailModal(); openRegisteredMovie(${_regMovie(r.movie, 'Apunte de ' + stats.username)})`;
+
                 contentHtml += `
-                    <div onclick="closeUserStatsDetailModal(); openMuralPostModal('${r.postId}')" class="bg-stone-100 dark:bg-stone-950 p-3 journal-border space-y-1 text-xs cursor-pointer hover:border-rose-900 transition">
-                        <div class="flex items-center justify-between font-mono text-[10px] text-stone-400">
-                            <span>${r.movieTitle}</span>
-                            <span class="text-rose-800 dark:text-rose-400 font-bold">Ver en mural →</span>
+                    <div onclick="${clickAction}" class="flex gap-3 p-2.5 bg-stone-100 dark:bg-stone-950 journal-border cursor-pointer hover:border-rose-800 transition">
+                        ${_pmPoster(poster, 'w-14 h-20 flex-shrink-0 journal-border')}
+                        <div class="min-w-0 flex-grow">
+                            <div class="flex items-start justify-between gap-2">
+                                <h4 class="font-heading font-bold text-xs text-rose-900 dark:text-rose-400 truncate">${_pmEsc(r.reviewTitle || movieTitle)}</h4>
+                                <span class="flex-shrink-0 text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 journal-border text-emerald-700 dark:text-emerald-400">
+                                    <i class="fa-solid fa-earth-americas mr-1"></i>Público
+                                </span>
+                            </div>
+                            <div class="text-[10px] font-mono text-stone-500 mt-0.5">
+                                ${_pmEsc(movieTitle)}${r.rating ? ` · <span class="text-amber-600"><i class="fa-solid fa-star"></i> ${Number(r.rating).toFixed(1)}</span>` : ''}
+                            </div>
+                            ${r.review ? `<p class="text-xs font-serif italic text-stone-700 dark:text-stone-300 mt-1.5 leading-relaxed" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${_pmEsc(r.review)}</p>` : ''}
                         </div>
-                        <h5 class="font-heading font-bold text-rose-900 dark:text-rose-400">${r.reviewTitle}</h5>
-                        <p class="font-serif italic text-stone-700 dark:text-stone-300 line-clamp-2">"${r.review}"</p>
                     </div>
                 `;
             });
             contentHtml += `</div>`;
         }
     } else if (type === 'lists') {
-        titleHeader = `Cuadernos temáticos de ${username}`;
-        let lists = [];
-        if (isMe) {
-            lists = customLists;
-        } else {
-            lists = [
-                { name: "Cine de autor contemporáneo", movies: [{ id: 872585, title: "Oppenheimer", poster: "https://image.tmdb.org/t/p/w500/8Gxv8gSFCU0XGDykEGv7zR1n2ua.jpg" }, { id: 792307, title: "Pobres Criaturas", poster: "https://image.tmdb.org/t/p/w500/kCGlIMHnOm8JPXq3rXM6c5wMxcT.jpg" }] },
-                { name: "Joyas ocultas de los 90s", movies: [{ id: 680, title: "Pulp Fiction", poster: "https://image.tmdb.org/t/p/w500/fIE3L2c322LFi2M3R2921.jpg" }, { id: 275, title: "Fargo", poster: "https://image.tmdb.org/t/p/w500/52531.jpg" }] }
-            ];
-        }
+        titleHeader = `Cuadernos públicos de ${stats.username}`;
+        let lists = stats.lists;
 
         if (lists.length === 0) {
-            contentHtml = `<p class="text-xs font-serif italic text-stone-400 text-center py-6">No hay cuadernos temáticos creados.</p>`;
+            contentHtml = `<p class="text-xs font-serif italic text-stone-400 text-center py-6">No hay cuadernos públicos.</p>`;
         } else {
             contentHtml = `<div class="space-y-2 max-h-60 overflow-y-auto custom-scrollbar pr-1">`;
             lists.forEach(l => {
                 contentHtml += `
                     <div onclick="openUserListContentModal('${l.name}', ${JSON.stringify(l.movies || []).replace(/"/g, '&quot;')})" class="bg-stone-100 dark:bg-stone-950 p-3 journal-border flex items-center justify-between text-xs font-serif cursor-pointer hover:border-rose-900 transition">
-                        <span class="font-bold text-rose-900 dark:text-rose-400">📓 ${l.name}</span>
+                        <span class="font-bold text-rose-900 dark:text-rose-400">📓 ${_pmEsc(l.name)}</span>
                         <span class="text-[10px] font-mono bg-stone-200 dark:bg-stone-900 px-2 py-0.5 journal-border">${l.movies ? l.movies.length : 0} películas →</span>
                     </div>
                 `;
@@ -581,9 +1192,9 @@ function openUserListContentModal(listName, moviesArray) {
             const overview = m.overview || 'Sin descripción disponible.';
 
             moviesHtml += `
-                <li onclick="closeUserListContentModal(); openDetailModal({id: ${movieId}, title: '${mTitle}', poster: '${poster}', rating: '${rating}', overview: '${overview}'}, 'Cuaderno: ${listName}')" 
+                <li onclick="closeUserListContentModal(); openRegisteredMovie(${_regMovie({ id: movieId, title: String(mTitle), poster, rating, overview }, 'Cuaderno: ' + listName)})" 
                     class="bg-stone-100 dark:bg-stone-950 p-2.5 journal-border text-xs font-serif text-stone-800 dark:text-stone-200 flex items-center justify-between cursor-pointer hover:border-rose-900 transition group">
-                    <span class="font-bold group-hover:text-rose-800 dark:group-hover:text-rose-400 transition">🎬 ${mTitle}</span>
+                    <span class="font-bold group-hover:text-rose-800 dark:group-hover:text-rose-400 transition">🎬 ${_pmEsc(mTitle)}</span>
                     <span class="text-[10px] font-mono text-stone-400">Ver película →</span>
                 </li>`;
         });
@@ -619,13 +1230,14 @@ function toggleWatchedStatus(movieId) {
         delete watchedMoviesData[movieId];
     } else {
         watchedMovies.push(movieId);
-        if (currentDetailMovie) {
+        const found = _findMovieById(movieId);
+        if (found) {
             watchedMoviesData[movieId] = {
-                id: currentDetailMovie.id,
-                title: currentDetailMovie.title,
-                poster: currentDetailMovie.poster,
-                rating: currentDetailMovie.rating,
-                overview: currentDetailMovie.overview
+                id: found.id,
+                title: found.title,
+                poster: found.poster,
+                rating: found.rating,
+                overview: found.overview
             };
         }
     }
@@ -663,7 +1275,6 @@ function updateWatchedBtnUI(movieId) {
 function openDetailModal(movie, tag) {
     resetModalPosition('detailModal');
 
-    // Resetea cualquier tamaño personalizado previo para que nazca con su tamaño original
     const modalContent = document.querySelector('#detailModal .draggable-modal-content');
     if (modalContent) {
         modalContent.style.width = '';
@@ -678,6 +1289,16 @@ function openDetailModal(movie, tag) {
 
     const detailTitle = document.getElementById('detailTitle');
     if (detailTitle) detailTitle.innerHTML = movie.title;
+
+    const detailSubtitle = document.getElementById('detailSubtitle');
+    if (detailSubtitle) {
+        if (movie.subtitle && movie.subtitle.trim() !== '') {
+            detailSubtitle.innerText = movie.subtitle;
+            detailSubtitle.classList.remove('hidden');
+        } else {
+            detailSubtitle.classList.add('hidden');
+        }
+    }
 
     const detailPoster = document.getElementById('detailPoster');
     if (detailPoster) detailPoster.src = movie.poster;
@@ -700,7 +1321,7 @@ function openDetailModal(movie, tag) {
 
     const detailOverview = document.getElementById('detailOverview');
     if (detailOverview) {
-        detailOverview.style.height = ''; // Limpia alturas fijas guardadas
+        detailOverview.style.height = '';
         detailOverview.innerText = movie.overview || 'Sin descripción disponible.';
     }
 
@@ -710,13 +1331,25 @@ function openDetailModal(movie, tag) {
         updateWatchedBtnUI(movie.id);
     }
 
+    const addBtn = document.getElementById('detailAddBtn');
+    if (addBtn) {
+        addBtn.onclick = () => {
+            const added = addMoviesToRoulette([movie]);
+            const label = addBtn.querySelector('span');
+            if (label) {
+                label.innerText = added ? 'Añadida ✓' : 'Ya está en el sorteo';
+                setTimeout(() => { label.innerText = 'Añadir a sorteo'; }, 1500);
+            }
+        };
+    }
+    renderDetailPublicReviews(movie);
+
     const pReview = personalReviews[movie.id];
     renderStarSelector(pReview ? pReview.rating : 0);
 
     const userReviewInput = document.getElementById('userPersonalReview');
     if (userReviewInput) {
         userReviewInput.value = pReview ? pReview.review || '' : '';
-        // Ajusta la altura del textarea según el texto que se acaba de inyectar
         setTimeout(() => autoResizeTextarea(userReviewInput), 50);
     }
 
@@ -761,6 +1394,14 @@ function showWinnerModal(movie) {
         modalOverview.innerText = movie.overview || 'Sin descripción disponible.';
     }
 
+    const wBtn = document.getElementById('winnerWatchedBtn');
+    if (wBtn) {
+        wBtn.onclick = () => { currentDetailMovie = movie; toggleWatchedStatus(movie.id); updateWinnerWatchedUI(movie.id); };
+        updateWinnerWatchedUI(movie.id);
+    }
+    const wListBtn = document.getElementById('winnerAddListBtn');
+    if (wListBtn) wListBtn.onclick = (e) => { currentDetailMovie = movie; openQuickListMenuFromDetail(e); };
+
     const modal = document.getElementById('winnerModal');
     if (modal) modal.classList.remove('hidden');
 }
@@ -770,28 +1411,48 @@ function closeModal() {
     if (modal) modal.classList.add('hidden');
 }
 
-function renderStarSelector(val) {
+function renderStarSelector(val, containerId = 'starContainer', textId = 'starRatingText') {
     selectedStarRating = val || 0;
-    const container = document.getElementById('starContainer');
+    const container = document.getElementById(containerId);
     if (!container) return;
     container.innerHTML = '';
-    const textEl = document.getElementById('starRatingText');
+    const textEl = document.getElementById(textId);
     if (textEl) textEl.innerText = selectedStarRating.toFixed(1);
 
     for (let i = 1; i <= 10; i++) {
         const starWrapper = document.createElement('div');
-        starWrapper.className = "relative cursor-pointer text-sm px-0.5 text-stone-300 dark:text-stone-700";
-        const isFull = selectedStarRating >= i;
-        let iconClass = isFull ? "fa-solid fa-star text-amber-600" : "fa-regular fa-star text-stone-300 dark:text-stone-700";
+        // Añadimos w-6 h-6 para darle un área de clic más grande y cómoda
+        starWrapper.className = "relative w-6 h-6 flex items-center justify-center cursor-pointer text-sm px-0.5 text-stone-300 dark:text-stone-700 hover:scale-110 transition-transform";
+
+        let iconClass = "fa-regular fa-star text-stone-300 dark:text-stone-700"; // Vacía
+
+        if (selectedStarRating >= i) {
+            iconClass = "fa-solid fa-star text-amber-600"; // Llena
+        } else if (selectedStarRating === i - 0.5) {
+            iconClass = "fa-solid fa-star-half-stroke text-amber-600"; // Media
+        }
+
         starWrapper.innerHTML = `<i class="${iconClass}"></i>`;
-        starWrapper.onclick = () => { selectedStarRating = i; renderStarSelector(selectedStarRating); };
+
+        // La magia: detectar si el clic es en la mitad izquierda o derecha
+        starWrapper.onclick = (e) => {
+            const rect = starWrapper.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+
+            if (clickX < rect.width / 2) {
+                renderStarSelector(i - 0.5, containerId, textId); // Media estrella
+            } else {
+                renderStarSelector(i, containerId, textId);       // Estrella entera
+            }
+        };
+
         container.appendChild(starWrapper);
     }
 }
 
 function clearPersonalRating() { selectedStarRating = 0; renderStarSelector(0); }
 
-function savePersonalReview() {
+async function savePersonalReview() {
     if (!currentDetailMovie) return;
     const reviewInput = document.getElementById('userPersonalReview').value.trim();
     const reviewTitleInput = document.getElementById('userReviewTitleInput') ? document.getElementById('userReviewTitleInput').value.trim() : '';
@@ -805,6 +1466,18 @@ function savePersonalReview() {
         isPublic: isPublic
     };
     localStorage.setItem('cine_personal_reviews', JSON.stringify(personalReviews));
+
+    // Si decide hacerlo público y hay sesión iniciada, lo publicamos en el muro de Firestore
+    if (isPublic && reviewInput && window.currentUser && window.fbCreatePost) {
+        await window.fbCreatePost({
+            type: 'review',
+            tmdbMovieId: currentDetailMovie.id,
+            movieObj: currentDetailMovie,
+            reviewTitle: reviewTitleInput,
+            content: reviewInput,
+            rating: selectedStarRating > 0 ? selectedStarRating : null
+        });
+    }
 
     const indicator = document.getElementById('saveStatusIndicator');
     if (indicator) {
@@ -838,6 +1511,7 @@ function renderCustomLists() {
     }
 
     customLists.forEach((list, listIndex) => {
+        const isPublic = list.isPublic !== false;
         const item = document.createElement('div');
         item.className = "bg-stone-100 dark:bg-stone-950 journal-border overflow-hidden transition-all";
 
@@ -845,9 +1519,13 @@ function renderCustomLists() {
             <div class="p-3 flex items-center justify-between bg-stone-100 dark:bg-stone-950 hover:bg-stone-200/50 dark:hover:bg-stone-900 transition select-none">
                 <div onclick="toggleListAccordion(${listIndex})" class="flex items-center space-x-2 flex-grow cursor-pointer">
                     <i class="fa-solid fa-book text-rose-800 text-xs"></i>
-                    <h4 class="text-xs font-heading font-bold text-rose-900 dark:text-rose-400">${list.name}</h4>
+                    <h4 class="text-xs font-heading font-bold text-rose-900 dark:text-rose-400">${_pmEsc(list.name)}</h4>
                 </div>
                 <div class="flex items-center space-x-2 flex-shrink-0">
+                    <!-- BOTÓN DE PRIVACIDAD -->
+                    <button onclick="toggleListPrivacy(${listIndex})" title="${isPublic ? 'Lista Pública (Clic para hacerla privada)' : 'Lista Privada (Clic para hacerla pública)'}" class="text-stone-400 hover:text-rose-600 px-1 py-0.5 text-xs transition">
+                        <i class="fa-solid ${isPublic ? 'fa-globe' : 'fa-lock'}"></i>
+                    </button>
                     <span class="text-[10px] font-mono bg-stone-200 dark:bg-stone-900 px-2 py-0.5 journal-border">${list.movies ? list.movies.length : 0} obras</span>
                     <button onclick="confirmDeleteCustomList(${listIndex})" title="Eliminar cuaderno" class="text-stone-400 hover:text-rose-600 px-1 py-0.5 text-xs transition"><i class="fa-solid fa-trash-can"></i></button>
                     <button onclick="toggleListAccordion(${listIndex})" class="text-stone-400 hover:text-stone-800 dark:hover:text-white text-xs px-1">
@@ -874,10 +1552,10 @@ function renderCustomLists() {
                          ondragover="onDragOverMovie(event)" 
                          ondrop="onDropMovie(event, ${listIndex}, ${mIndex})" 
                          class="flex items-center justify-between bg-stone-100 dark:bg-stone-950 p-2 journal-border text-xs group cursor-grab active:cursor-grabbing hover:border-rose-800 transition">
-                        <div class="flex items-center space-x-2 overflow-hidden flex-grow" onclick="openDetailModal({id: ${movieId}, title: '${mTitle}', poster: '${poster}', rating: '${m.rating || '8.5'}', overview: '${m.overview || 'Sin descripción'}'}, 'Cuaderno: ${list.name}')">
+                        <div class="flex items-center space-x-2 overflow-hidden flex-grow" onclick="openRegisteredMovie(${_regMovie({ id: movieId, title: String(mTitle), poster, rating: m.rating || '8.5', overview: m.overview || 'Sin descripción' }, 'Cuaderno: ' + list.name)})">
                             <i class="fa-solid fa-grip-vertical text-stone-400 text-[10px] group-hover:text-stone-700 dark:group-hover:text-stone-200"></i>
                             <span class="font-mono text-[10px] text-stone-400 w-4 text-right">${mIndex + 1}.</span>
-                            <span class="font-serif font-bold text-stone-800 dark:text-stone-200 truncate hover:text-rose-800 dark:hover:text-rose-400 transition">${mTitle}</span>
+                            <span class="font-serif font-bold text-stone-800 dark:text-stone-200 truncate hover:text-rose-800 dark:hover:text-rose-400 transition">${_pmEsc(mTitle)}</span>
                         </div>
                         <button onclick="confirmRemoveMovieFromList(${listIndex}, ${movieId})" title="Quitar de la lista" class="text-stone-400 hover:text-rose-600 px-1.5 py-0.5 text-xs transition"><i class="fa-solid fa-xmark"></i></button>
                     </div>
@@ -892,6 +1570,14 @@ function renderCustomLists() {
     });
 }
 
+// Función para cambiar la privacidad
+function toggleListPrivacy(listIndex) {
+    if (!customLists[listIndex]) return;
+    customLists[listIndex].isPublic = customLists[listIndex].isPublic === false ? true : false;
+    saveAndRenderCustomLists(); // Esto ya guarda en localStorage
+    if (window.fbSyncPublicStats) window.fbSyncPublicStats();
+}
+
 function toggleListAccordion(listIndex) {
     const body = document.getElementById(`listBody_${listIndex}`);
     const chevron = document.getElementById(`listChevron_${listIndex}`);
@@ -904,22 +1590,6 @@ function toggleListAccordion(listIndex) {
         body.classList.add('hidden');
         if (chevron) chevron.classList.remove('rotate-180');
     }
-}
-
-function confirmDeleteCustomList(listIndex) {
-    const listName = customLists[listIndex].name;
-    showDeleteConfirmationModal(() => {
-        customLists.splice(listIndex, 1);
-        saveAndRenderCustomLists();
-    }, `¿Eliminar el cuaderno "${listName}"? Se perderán las obras guardadas en él.`);
-}
-
-function confirmRemoveMovieFromList(listIndex, movieId) {
-    showDeleteConfirmationModal(() => {
-        customLists[listIndex].movies = customLists[listIndex].movies.filter(m => m.id !== movieId);
-        saveAndRenderCustomLists();
-        setTimeout(() => mantenerAcordeonAbierto(listIndex), 50);
-    }, `¿Quitar esta obra del cuaderno?`);
 }
 
 let draggedMovieInfo = null;
@@ -971,7 +1641,6 @@ function moveMovieInList(listIndex, movieIndex, direction) {
     movies[targetIndex] = temp;
 
     saveAndRenderCustomLists();
-    // Mantener abierto el acordeón tras ordenar
     setTimeout(() => {
         const body = document.getElementById(`listBody_${listIndex}`);
         const chevron = document.getElementById(`listChevron_${listIndex}`);
@@ -1096,11 +1765,11 @@ function renderSingleCommentBlock(postId, c, isReply = false) {
     return `
         <div id="commentRow_${c.id}" class="bg-stone-200/50 dark:bg-stone-900 p-2.5 journal-border text-xs space-y-1.5">
             <div class="flex items-start space-x-2.5">
-                <img src="${cAvatar}" class="w-6 h-6 rounded-full journal-border bg-stone-300 flex-shrink-0 mt-0.5 cursor-pointer hover:opacity-80 transition" onclick="openUserProfileModal('${c.author}', '${c.avatarSeed || c.author}', 'Crítico')">
+                <img src="${cAvatar}" class="w-6 h-6 rounded-full journal-border bg-stone-300 flex-shrink-0 mt-0.5 cursor-pointer hover:opacity-80 transition" onclick="openUserProfileModal('${c.author}', '${c.avatarSeed || c.author}', 'Crítico', '')">
                 <div class="space-y-1 flex-grow">
                     <div class="flex items-center justify-between">
-                        <span class="font-heading font-bold cursor-pointer hover:underline" onclick="openUserProfileModal('${c.author}', '${c.avatarSeed || c.author}', 'Crítico')">${c.author}</span>
-                        <span class="text-[9px] font-mono text-stone-400">${c.date || 'Reciente'}</span>
+                        <span class="font-heading font-bold cursor-pointer hover:underline" onclick="openUserProfileModal('${c.author}', '${c.avatarSeed || c.author}', 'Crítico', '')">${c.author}</span>
+                        <span class="text-[9px] font-mono text-stone-400">${getRelativeTime(c)}</span>
                     </div>
                     <p id="commentText_${c.id}" class="font-serif text-stone-700 dark:text-stone-300 leading-relaxed">${formattedText}</p>
                     
@@ -1152,10 +1821,11 @@ function clearReplyTarget(postId) {
     if (indicator) indicator.classList.add('hidden');
 }
 
-function openMuralPostModal(postId) {
+async function openMuralPostModal(postId) {
     resetModalPosition('muralPostModal');
-    const allPosts = getCommunityAndUserPosts();
-    let post = allPosts.find(p => p.id === postId);
+
+    const allPosts = [...(window.currentFirestorePosts || []), ...getCommunityAndUserPosts()];
+    let post = allPosts.find(p => String(p.id) === String(postId));
     if (!post) return;
 
     let modal = document.getElementById('muralPostModal');
@@ -1170,102 +1840,137 @@ function openMuralPostModal(postId) {
     const reactions = post.reactions || { agree: 0, disagree: 0 };
     const userVote = post.userVotes ? post.userVotes[currentUsername] : null;
 
-    const agreeActive = userVote === 'agree' ? 'bg-emerald-800/40 text-emerald-400 font-bold' : '';
-    const disagreeActive = userVote === 'disagree' ? 'bg-rose-800/40 text-rose-400 font-bold' : '';
+    const agreeActive = userVote === 'agree' ? 'text-emerald-600 font-bold' : 'text-stone-400 hover:text-stone-800 dark:hover:text-stone-200';
+    const disagreeActive = userVote === 'disagree' ? 'text-rose-600 font-bold' : 'text-stone-400 hover:text-stone-800 dark:hover:text-stone-200';
 
     const commentsTreeHtml = renderCommentsTreeHtml(postId, comments);
 
     let headerBlockHtml = '';
     if (post.type === 'review' && (post.tmdbMovieId || post.movieObj)) {
-        let fetchedMovieObj = post.movieObj;
+        let fetchedMovieObj = null;
+        if (post.tmdbMovieId) {
+            fetchedMovieObj = await fetchDualLanguageMovie(`/movie/${post.tmdbMovieId}`);
+        }
+        if (!fetchedMovieObj) fetchedMovieObj = post.movieObj;
+
         if (fetchedMovieObj) {
             const score = post.rating || fetchedMovieObj.rating || 'N/A';
-            const optionalTitleHtml = (post.reviewTitle && post.reviewTitle.trim() !== '')
-                ? `<h3 class="font-heading font-bold text-sm text-rose-900 dark:text-rose-400 mt-1">${post.reviewTitle}</h3>`
-                : '';
-
             const movieDataJson = JSON.stringify({
                 id: fetchedMovieObj.id || post.tmdbMovieId,
                 title: fetchedMovieObj.title,
+                subtitle: fetchedMovieObj.subtitle || '',
                 poster: fetchedMovieObj.poster,
                 rating: score,
                 overview: fetchedMovieObj.overview || 'Sin descripción disponible.'
             }).replace(/"/g, '&quot;');
 
             headerBlockHtml = `
-                <div class="space-y-1.5">
-                    <div onclick="openDetailModal(${movieDataJson}, 'Reseña cinematográfica')" 
-                         class="flex items-center space-x-3 bg-stone-200 dark:bg-stone-900 p-2 journal-border cursor-pointer hover:border-rose-900 transition group">
-                        <img src="${fetchedMovieObj.poster}" onerror="this.src='https://via.placeholder.com/150'" class="w-10 h-14 object-cover journal-border flex-shrink-0 group-hover:opacity-90 transition">
-                        <div>
-                            <span class="text-[9px] font-mono uppercase tracking-wider text-rose-800 dark:text-rose-400 font-bold">Reseña cinematográfica</span>
-                            <h4 class="font-serif font-bold text-xs text-stone-900 dark:text-stone-100 group-hover:text-rose-800 dark:group-hover:text-rose-400 transition">${fetchedMovieObj.title}</h4>
-                            <span class="text-amber-600 text-xs font-mono"><i class="fa-solid fa-star"></i> ${score}/10</span>
+                <div class="flex flex-row gap-5 mb-5">
+                    <div onclick="openDetailModal(${movieDataJson}, 'Reseña cinematográfica')" class="cursor-pointer group flex-shrink-0">
+                        <img src="${fetchedMovieObj.poster}" onerror="this.src='https://via.placeholder.com/150'" class="w-20 h-30 sm:w-24 sm:h-36 object-cover shadow-md border border-stone-200 dark:border-stone-800 group-hover:opacity-90 transition">
+                    </div>
+                    <div class="flex flex-col justify-center">
+                        <div class="text-[9px] font-mono uppercase tracking-widest text-rose-800 dark:text-rose-400 mb-0.5">
+                            Reseña cinematográfica
+                        </div>
+                        <h2 class="text-xl sm:text-2xl font-black font-heading leading-tight text-stone-900 dark:text-stone-100 mb-1">
+                            ${fetchedMovieObj.title}
+                        </h2>
+                        ${fetchedMovieObj.subtitle ? `<span class="text-xs font-serif text-stone-500 dark:text-stone-400 italic mb-1 line-clamp-1">${fetchedMovieObj.subtitle}</span>` : ''}
+                        
+                        <div class="flex items-center space-x-2 mt-1">
+                            <span class="text-amber-600 font-mono text-sm font-bold"><i class="fa-solid fa-star mr-1"></i>${score}/10</span>
                         </div>
                     </div>
-                    ${optionalTitleHtml}
                 </div>
             `;
         }
     } else if (post.title) {
-        headerBlockHtml = `<h3 class="font-heading font-bold text-sm text-rose-900 dark:text-rose-400">${post.title}</h3>`;
+        headerBlockHtml = `
+            <h2 class="text-xl font-black font-heading leading-tight text-stone-900 dark:text-stone-100 mb-3">
+                ${post.title}
+            </h2>
+        `;
     }
 
     let editButtonHtml = '';
     if (post.author === currentUsername) {
-        editButtonHtml = `<button onclick="enableEditMuralPost('${post.id}')" class="text-xs font-mono text-stone-500 hover:text-rose-800 dark:hover:text-rose-400 transition ml-auto mr-3"><i class="fa-solid fa-pen mr-1"></i>Editar</button>`;
+        editButtonHtml = `
+            <div class="flex items-center ml-auto mr-2 space-x-3">
+                <button onclick="enableEditMuralPost('${post.id}')" class="text-[10px] font-mono text-stone-500 hover:text-rose-800 transition"><i class="fa-solid fa-pen mr-1"></i>Editar</button>
+                <button onclick="deleteMuralPost('${post.id}')" class="text-[10px] font-mono text-stone-500 hover:text-rose-800 transition"><i class="fa-solid fa-trash mr-1"></i>Borrar</button>
+            </div>
+        `;
     }
 
     modal.innerHTML = `
-        <div class="bg-stone-50 dark:bg-stone-900 journal-border rounded-none max-w-xl w-full p-5 space-y-3 text-left relative shadow-2xl draggable-modal-content flex flex-col">
-            <div id="muralPostHeader" class="modal-header-drag flex items-center justify-between border-b border-stone-300 dark:border-stone-800 pb-2 flex-shrink-0">
-                <span class="text-xs font-mono text-stone-500 uppercase tracking-widest flex items-center gap-2"><i class="fa-solid fa-grip-lines text-stone-400"></i> Detalle de debate</span>
-                <button onclick="document.getElementById('muralPostModal').classList.add('hidden')" class="text-stone-400 hover:text-stone-800 dark:hover:text-white text-lg p-1 transition"><i class="fa-solid fa-xmark"></i></button>
+        <div class="bg-stone-50 dark:bg-stone-900 journal-border rounded-none max-w-xl w-full p-0 text-left relative shadow-2xl draggable-modal-content flex flex-col max-h-[90vh]">
+            
+            <div id="muralPostHeader" class="modal-header-drag flex items-center justify-between border-b border-stone-300 dark:border-stone-800 p-3 flex-shrink-0 bg-stone-50 dark:bg-stone-900">
+                <span class="text-[10px] font-mono font-bold text-stone-800 dark:text-stone-200 uppercase tracking-widest flex items-center gap-2">
+                    <i class="fa-solid fa-grip-lines text-stone-400"></i> CineZine — Artículo
+                </span>
+                <button onclick="document.getElementById('muralPostModal').classList.add('hidden')" class="text-stone-400 hover:text-rose-800 dark:hover:text-rose-400 text-lg p-1 transition"><i class="fa-solid fa-xmark"></i></button>
             </div>
             
-            <div class="flex items-center justify-between border-b border-stone-200 dark:border-stone-800 pb-2 flex-shrink-0">
-                <div class="flex items-center space-x-2.5 cursor-pointer hover:opacity-80 transition" onclick="openUserProfileModal('${post.author}', '${post.avatarSeed || post.author}', '${post.role || 'Crítico'}')">
-                    <img src="https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(post.avatarSeed || post.author)}" class="w-8 h-8 rounded-full journal-border bg-stone-300">
-                    <div>
-                        <h4 class="font-heading font-bold text-xs hover:underline">${post.author}</h4>
-                        <span class="text-[9px] font-mono text-stone-500 uppercase">${post.role || 'Crítico'}</span>
-                    </div>
-                </div>
-                ${editButtonHtml}
-                <span class="text-xs font-mono text-stone-400">${post.date}</span>
-            </div>
-
-            <div class="space-y-2 flex-shrink-0">
-                ${headerBlockHtml}
-                <p class="font-serif text-xs text-stone-700 dark:text-stone-300 leading-relaxed italic bg-stone-100 dark:bg-stone-950 p-2.5 journal-border">"${post.content}"</p>
-            </div>
-
-            <div class="flex items-center space-x-3 text-xs font-mono flex-shrink-0">
-                <button onclick="reactToMuralPost('${post.id}', 'agree')" class="px-2.5 py-1 bg-stone-200 dark:bg-stone-800 hover:bg-emerald-700/25 text-stone-700 dark:text-stone-300 journal-border transition flex items-center space-x-1.5 cursor-pointer ${agreeActive}">
-                    <i class="fa-solid fa-thumbs-up text-emerald-600"></i>
-                    <span>Acuerdo (${reactions.agree || 0})</span>
-                </button>
-                <button onclick="reactToMuralPost('${post.id}', 'disagree')" class="px-2.5 py-1 bg-stone-200 dark:bg-stone-800 hover:bg-rose-700/25 text-stone-700 dark:text-stone-300 journal-border transition flex items-center space-x-1.5 cursor-pointer ${disagreeActive}">
-                    <i class="fa-solid fa-thumbs-down text-rose-600"></i>
-                    <span>Discrepo (${reactions.disagree || 0})</span>
-                </button>
-            </div>
-
-            <div class="space-y-2 pt-2 border-t border-stone-200 dark:border-stone-800 flex-grow flex flex-col min-h-0">
-                <h4 class="font-heading font-bold text-xs uppercase tracking-wider text-stone-600 dark:text-stone-400 flex-shrink-0"><i class="fa-solid fa-comments mr-1.5 text-rose-800"></i>Debate y comentarios (${comments.length})</h4>
+            <div class="overflow-y-auto custom-scrollbar flex-grow flex flex-col">
                 
-                <div id="muralCommentsList_${post.id}" class="space-y-2 flex-grow overflow-y-auto custom-scrollbar pr-1 min-h-[80px]">
-                    ${commentsTreeHtml}
-                </div>
+                <!-- Padding general reducido para que sea más compacto -->
+                <div class="p-5 flex-grow">
+                    <!-- FIRMA DEL AUTOR -->
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center space-x-2 cursor-pointer hover:opacity-80 transition" onclick="openUserProfileModal('${post.author}', '${post.avatarSeed || post.author}', '${post.role || 'Crítico'}', '${post.userId || ''}')">
+                            <img src="${post.author === currentUsername ? getAvatarUrl() : `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(post.avatarSeed || post.author)}`}" class="w-7 h-7 rounded-full border border-stone-300 dark:border-stone-700">
+                            <div class="text-[9px] font-mono uppercase tracking-widest">
+                                <span class="font-bold text-stone-800 dark:text-stone-200 block hover:underline">Por ${post.author}</span>
+                                <span class="text-stone-500">${post.role || 'Crítico'} · ${getRelativeTime(post)}</span>
+                            </div>
+                        </div>
+                        ${editButtonHtml}
+                    </div>
 
-                <div class="space-y-1 pt-2 flex-shrink-0">
-                    <div id="replyIndicator_${post.id}" class="text-[11px] font-mono text-stone-500 hidden"></div>
-                    <div class="flex items-center space-x-2 relative">
-                        <input type="text" id="newCommentInput_${postId}" placeholder="Añadir un apunte al debate..." class="flex-grow bg-stone-100 dark:bg-stone-950 journal-border px-3 py-1.5 text-xs font-serif focus:outline-none focus:border-rose-800" onkeydown="if(event.key === 'Enter') submitMuralComment('${post.id}')">
-                        <button type="button" id="emojiBtn_newCommentInput_${postId}" onclick="toggleEmojiPicker('newCommentInput_${postId}')" class="px-2 py-1.5 bg-stone-200 dark:bg-stone-800 hover:bg-stone-300 text-stone-700 dark:text-stone-300 journal-border text-xs transition" title="Añadir Emoji">🎬</button>
-                        <button onclick="submitMuralComment('${post.id}')" class="px-3.5 py-1.5 bg-rose-900 hover:bg-rose-800 text-stone-100 font-mono text-xs journal-border transition uppercase">Comentar</button>
+                    ${headerBlockHtml}
+
+                    <!-- CAJA DE LA RESEÑA (Texto en text-sm y padding p-4) -->
+                    <div class="relative mt-4 bg-stone-100 dark:bg-stone-950 p-4 border-l-4 border-rose-800 border-y border-r border-stone-200 dark:border-stone-800 shadow-sm">
+                        <i class="fa-solid fa-quote-left absolute top-2 right-2 text-4xl text-stone-200 dark:text-stone-800 opacity-30 z-0"></i>
+                        <div class="relative z-10">
+                            ${(post.reviewTitle && post.reviewTitle.trim() !== '') ? `<h3 class="font-heading font-bold text-base text-rose-900 dark:text-rose-400 mb-1">${post.reviewTitle}</h3>` : ''}
+                            <p class="font-serif text-sm text-stone-700 dark:text-stone-300 leading-relaxed italic">"${post.content}"</p>
+                        </div>
+                    </div>
+
+                    <!-- REACCIONES -->
+                    <div class="flex items-center space-x-5 mt-5 pt-3 border-t border-stone-200 dark:border-stone-800 font-mono text-[10px] uppercase tracking-wider">
+                        <button onclick="reactToMuralPost('${post.id}', 'agree')" class="${agreeActive} transition flex items-center space-x-1.5">
+                            <i class="fa-regular fa-thumbs-up"></i><span>Acuerdo (${reactions.agree || 0})</span>
+                        </button>
+                        <button onclick="reactToMuralPost('${post.id}', 'disagree')" class="${disagreeActive} transition flex items-center space-x-1.5">
+                            <i class="fa-regular fa-thumbs-down"></i><span>Discrepo (${reactions.disagree || 0})</span>
+                        </button>
                     </div>
                 </div>
+
+                <!-- COMENTARIOS -->
+                <div class="bg-stone-100/60 dark:bg-stone-950/60 p-5 border-t border-stone-300 dark:border-stone-800 flex-shrink-0">
+                    <h4 class="font-heading font-bold text-[11px] uppercase tracking-widest text-stone-800 dark:text-stone-200 mb-3 flex items-center">
+                        <i class="fa-solid fa-comments mr-1.5 text-rose-800"></i> Notas al margen (${comments.length})
+                    </h4>
+                    
+                    <div id="muralCommentsList_${post.id}" class="space-y-3 mb-3">
+                        ${commentsTreeHtml}
+                    </div>
+
+                    <div class="space-y-1">
+                        <div id="replyIndicator_${post.id}" class="text-[10px] font-mono text-rose-800 hidden"></div>
+                        <div class="flex items-center border-b border-stone-300 dark:border-stone-700 focus-within:border-rose-800 transition-colors pb-0.5">
+                            <input type="text" id="newCommentInput_${postId}" placeholder="Escribe tu apunte..." class="flex-grow bg-transparent px-1 py-1 text-xs font-serif focus:outline-none placeholder-stone-400" onkeydown="if(event.key === 'Enter') submitMuralComment('${post.id}')">
+                            <button type="button" id="emojiBtn_newCommentInput_${postId}" onclick="toggleEmojiPicker('newCommentInput_${postId}')" class="px-1.5 text-stone-400 hover:text-rose-800 transition text-sm" title="Añadir Emoji">🎬</button>
+                            <button onclick="submitMuralComment('${post.id}')" class="ml-2 px-3 py-1 bg-stone-800 hover:bg-rose-900 text-white font-mono text-[9px] transition uppercase tracking-widest font-bold">Enviar</button>
+                        </div>
+                    </div>
+                </div>
+
             </div>
         </div>
     `;
@@ -1273,53 +1978,49 @@ function openMuralPostModal(postId) {
     modal.classList.remove('hidden');
 }
 
-function submitMuralComment(postId) {
+async function submitMuralComment(postId) {
     const input = document.getElementById(`newCommentInput_${postId}`);
     if (!input || !input.value.trim()) return;
 
     let textVal = input.value.trim();
-    let savedMural = JSON.parse(localStorage.getItem('cine_diario_mural_posts') || '[]');
-    let post = savedMural.find(p => p.id === postId);
+    const targetObj = replyingTargetMap[postId];
+    const parentId = targetObj ? targetObj.commentId : null;
+    const replyToAuthor = targetObj ? targetObj.author : null;
 
-    if (!post) {
-        const allPosts = getCommunityAndUserPosts();
-        post = allPosts.find(p => p.id === postId);
+    if (replyToAuthor && !textVal.startsWith(`@${replyToAuthor}`)) {
+        textVal = `@${replyToAuthor} ${textVal}`;
+    }
+
+    const newComment = {
+        id: 'c_' + Date.now() + Math.random().toString(36).substring(2, 7),
+        parentId: parentId,
+        replyToAuthor: replyToAuthor,
+        author: currentUsername,
+        avatarSeed: currentAvatarSeed,
+        text: textVal,
+        date: "Hace un momento",
+        reactions: { agree: 0, disagree: 0 },
+        userVotes: {}
+    };
+
+    // Si hay un usuario autenticado, guardamos en Firestore
+    if (window.currentUser && window.fbAddCommentFirestore) {
+        await window.fbAddCommentFirestore(postId, newComment);
+    } else {
+        // Fallback local para invitados
+        let savedMural = JSON.parse(localStorage.getItem('cine_diario_mural_posts') || '[]');
+        let post = savedMural.find(p => p.id === postId);
         if (post) {
-            savedMural.push(JSON.parse(JSON.stringify(post)));
-            post = savedMural[savedMural.length - 1];
+            if (!post.comments) post.comments = [];
+            post.comments.push(newComment);
+            localStorage.setItem('cine_diario_mural_posts', JSON.stringify(savedMural));
         }
     }
 
-    if (post) {
-        if (!post.comments) post.comments = [];
-        const targetObj = replyingTargetMap[postId];
-        const parentId = targetObj ? targetObj.commentId : null;
-        const replyToAuthor = targetObj ? targetObj.author : null;
-
-        if (replyToAuthor && !textVal.startsWith(`@${replyToAuthor}`)) {
-            textVal = `@${replyToAuthor} ${textVal}`;
-        }
-
-        const newComment = {
-            id: 'c_' + Date.now() + Math.random().toString(36).substring(2, 7),
-            parentId: parentId,
-            replyToAuthor: replyToAuthor,
-            author: currentUsername,
-            avatarSeed: currentUsername,
-            text: textVal,
-            date: "Hace un momento",
-            reactions: { agree: 0, disagree: 0 },
-            userVotes: {}
-        };
-
-        post.comments.push(newComment);
-        localStorage.setItem('cine_diario_mural_posts', JSON.stringify(savedMural));
-
-        clearReplyTarget(postId);
-        input.value = '';
-        openMuralPostModal(postId);
-        renderMuralFeed();
-    }
+    clearReplyTarget(postId);
+    input.value = '';
+    openMuralPostModal(postId);
+    renderMuralFeed();
 }
 
 function showDeleteConfirmationModal(onConfirm, customTitle = "Eliminar apunte", customText = "¿Estás seguro de que deseas eliminar este comentario? Esta acción no se puede deshacer.") {
@@ -1522,44 +2223,69 @@ function saveEditedComment(postId, commentId) {
     }
 }
 
-function reactToMuralPost(postId, type) {
-    let savedMural = JSON.parse(localStorage.getItem('cine_diario_mural_posts') || '[]');
-    let post = savedMural.find(p => p.id === postId);
-
-    if (!post) {
-        const allPosts = getCommunityAndUserPosts();
-        post = allPosts.find(p => p.id === postId);
-        if (post) {
-            savedMural.push(JSON.parse(JSON.stringify(post)));
-            post = savedMural[savedMural.length - 1];
-        }
-    }
-
-    if (post) {
-        if (!post.reactions) post.reactions = { agree: 0, disagree: 0 };
-        if (!post.userVotes) post.userVotes = {};
-
-        const currentVote = post.userVotes[currentUsername];
-
-        if (currentVote === type) {
-            post.reactions[type] = Math.max(0, (post.reactions[type] || 0) - 1);
-            post.userVotes[currentUsername] = null;
-        } else {
-            if (currentVote) {
-                post.reactions[currentVote] = Math.max(0, (post.reactions[currentVote] || 0) - 1);
+function deleteMuralPost(postId) {
+    showDeleteConfirmationModal(async () => {
+        // Si es un post de Firestore
+        if (window.currentUser && !String(postId).startsWith('comm_') && !String(postId).startsWith('user_')) {
+            if (window.fbDeletePostFirestore) {
+                await window.fbDeletePostFirestore(postId);
             }
-            post.reactions[type] = (post.reactions[type] || 0) + 1;
-            post.userVotes[currentUsername] = type;
+        } else {
+            // Si es un post local (fallback)
+            let savedMural = JSON.parse(localStorage.getItem('cine_diario_mural_posts') || '[]');
+            savedMural = savedMural.filter(p => p.id !== postId);
+            localStorage.setItem('cine_diario_mural_posts', JSON.stringify(savedMural));
         }
 
-        localStorage.setItem('cine_diario_mural_posts', JSON.stringify(savedMural));
-
-        const modal = document.getElementById('muralPostModal');
-        if (modal && !modal.classList.contains('hidden')) {
-            openMuralPostModal(postId);
-        }
+        // Cerrar el modal y recargar el muro
+        document.getElementById('muralPostModal').classList.add('hidden');
         renderMuralFeed();
+    }, "Eliminar publicación", "¿Estás seguro de que deseas eliminar esta publicación permanentemente?");
+}
+
+async function reactToMuralPost(postId, type) {
+    const allPosts = [...(window.currentFirestorePosts || []), ...getCommunityAndUserPosts()];
+    let post = allPosts.find(p => String(p.id) === String(postId));
+    if (!post) return;
+
+    if (!post.reactions) post.reactions = { agree: 0, disagree: 0 };
+    if (!post.userVotes) post.userVotes = {};
+
+    const currentVote = post.userVotes[currentUsername];
+
+    if (currentVote === type) {
+        post.reactions[type] = Math.max(0, (post.reactions[type] || 0) - 1);
+        post.userVotes[currentUsername] = null;
+    } else {
+        if (currentVote) {
+            post.reactions[currentVote] = Math.max(0, (post.reactions[currentVote] || 0) - 1);
+        }
+        post.reactions[type] = (post.reactions[type] || 0) + 1;
+        post.userVotes[currentUsername] = type;
     }
+
+    // Si es un post de Firestore, actualizamos en la nube
+    if (window.currentUser && !String(postId).startsWith('comm_') && !String(postId).startsWith('user_') && window.fbUpdatePostFirestore) {
+        await window.fbUpdatePostFirestore(postId, {
+            reactions: post.reactions,
+            userVotes: post.userVotes
+        });
+    } else {
+        // Fallback local
+        let savedMural = JSON.parse(localStorage.getItem('cine_diario_mural_posts') || '[]');
+        let localPost = savedMural.find(p => p.id === postId);
+        if (localPost) {
+            localPost.reactions = post.reactions;
+            localPost.userVotes = post.userVotes;
+            localStorage.setItem('cine_diario_mural_posts', JSON.stringify(savedMural));
+        }
+    }
+
+    const modal = document.getElementById('muralPostModal');
+    if (modal && !modal.classList.contains('hidden')) {
+        openMuralPostModal(postId);
+    }
+    renderMuralFeed();
 }
 
 function reactToComment(postId, commentId, type) {
@@ -1601,6 +2327,11 @@ function reactToComment(postId, commentId, type) {
 }
 
 function getCommunityAndUserPosts() {
+    // Si ya tenemos posts en tiempo real desde Firestore, los usamos como base principal
+    if (window.currentFirestorePosts && window.currentFirestorePosts.length > 0) {
+        return window.currentFirestorePosts;
+    }
+
     let userPublicPosts = [];
     const savedPersonal = JSON.parse(localStorage.getItem('cine_personal_reviews') || '{}');
     Object.keys(savedPersonal).forEach(movieId => {
@@ -1609,7 +2340,7 @@ function getCommunityAndUserPosts() {
             userPublicPosts.push({
                 id: 'user_' + movieId,
                 author: currentUsername,
-                avatarSeed: currentUsername,
+                avatarSeed: currentAvatarSeed,
                 role: "Crítico Principal / Editor",
                 type: "review",
                 tmdbMovieId: parseInt(movieId),
@@ -1649,15 +2380,7 @@ function getCommunityAndUserPosts() {
     const map = new Map();
 
     [...communityPosts, ...userPublicPosts].forEach(p => map.set(p.id, p));
-
-    customSaved.forEach(p => {
-        if (map.has(p.id)) {
-            const existing = map.get(p.id);
-            map.set(p.id, { ...existing, ...p });
-        } else {
-            map.set(p.id, p);
-        }
-    });
+    customSaved.forEach(p => map.set(p.id, p));
 
     return Array.from(map.values());
 }
@@ -1670,6 +2393,7 @@ function getAvatarUrl() {
 function saveUserBioFromDrawer(val) {
     currentUserBio = val.trim();
     localStorage.setItem('cine_user_bio', currentUserBio);
+    if (window.fbSaveProfile) window.fbSaveProfile({ bio: currentUserBio });
 }
 
 function updateProfileDrawerStats() {
@@ -1694,6 +2418,46 @@ function updateProfileDrawerStats() {
     if (sWatched) sWatched.innerText = watchedMovies.length;
     if (sBitacora) sBitacora.innerText = Object.keys(personalReviews).length;
     if (sLists) sLists.innerText = customLists.length;
+
+    // --- INTEGRACIÓN DEL BOTÓN DE AUTH EN EL PANEL LATERAL ---
+    let authSection = document.getElementById('drawerAuthSection');
+    const drawerContent = document.getElementById('profileDrawer') ? document.getElementById('profileDrawer').querySelector('.space-y-4, .p-6, div') : null;
+
+    if (!authSection && drawerContent) {
+        authSection = document.createElement('div');
+        authSection.id = 'drawerAuthSection';
+        authSection.className = 'pt-4 border-t border-stone-800 mt-4';
+        drawerContent.appendChild(authSection);
+    }
+
+    if (authSection) {
+        if (window.currentUser) {
+            authSection.innerHTML = `
+                <button onclick="window.fbSignOut(); toggleProfileDrawer();" class="w-full py-2 bg-rose-900 hover:bg-rose-800 text-stone-100 font-mono text-xs journal-border transition uppercase tracking-wider font-bold">
+                    <i class="fa-solid fa-right-from-bracket mr-2"></i>Cerrar Sesión
+                </button>
+            `;
+        } else {
+            authSection.innerHTML = `
+                <button onclick="toggleProfileDrawer(); document.getElementById('authModal').classList.remove('hidden');" class="w-full py-2 bg-rose-900 hover:bg-rose-800 text-stone-100 font-mono text-xs journal-border transition uppercase tracking-wider font-bold">
+                    <i class="fa-solid fa-right-to-bracket mr-2"></i>Iniciar Sesión / Registrarse
+                </button>
+            `;
+        }
+    }
+
+    if (window.currentUser) {
+        authSection.innerHTML = `
+        <div class="space-y-2">
+            <button onclick="window.fbSignOut(); toggleProfileDrawer();" class="w-full py-2 bg-stone-800 hover:bg-stone-700 text-stone-100 font-mono text-xs journal-border transition uppercase tracking-wider">
+                <i class="fa-solid fa-right-from-bracket mr-2"></i>Cerrar Sesión
+            </button>
+            <button onclick="window.fbDeleteAccount()" class="w-full py-2 bg-rose-950 hover:bg-rose-900 text-rose-400 font-mono text-xs journal-border transition uppercase tracking-wider">
+                <i class="fa-solid fa-trash-can mr-2"></i>Eliminar cuenta
+            </button>
+        </div>
+    `;
+    }
 }
 
 function toggleProfileDrawer() {
@@ -1736,6 +2500,7 @@ function confirmAvatarWordPrompt() {
     localStorage.removeItem('cine_avatar_custom_url');
     currentAvatarSeed = newWord;
     localStorage.setItem('cine_avatar_seed', currentAvatarSeed);
+    if (window.fbSaveProfile) window.fbSaveProfile({ avatarSeed: currentAvatarSeed });
     updateProfileDrawerStats();
     closeAvatarWordModal();
 }
@@ -1750,6 +2515,7 @@ window.onload = async () => {
 
     resetAndFetchFilteredMovies();
     loadOscarMovies();
+    refreshRoulette();
     renderCustomLists();
     updateProfileDrawerStats();
 
@@ -1760,6 +2526,16 @@ window.onload = async () => {
     makeModalDraggable('smartPublishModal', 'smartPublishHeader');
     makeModalDraggable('winnerModal', 'winnerModalHeader');
     makeModalDraggable('settingsModal', 'settingsHeader');
+
+    const resultsGridEl = document.getElementById('resultsGrid');
+    if (resultsGridEl) {
+        resultsGridEl.addEventListener('scroll', () => {
+            if (isLoadingMore) return;
+            if (resultsGridEl.scrollTop + resultsGridEl.clientHeight >= resultsGridEl.scrollHeight - 150) {
+                loadNextFilteredPageAutomatically();
+            }
+        });
+    }
 };
 
 async function fetchDualLanguageMovie(endpoint) {
@@ -1805,7 +2581,8 @@ async function fetchFromTMDb(endpoint) {
     } catch (err) { return null; }
 }
 
-function resetAndFetchFilteredMovies() { currentFilterPage = 1; fetchedResults = []; fetchMultipleFilteredPages(); }
+function resetAndFetchFilteredMovies() { currentFilterPage = 10; // la carga inicial ya trae las páginas 1-10
+    fetchedResults = []; fetchMultipleFilteredPages(); }
 
 async function fetchMultipleFilteredPages() {
     const genre = document.getElementById('genreSelect').value;
@@ -1819,7 +2596,7 @@ async function fetchMultipleFilteredPages() {
     let baseTitle = `/discover/movie?language=${currentTitleLang}&sort_by=${sortBy}&vote_average.gte=${minRating}&vote_average.lte=${maxRating}&vote_count.gte=${minVotes}`;
     if (genre) { baseEs += `&with_genres=${genre}`; baseTitle += `&with_genres=${genre}`; }
 
-    const pages = [1, 2, 3];
+    const pages = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
     const responsesEs = await Promise.all(pages.map(p => fetchFromTMDb(`${baseEs}&page=${p}`)));
     const responsesTitle = await Promise.all(pages.map(p => fetchFromTMDb(`${baseTitle}&page=${p}`)));
 
@@ -1852,7 +2629,68 @@ async function fetchMultipleFilteredPages() {
 
     const countIndicator = document.getElementById('catalogCountIndicator');
     if (countIndicator) {
-        countIndicator.innerText = `${fetchedResults.length} obras`;
+        updateCatalogCount();
+    }
+}
+
+async function loadNextFilteredPageAutomatically() {
+    if (isLoadingMore) return;
+    if (currentFilterPage >= totalFilterPages) return;
+
+    isLoadingMore = true;
+    const nextPages = [currentFilterPage + 1, currentFilterPage + 2];
+    currentFilterPage += 2;
+
+    await fetchMultipleFilteredPagesForScroll(nextPages);
+
+    setTimeout(() => {
+        isLoadingMore = false;
+    }, 600);
+}
+
+async function fetchMultipleFilteredPagesForScroll(pagesArray) {
+    const genre = document.getElementById('genreSelect').value;
+    const minRating = parseFloat(document.getElementById('minRatingInput').value);
+    const maxRating = parseFloat(document.getElementById('maxRatingInput').value);
+    const baseSortBy = document.getElementById('sortBySelect').value;
+    const sortBy = `${baseSortBy}.${sortDirection}`;
+    const minVotes = document.getElementById('minVotes').value;
+
+    let baseEs = `/discover/movie?language=${currentLang}&sort_by=${sortBy}&vote_average.gte=${minRating}&vote_average.lte=${maxRating}&vote_count.gte=${minVotes}`;
+    let baseTitle = `/discover/movie?language=${currentTitleLang}&sort_by=${sortBy}&vote_average.gte=${minRating}&vote_average.lte=${maxRating}&vote_count.gte=${minVotes}`;
+    if (genre) { baseEs += `&with_genres=${genre}`; baseTitle += `&with_genres=${genre}`; }
+
+    const responsesEs = await Promise.all(pagesArray.map(p => fetchFromTMDb(`${baseEs}&page=${p}`)));
+    const responsesTitle = await Promise.all(pagesArray.map(p => fetchFromTMDb(`${baseTitle}&page=${p}`)));
+
+    responsesEs.forEach((dataEs, index) => {
+        if (dataEs && dataEs.results) {
+            const titleRes = (responsesTitle[index] && responsesTitle[index].results) ? responsesTitle[index].results : [];
+            const mapped = dataEs.results.map((mEs, i) => {
+                const mTitle = titleRes[i] || mEs;
+                const posterPath = mTitle.poster_path || mEs.poster_path;
+                const mainTitle = mTitle.title || mTitle.original_title || mEs.title;
+                const subTitle = mEs.title || mEs.original_title;
+                return {
+                    id: mEs.id,
+                    title: mainTitle,
+                    subtitle: subTitle !== mainTitle ? subTitle : '',
+                    rating: mEs.vote_average ? mEs.vote_average.toFixed(1) : 'N/A',
+                    votes: mEs.vote_count > 1000 ? (mEs.vote_count / 1000).toFixed(0) + 'k' : (mEs.vote_count || 0),
+                    poster: posterPath ? `https://image.tmdb.org/t/p/w500${posterPath}` : 'https://via.placeholder.com/150',
+                    overview: mEs.overview || 'Sin descripción disponible.',
+                    year: mEs.release_date ? mEs.release_date.split('-')[0] : 'N/A'
+                };
+            });
+            fetchedResults = [...fetchedResults, ...mapped];
+        }
+    });
+
+    renderResultsGrid();
+
+    const countIndicator = document.getElementById('catalogCountIndicator');
+    if (countIndicator) {
+        updateCatalogCount();
     }
 }
 
@@ -1861,7 +2699,7 @@ function renderResultsGrid() {
     if (!container) return;
     container.innerHTML = '';
 
-    fetchedResults.forEach(movie => {
+    getVisibleCatalogMovies().forEach(movie => {
         const isWatched = watchedMovies.includes(movie.id);
         const pReview = personalReviews[movie.id];
         const personalRating = pReview && pReview.rating ? pReview.rating : null;
@@ -1908,6 +2746,7 @@ function renderResultsGrid() {
         `;
         container.appendChild(card);
     });
+    updateCatalogCount();
 }
 
 function handleRangeInput() {
@@ -1946,6 +2785,7 @@ async function loadOscarMovies() {
         return null;
     }));
     currentOscarList = results.filter(m => m !== null);
+    renderOscarList();
 }
 
 function handleAutocompleteInput(query) {
@@ -1963,41 +2803,31 @@ function handleAutocompleteInput(query) {
     if (spinner) spinner.classList.remove('hidden');
 
     autocompleteDebounceTimer = setTimeout(async () => {
-        const encoded = encodeURIComponent(query.trim());
-        const data = await fetchFromTMDb(`/search/movie?query=${encoded}&language=${currentLang}`);
+        // Usamos la nueva función
+        const results = await fetchSearchMovieDual(query);
 
         if (spinner) spinner.classList.add('hidden');
 
-        if (data && data.results && data.results.length > 0) {
+        if (results && results.length > 0) {
             if (dropdown) {
                 dropdown.innerHTML = '';
-                data.results.slice(0, 5).forEach(m => {
-                    const poster = m.poster_path ? `https://image.tmdb.org/t/p/w92${m.poster_path}` : 'https://via.placeholder.com/92';
-                    const year = m.release_date ? m.release_date.split('-')[0] : 'N/A';
-                    const title = m.title || m.original_title;
+                results.slice(0, 5).forEach(m => {
+                    const poster = m.poster; // Ya viene formateado
 
                     const item = document.createElement('div');
                     item.className = "flex items-center space-x-3 p-2 hover:bg-stone-200 dark:hover:bg-stone-800 cursor-pointer transition border-b border-stone-200 dark:border-stone-800 last:border-b-0";
                     item.innerHTML = `
                         <img src="${poster}" class="w-8 h-12 object-cover journal-border flex-shrink-0">
                         <div class="overflow-hidden">
-                            <h5 class="text-xs font-serif font-bold truncate">${title} (${year})</h5>
-                            <span class="text-[10px] font-mono text-stone-500"><i class="fa-solid fa-star text-amber-500"></i> ${m.vote_average ? m.vote_average.toFixed(1) : 'N/A'}</span>
+                            <h5 class="text-xs font-serif font-bold truncate">${m.title} (${m.year})</h5>
+                            ${m.subtitle ? `<span class="block text-[10px] font-serif text-stone-500 truncate">${m.subtitle}</span>` : ''}
+                            <span class="text-[10px] font-mono text-stone-500"><i class="fa-solid fa-star text-amber-500"></i> ${m.rating}</span>
                         </div>
                     `;
                     item.onclick = () => {
                         dropdown.classList.add('hidden');
-                        document.getElementById('manualMovieInput').value = title;
-                        const movieObj = {
-                            id: m.id,
-                            title: title,
-                            subtitle: m.original_title !== title ? m.original_title : '',
-                            rating: m.vote_average ? m.vote_average.toFixed(1) : 'N/A',
-                            votes: m.vote_count > 1000 ? (m.vote_count / 1000).toFixed(0) + 'k' : (m.vote_count || 0),
-                            poster: m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : 'https://via.placeholder.com/150',
-                            overview: m.overview || 'Sin descripción disponible.'
-                        };
-                        openDetailModal(movieObj, "Búsqueda directa");
+                        document.getElementById('manualMovieInput').value = m.title;
+                        openDetailModal(m, "Búsqueda directa");
                     };
                     dropdown.appendChild(item);
                 });
@@ -2080,35 +2910,49 @@ function handleModalMovieAutocomplete(query) {
     }
 
     modalAutocompleteTimer = setTimeout(async () => {
-        const encoded = encodeURIComponent(query.trim());
-        const data = await fetchFromTMDb(`/search/movie?query=${encoded}&language=${currentLang}`);
+        // Usamos la nueva función
+        const results = await fetchSearchMovieDual(query);
 
-        if (data && data.results && data.results.length > 0) {
+        if (results && results.length > 0) {
             if (dropdown) {
                 dropdown.innerHTML = '';
-                data.results.slice(0, 5).forEach(m => {
-                    const poster = m.poster_path ? `https://image.tmdb.org/t/p/w92${m.poster_path}` : 'https://via.placeholder.com/92';
-                    const year = m.release_date ? m.release_date.split('-')[0] : 'N/A';
-                    const title = m.title || m.original_title;
-
+                results.slice(0, 5).forEach(m => {
                     const item = document.createElement('div');
                     item.className = "flex items-center space-x-2 p-2 hover:bg-stone-200 dark:hover:bg-stone-800 cursor-pointer transition border-b border-stone-200 dark:border-stone-800 last:border-b-0 text-xs";
                     item.innerHTML = `
-                        <img src="${poster}" class="w-7 h-10 object-cover journal-border flex-shrink-0">
-                        <div>
-                            <span class="font-serif font-bold">${title} (${year})</span>
+                        <img src="${m.poster}" class="w-7 h-10 object-cover journal-border flex-shrink-0">
+                        <div class="overflow-hidden">
+                            <span class="block font-serif font-bold truncate">${m.title} (${m.year})</span>
+                            ${m.subtitle ? `<span class="block text-[10px] font-serif text-stone-500 truncate">${m.subtitle}</span>` : ''}
                         </div>
                     `;
                     item.onclick = () => {
-                        document.getElementById('modalMovieSearchInput').value = `${title} (${year})`;
+                        document.getElementById('modalMovieSearchInput').value = `${m.title} (${m.year})`;
                         document.getElementById('selectedTmdbMovieId').value = m.id;
+
                         cachedSelectedMovieObj = {
                             id: m.id,
-                            title: title,
-                            poster: m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : 'https://via.placeholder.com/150',
-                            rating: m.vote_average ? m.vote_average.toFixed(1) : '8.0',
-                            overview: m.overview || 'Sin descripción disponible.'
+                            title: m.title,
+                            subtitle: m.subtitle,
+                            poster: m.poster,
+                            rating: m.rating,
+                            overview: m.overview
                         };
+
+                        // Rellenar la tarjeta de vista previa
+                        const previewBox = document.getElementById('selectedMoviePreview');
+                        const posterImg = document.getElementById('previewMoviePoster');
+                        const titleTxt = document.getElementById('previewMovieTitle');
+                        const overviewTxt = document.getElementById('previewMovieOverview');
+
+                        if (previewBox && posterImg && titleTxt && overviewTxt) {
+                            posterImg.src = m.poster;
+                            // Mostramos el título principal, y si hay subtítulo, lo añadimos en pequeño
+                            titleTxt.innerHTML = `${m.title} (${m.year}) ${m.subtitle ? `<span class="block text-[10px] text-stone-500 font-normal mt-0.5">${m.subtitle}</span>` : ''}`;
+                            overviewTxt.innerText = m.overview;
+                            previewBox.classList.remove('hidden');
+                        }
+
                         dropdown.classList.add('hidden');
                     };
                     dropdown.appendChild(item);
@@ -2124,47 +2968,575 @@ function handleModalMovieAutocomplete(query) {
     }, 400);
 }
 
-function handleSmartPublishSubmit(e) {
-    e.preventDefault();
+function clearModalMovieSelection() {
+    document.getElementById('modalMovieSearchInput').value = '';
+    document.getElementById('selectedTmdbMovieId').value = '';
+    document.getElementById('selectedMoviePreview').classList.add('hidden');
+    cachedSelectedMovieObj = null;
+}
+
+// Cerrar cualquier modal al hacer clic en su fondo oscuro exterior
+document.addEventListener('click', (e) => {
+    const modalIds = [
+        'detailModal',
+        'winnerModal',
+        'settingsModal',
+        'smartPublishModal',
+        'avatarWordModal',
+        'muralPostModal',
+        'userProfileModal',
+        'userStatsDetailModal',
+        'userListContentModal',
+        'customConfirmModal'
+    ];
+
+    if (modalIds.includes(e.target.id)) {
+        e.target.classList.add('hidden');
+    }
+});
+
+function openQuickListMenuFromDetail(e) {
+    e.stopPropagation();
+    const dropdown = document.getElementById('quickListDropdown');
+    if (!dropdown || !currentDetailMovie) return;
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    dropdown.style.top = `${window.scrollY + rect.top - dropdown.offsetHeight - 10}px`;
+    dropdown.style.left = `${window.scrollX + rect.left}px`;
+
+    renderQuickListDropdownItems();
+    dropdown.classList.remove('hidden');
+}
+
+function renderQuickListDropdownItems() {
+    const container = document.getElementById('quickListItemsContainer');
+    if (!container || !currentDetailMovie) return;
+
+    container.innerHTML = '';
+
+    if (customLists.length === 0) {
+        container.innerHTML = `
+            <div class="p-2 space-y-2 text-xs font-serif">
+                <p class="text-stone-400 italic">No hay cuadernos creados.</p>
+                <div class="flex gap-1">
+                    <input type="text" id="quickNewListInput" placeholder="Nombre de libreta..." class="w-full bg-stone-100 dark:bg-stone-950 journal-border px-2 py-1 text-xs focus:outline-none focus:border-rose-800" onkeydown="if(event.key==='Enter') createNewListOnlyFromDetail()">
+                    <button onclick="createNewListOnlyFromDetail()" class="bg-rose-900 text-white px-2 py-1 journal-border text-xs"><i class="fa-solid fa-plus"></i></button>
+                </div>
+            </div>
+        `;
+    } else {
+        customLists.forEach((list, index) => {
+            if (!list.movies) list.movies = [];
+            const alreadyInList = list.movies.some(m => m.id === currentDetailMovie.id);
+
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = `w-full text-left px-2.5 py-2 hover:bg-stone-200 dark:hover:bg-stone-800 transition flex items-center justify-between text-xs font-serif`;
+
+            btn.innerHTML = `
+                <span class="truncate">📓 ${list.name}</span>
+                <span class="text-[10px] font-mono ${alreadyInList ? 'text-rose-800 dark:text-rose-400 font-bold' : 'text-stone-400'}">${alreadyInList ? '✓ Guardada (Quitar)' : '+ Añadir'}</span>
+            `;
+
+            btn.onclick = () => {
+                if (alreadyInList) {
+                    list.movies = list.movies.filter(m => m.id !== currentDetailMovie.id);
+                } else {
+                    list.movies.push({
+                        id: currentDetailMovie.id,
+                        title: currentDetailMovie.title,
+                        poster: currentDetailMovie.poster,
+                        rating: currentDetailMovie.rating,
+                        overview: currentDetailMovie.overview,
+                        year: currentDetailMovie.year
+                    });
+                }
+                saveAndRenderCustomLists();
+                renderQuickListDropdownItems();
+            };
+            container.appendChild(btn);
+        });
+
+        const newDiv = document.createElement('div');
+        newDiv.className = "pt-2 border-t border-stone-200 dark:border-stone-800 mt-1 p-1 space-y-1";
+        newDiv.innerHTML = `
+            <div class="flex gap-1">
+                <input type="text" id="quickNewListInput" placeholder="Nuevo cuaderno..." class="w-full bg-stone-100 dark:bg-stone-950 journal-border px-2 py-1 text-xs focus:outline-none focus:border-rose-800" onkeydown="if(event.key==='Enter') createNewListOnlyFromDetail()">
+                <button onclick="createNewListOnlyFromDetail()" class="bg-rose-900 text-white px-2 py-1 journal-border text-xs"><i class="fa-solid fa-plus"></i></button>
+            </div>
+        `;
+        container.appendChild(newDiv);
+    }
+}
+
+function createNewListOnlyFromDetail() {
+    const input = document.getElementById('quickNewListInput');
+    if (!input || !input.value.trim()) return;
+    const name = input.value.trim();
+
+    const newList = {
+        id: Date.now(),
+        name: name,
+        movies: []
+    };
+
+    customLists.push(newList);
+    saveAndRenderCustomLists();
+    renderQuickListDropdownItems();
+}
+
+function closeQuickListDropdown() {
+    const dropdown = document.getElementById('quickListDropdown');
+    if (dropdown) dropdown.classList.add('hidden');
+}
+
+async function handleSmartPublishSubmit(e) {
+    if (e) e.preventDefault();
 
     const titleVal = document.getElementById('smartPostTitle').value.trim();
     const contentVal = document.getElementById('smartPostContent').value.trim();
     const ratingVal = parseFloat(document.getElementById('smartPostRating').value);
     const movieIdVal = document.getElementById('selectedTmdbMovieId').value;
+    const publishToWall = document.getElementById('wallPublishCheck')?.checked ?? true;
 
-    let newPost = {
-        id: 'post_' + Date.now(),
-        author: currentUsername,
-        avatarSeed: currentUsername,
-        role: "Crítico principal / Editor",
-        type: currentPublishMode,
-        date: "Hace un momento",
-        reactions: { agree: 0, disagree: 0 },
-        userVotes: {},
-        comments: []
-    };
+    const options = { day: 'numeric', month: 'short', year: 'numeric' };
+    const dateFormatted = new Date().toLocaleDateString('es-ES', options);
 
     if (currentPublishMode === 'review') {
         if (!movieIdVal || !cachedSelectedMovieObj) {
             alert("Por favor selecciona una película del buscador para tu reseña.");
             return;
         }
-        newPost.tmdbMovieId = parseInt(movieIdVal);
-        newPost.movieObj = cachedSelectedMovieObj;
-        newPost.reviewTitle = titleVal;
-        newPost.rating = isNaN(ratingVal) ? null : ratingVal;
-        newPost.content = contentVal;
-        newPost.title = '';
+
+        // GUARDAMOS EN LA BITÁCORA PERSONAL (Aunque no sea público en el muro)
+        personalReviews[cachedSelectedMovieObj.id] = {
+            movie: cachedSelectedMovieObj,
+            rating: isNaN(ratingVal) ? null : ratingVal,
+            review: contentVal,
+            reviewTitle: titleVal,
+            isPublic: publishToWall
+        };
+        localStorage.setItem('cine_personal_reviews', JSON.stringify(personalReviews));
+        window.fbSyncPublicStats(); // Actualizamos las stats públicas
+
+        if (publishToWall) {
+            let newPost = {
+                id: 'post_' + Date.now(),
+                author: currentUsername,
+                avatarSeed: currentAvatarSeed,
+                role: "Crítico principal / Editor",
+                type: 'review',
+                tmdbMovieId: parseInt(movieIdVal),
+                movieObj: cachedSelectedMovieObj,
+                reviewTitle: titleVal,
+                rating: isNaN(ratingVal) ? null : ratingVal,
+                content: contentVal,
+                title: '',
+                date: dateFormatted,
+                reactions: { agree: 0, disagree: 0 },
+                userVotes: {},
+                comments: []
+            };
+            if (window.currentUser && window.fbCreatePost) {
+                await window.fbCreatePost(newPost);
+            } else {
+                let savedMural = JSON.parse(localStorage.getItem('cine_diario_mural_posts') || '[]');
+                savedMural.unshift(newPost);
+                localStorage.setItem('cine_diario_mural_posts', JSON.stringify(savedMural));
+            }
+        }
     } else {
-        newPost.title = titleVal;
-        newPost.content = contentVal;
-        newPost.tmdbMovieId = null;
+        // Es un debate, siempre va al muro
+        let newPost = {
+            id: 'post_' + Date.now(),
+            author: currentUsername,
+            avatarSeed: currentAvatarSeed,
+            role: "Crítico principal / Editor",
+            type: 'discussion',
+            title: titleVal,
+            content: contentVal,
+            tmdbMovieId: null,
+            date: dateFormatted,
+            reactions: { agree: 0, disagree: 0 },
+            userVotes: {},
+            comments: []
+        };
+        if (window.currentUser && window.fbCreatePost) {
+            await window.fbCreatePost(newPost);
+        } else {
+            let savedMural = JSON.parse(localStorage.getItem('cine_diario_mural_posts') || '[]');
+            savedMural.unshift(newPost);
+            localStorage.setItem('cine_diario_mural_posts', JSON.stringify(savedMural));
+        }
     }
 
-    let savedMural = JSON.parse(localStorage.getItem('cine_diario_mural_posts') || '[]');
-    savedMural.unshift(newPost);
-    localStorage.setItem('cine_diario_mural_posts', JSON.stringify(savedMural));
-
+    clearModalMovieSelection();
     closeSmartPublishModal();
     renderMuralFeed('all');
+}
+
+// Cerrar el menú flotante de "Fichar en cuaderno" al hacer clic fuera de él
+window.addEventListener('click', (e) => {
+    const dropdown = document.getElementById('quickListDropdown');
+    const btn = document.querySelector('button[onclick*="openQuickListMenuFromDetail"]');
+
+    if (dropdown && !dropdown.classList.contains('hidden')) {
+        // Si el clic no fue dentro del menú ni en el botón que lo abre, lo cerramos
+        if (!dropdown.contains(e.target) && (!btn || !btn.contains(e.target))) {
+            dropdown.classList.add('hidden');
+        }
+    }
+});
+
+// Manejo de eventos del Modal de Autenticación y Registro Completo
+document.addEventListener('DOMContentLoaded', () => {
+    const authModal = document.getElementById('authModal');
+    const step1 = document.getElementById('authStep1');
+    const step2 = document.getElementById('authStep2');
+    const btnShowRegisterStep = document.getElementById('btnShowRegisterStep');
+    const btnBackToStep1 = document.getElementById('btnBackToStep1');
+    const loginForm = document.getElementById('loginForm');
+    const registerForm = document.getElementById('registerProfileForm');
+    const rememberCheckbox = document.getElementById('rememberMe');
+    const regPasswordInput = document.getElementById('regPassword');
+    const btnFinalRegister = document.getElementById('btnFinalRegister');
+    const regAvatarSeedInput = document.getElementById('regAvatarSeed');
+    const regAvatarPreview = document.getElementById('regAvatarPreview');
+
+    // Actualización en tiempo real de la vista previa del avatar
+    if (regAvatarSeedInput && regAvatarPreview) {
+        regAvatarSeedInput.addEventListener('input', (e) => {
+            const seedVal = e.target.value.trim() || 'default';
+            regAvatarPreview.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(seedVal)}`;
+        });
+    }
+
+    // Validación interactiva de contraseña en tiempo real
+    if (regPasswordInput) {
+        regPasswordInput.addEventListener('input', (e) => {
+            const val = e.target.value;
+
+            const hasLength = val.length >= 8;
+            const hasUpper = /[A-Z]/.test(val);
+            const hasLower = /[a-z]/.test(val);
+            const hasNumber = /[0-9]/.test(val);
+            const hasSpecial = /[!@#$%^&*(),.?":{}|<>]/.test(val);
+
+            updateReqStyle('req-length', hasLength);
+            updateReqStyle('req-upper', hasUpper);
+            updateReqStyle('req-lower', hasLower);
+            updateReqStyle('req-number', hasNumber);
+            updateReqStyle('req-special', hasSpecial);
+
+            if (hasLength && hasUpper && hasLower && hasNumber && hasSpecial) {
+                btnFinalRegister.disabled = false;
+                btnFinalRegister.classList.remove('opacity-50', 'cursor-not-allowed');
+            } else {
+                btnFinalRegister.disabled = true;
+                btnFinalRegister.classList.add('opacity-50', 'cursor-not-allowed');
+            }
+        });
+    }
+
+    function updateReqStyle(elementId, isValid) {
+        const el = document.getElementById(elementId);
+        if (!el) return;
+        if (isValid) {
+            el.className = "text-emerald-400 flex items-center gap-1.5 transition-colors";
+            el.innerHTML = el.innerHTML.replace('❌', '✔');
+        } else {
+            el.className = "text-gray-500 flex items-center gap-1.5 transition-colors";
+            el.innerHTML = el.innerHTML.replace('✔', '❌');
+        }
+    }
+
+    // Iniciar Sesión con Correo
+    if (loginForm) {
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('authEmail').value;
+            const password = document.getElementById('authPassword').value;
+            const errorDiv = document.getElementById('authErrorMsg');
+
+            if (errorDiv) { errorDiv.classList.add('hidden'); errorDiv.innerText = ''; }
+
+            try {
+                await window.setAuthPersistence(rememberCheckbox.checked);
+                await window.fbSignIn(email, password);
+                sessionStorage.removeItem('guestMode');
+
+                // El nombre/avatar/bio se cargan desde la nube en onAuthStateChanged (index.html)
+                updateProfileDrawerStats();
+                if (authModal) authModal.classList.add('hidden');
+
+            } catch (err) {
+                let friendlyMessage = "Correo electrónico o contraseña incorrectos.";
+                if (err.code === 'auth/too-many-requests') {
+                    friendlyMessage = "Demasiados intentos fallidos. Inténtalo más tarde.";
+                } else if (err.code === 'auth/user-disabled') {
+                    friendlyMessage = "Esta cuenta ha sido deshabilitada.";
+                } else if (err.code === 'auth/invalid-email') {
+                    friendlyMessage = "El formato del correo electrónico no es válido.";
+                }
+
+                if (errorDiv) {
+                    errorDiv.innerText = friendlyMessage;
+                    errorDiv.classList.remove('hidden');
+                }
+            }
+        });
+    }
+
+    // Cambiar al Paso 2 (Formulario de Registro Completo)
+    if (btnShowRegisterStep) {
+        btnShowRegisterStep.addEventListener('click', () => {
+            if (step1) step1.classList.add('hidden');
+            if (step2) step2.classList.remove('hidden');
+        });
+    }
+
+    // Volver del Paso 2 al Paso 1
+    if (btnBackToStep1) {
+        btnBackToStep1.addEventListener('click', () => {
+            if (step2) step2.classList.add('hidden');
+            if (step1) step1.classList.remove('hidden');
+        });
+    }
+
+    // Finalizar el registro con perfil completo y credenciales propias en Firebase
+    if (registerForm) {
+        registerForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('regEmail').value;
+            const password = document.getElementById('regPassword').value;
+            const usernameVal = document.getElementById('regUsername').value.trim();
+            const avatarSeedVal = document.getElementById('regAvatarSeed').value.trim();
+            const bioVal = document.getElementById('regUserBio').value.trim();
+            const errorDiv = document.getElementById('authRegisterErrorMsg');
+
+            if (errorDiv) { errorDiv.classList.add('hidden'); errorDiv.innerText = ''; }
+
+            try {
+                window._signingUp = true; // evita que onAuthStateChanged pise el perfil mientras se crea
+                await window.setAuthPersistence(rememberCheckbox.checked);
+                await window.fbSignUp(email, password);
+                sessionStorage.removeItem('guestMode');
+
+                const username = usernameVal || 'Cinéfilo/a';
+                const avatarSeed = avatarSeedVal || username;
+                const bio = bioVal || currentUserBio;
+
+                currentUsername = username;      window.currentUsername = username;
+                currentAvatarSeed = avatarSeed;  window.currentAvatarSeed = avatarSeed;
+                currentUserBio = bio;            window.currentUserBio = bio;
+                localStorage.setItem('cine_username', username);
+                localStorage.setItem('cine_avatar_seed', avatarSeed);
+                localStorage.setItem('cine_user_bio', bio);
+
+                await window.fbSaveProfile({ username, avatarSeed, bio });
+                await window.fbInitLibrary(); // sube a la nube lo que ya hubiera en este navegador
+
+                updateProfileDrawerStats();
+                if (authModal) authModal.classList.add('hidden');
+
+            } catch (err) {
+                let friendlyMessage = "Error al crear la cuenta. Inténtalo de nuevo.";
+                if (err.code === 'auth/email-already-in-use') {
+                    friendlyMessage = "Este correo electrónico ya está registrado.";
+                } else if (err.code === 'auth/weak-password') {
+                    friendlyMessage = "La contraseña es muy débil.";
+                } else if (err.code === 'auth/invalid-email') {
+                    friendlyMessage = "El formato del correo electrónico no es válido.";
+                }
+
+                if (errorDiv) {
+                    errorDiv.innerText = friendlyMessage;
+                    errorDiv.classList.remove('hidden');
+                }
+            } finally {
+                window._signingUp = false;
+            }
+        });
+    }
+
+    // Google Login
+    const btnGoogle = document.getElementById('btnGoogleAuth');
+    if (btnGoogle) {
+        btnGoogle.addEventListener('click', async () => {
+            try {
+                await window.setAuthPersistence(rememberCheckbox.checked);
+                await window.fbLoginGoogle();
+                sessionStorage.removeItem('guestMode');
+            } catch (err) {
+                alert("Error con Google: " + err.message);
+            }
+        });
+    }
+
+    // Ingresar como Invitado
+    const btnGuest = document.getElementById('btnGuestAuth');
+    if (btnGuest) {
+        btnGuest.addEventListener('click', () => {
+            [...CINE_SYNC_KEYS, 'cine_username', 'cine_avatar_seed', 'cine_user_bio', 'cine_avatar_custom_url', 'cine_data_owner']
+                .forEach(k => localStorage.removeItem(k));
+            sessionStorage.setItem('cineGuestChosen', '1');
+            sessionStorage.setItem('guestMode', 'true');
+
+            watchedMovies = [];
+            watchedMoviesData = {};
+            personalReviews = {};
+            customLists = [];
+            currentUsername = 'Invitado/a';
+
+            if (authModal) authModal.classList.add('hidden');
+
+            window.updateProfileUI(null);
+            renderCustomLists();
+            renderResultsGrid();
+            renderMuralFeed();
+        });
+    }
+});
+
+// Función para actualizar la UI del panel de perfil y estado de sesión
+window.updateProfileDrawerStats = function () {
+    // Si no hay usuario activo de Firebase ni estamos en modo invitado estricto, 
+    // aseguramos que los textos reflejen al invitado.
+    if (!window.currentUser && sessionStorage.getItem('guestMode') === 'true') {
+        currentUsername = 'Invitado/a';
+        currentAvatarSeed = 'Invitado/a';
+    }
+
+    const hUsername = document.getElementById('headerUsername');
+    const dUsername = document.getElementById('drawerUsername');
+    const dBioInput = document.getElementById('drawerUserBioInput');
+
+    if (hUsername) hUsername.innerText = currentUsername;
+    if (dUsername) dUsername.innerText = currentUsername;
+    if (dBioInput) dBioInput.value = currentUserBio;
+
+    const avatarUrl = getAvatarUrl();
+    const hAvatar = document.getElementById('headerProfileAvatar');
+    const dAvatar = document.getElementById('drawerProfileAvatar');
+
+    if (hAvatar) hAvatar.src = avatarUrl;
+    if (dAvatar) dAvatar.src = avatarUrl;
+
+    const sWatched = document.getElementById('statWatchedCount');
+    const sBitacora = document.getElementById('statBitacoraCount');
+    const sLists = document.getElementById('statListsCount');
+    if (sWatched) sWatched.innerText = watchedMovies.length;
+    if (sBitacora) sBitacora.innerText = Object.keys(personalReviews).length;
+    if (sLists) sLists.innerText = customLists.length;
+
+    let authSection = document.getElementById('drawerAuthSection');
+    const drawerContent = document.getElementById('profileDrawer') ? document.getElementById('profileDrawer').querySelector('.space-y-4, .p-6, div') : null;
+
+    if (!authSection && drawerContent) {
+        authSection = document.createElement('div');
+        authSection.id = 'drawerAuthSection';
+        authSection.className = 'pt-4 border-t border-stone-800 mt-4';
+        drawerContent.appendChild(authSection);
+    }
+
+    if (authSection) {
+        if (window.currentUser) {
+            authSection.innerHTML = `
+                <div class="space-y-2">
+                    <button onclick="window.fbSignOut();" class="w-full py-2 bg-stone-800 hover:bg-stone-700 text-stone-100 font-mono text-xs journal-border transition uppercase tracking-wider">
+                        <i class="fa-solid fa-right-from-bracket mr-2"></i>Cerrar Sesión
+                    </button>
+                    <button onclick="window.fbDeleteAccount()" class="w-full py-2 bg-rose-950 hover:bg-rose-900 text-rose-400 font-mono text-xs journal-border transition uppercase tracking-wider">
+                        <i class="fa-solid fa-trash-can mr-2"></i>Eliminar cuenta
+                    </button>
+                </div>
+            `;
+        } else {
+            authSection.innerHTML = `
+                <button onclick="toggleProfileDrawer(); document.getElementById('authModal').classList.remove('hidden');" class="w-full py-2 bg-rose-900 hover:bg-rose-800 text-stone-100 font-mono text-xs journal-border transition uppercase tracking-wider font-bold">
+                    <i class="fa-solid fa-right-to-bracket mr-2"></i>Iniciar Sesión / Registrarse
+                </button>
+            `;
+        }
+    }
+    if (window.refreshOpenProfileModals) window.refreshOpenProfileModals();
+};
+
+window.updateProfileUI = function (user) {
+    if (typeof window.updateProfileDrawerStats === 'function') {
+        window.updateProfileDrawerStats();
+    }
+};
+
+// ===== CONEXIÓN DEL SISTEMA DE ESTRELLAS AL MURO =====
+
+// Al abrir el modal de crear reseña, dibujamos las estrellas en el muro
+const originalOpenRedactionChoice = window.openRedactionChoice;
+window.openRedactionChoice = function (mode) {
+    originalOpenRedactionChoice(mode);
+    if (mode === 'review') {
+        renderStarSelector(0, 'smartStarContainer', 'smartStarRatingText');
+    }
+};
+
+// Al guardar, capturamos la nota y la enviamos al formulario
+const originalHandleSubmit = window.handleSmartPublishSubmit;
+window.handleSmartPublishSubmit = async function (e) {
+    if (e) e.preventDefault();
+
+    // El valor de las estrellas ya está en selectedStarRating
+    const ratingVal = selectedStarRating > 0 ? selectedStarRating : null;
+
+    if (typeof originalHandleSubmit === 'function') {
+        let hiddenInput = document.getElementById('smartPostRating');
+        if (!hiddenInput) {
+            hiddenInput = document.createElement('input');
+            hiddenInput.type = 'hidden';
+            hiddenInput.id = 'smartPostRating';
+            document.getElementById('smartPublishForm').appendChild(hiddenInput);
+        }
+        hiddenInput.value = ratingVal;
+
+        await originalHandleSubmit(e);
+    }
+
+    // Limpiamos las estrellas para la próxima vez
+    renderStarSelector(0, 'smartStarContainer', 'smartStarRatingText');
+};
+
+// ===== BUSCADOR MULTILINGÜE INTELIGENTE =====
+
+async function fetchSearchMovieDual(query) {
+    const encoded = encodeURIComponent(query.trim());
+
+    // Hacemos dos búsquedas en paralelo:
+    // 1. En el idioma de la interfaz (para que encuentre "Scarface" si buscas en inglés)
+    // 2. En el idioma de los títulos (para mostrar el título correcto)
+    const [dataInterface, dataTitle] = await Promise.all([
+        fetchFromTMDb(`/search/movie?query=${encoded}&language=${currentLang}`),
+        fetchFromTMDb(`/search/movie?query=${encoded}&language=${currentTitleLang}`)
+    ]);
+
+    if (!dataInterface || !dataInterface.results) return [];
+
+    return dataInterface.results.map(m => {
+        // Buscamos si esta misma película está en los resultados del otro idioma
+        const titleMatch = dataTitle && dataTitle.results ? dataTitle.results.find(t => t.id === m.id) : null;
+
+        const titleMain = titleMatch ? (titleMatch.title || titleMatch.original_title) : (m.title || m.original_title);
+        const titleSub = (m.title || m.original_title);
+
+        const posterPath = (titleMatch && titleMatch.poster_path) ? titleMatch.poster_path : m.poster_path;
+
+        return {
+            id: m.id,
+            title: titleMain,
+            subtitle: titleSub !== titleMain ? titleSub : '',
+            rating: m.vote_average ? m.vote_average.toFixed(1) : 'N/A',
+            votes: m.vote_count > 1000 ? (m.vote_count / 1000).toFixed(0) + 'k' : (m.vote_count || 0),
+            poster: posterPath ? `https://image.tmdb.org/t/p/w500${posterPath}` : 'https://via.placeholder.com/150',
+            overview: m.overview || 'Sin descripción disponible.',
+            year: m.release_date ? m.release_date.split('-')[0] : 'N/A'
+        };
+    });
 }
