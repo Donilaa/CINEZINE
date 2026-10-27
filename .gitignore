@@ -1,0 +1,6 @@
+# Archivos privados que NUNCA deben subirse a GitHub
+local-config.js
+reglas firebase.txt
+.env
+.env.*
+.vercel
