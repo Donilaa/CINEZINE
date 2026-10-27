@@ -1818,7 +1818,7 @@ function _saveNotifReadSet() {
 function _notifPostTitle(rawPost) {
     if (!rawPost) return 'Publicación';
     if (rawPost.type === 'review') {
-        const m = _viewerMovieOf(rawPost) || rawPost.movieObj;
+        const m = (typeof _resolveViewerMovie === 'function' ? _resolveViewerMovie(rawPost) : null) || rawPost.movieObj;
         if (m && m.title) return m.title;
         if (rawPost.reviewTitle) return rawPost.reviewTitle;
         return 'Reseña';
@@ -1907,9 +1907,30 @@ window.refreshNotifications = async function () {
 
         for (const p of posts) {
             const postOwnerUid = p.authorUid || p.userId || '';
-            const isMyPost = postOwnerUid === myUid;
+            const postAuthorLower = String(p.author || '').trim().toLowerCase();
+            const isMyPost = (postOwnerUid && postOwnerUid === myUid) || (!postOwnerUid && myNameLower && postAuthorLower === myNameLower);
             const postTitle = _notifPostTitle(p);
             const postKind = p.type === 'review' ? 'reseña de' : 'debate';
+
+            // 0) Nueva publicación de otro miembro de la comunidad en el muro
+            if (!isMyPost && p.author) {
+                const verb = p.type === 'review' ? 'publicó una reseña de' : 'abrió el debate';
+                built.push({
+                    id: `post_${p.id}`,
+                    type: 'new_post',
+                    postId: p.id,
+                    commentId: null,
+                    actorUid: postOwnerUid,
+                    actorName: p.author || 'Cinéfilo/a',
+                    actorSeed: p.avatarSeed || p.author || 'Cinéfilo/a',
+                    postTitle,
+                    postKind,
+                    verb,
+                    snippet: String(p.reviewTitle || p.content || '').slice(0, 120),
+                    ts: _ms(p.createdAt),
+                    plainSummary: `${p.author} ${verb} «${postTitle}»`
+                });
+            }
 
             // A) Votos en mis publicaciones
             if (isMyPost && p.votes && typeof p.votes === 'object') {
@@ -2156,6 +2177,7 @@ function renderNotificationsPanel() {
     }
 
     const typeBadge = (type) => {
+        if (type === 'new_post') return '<span class="w-4 h-4 rounded-full bg-stone-800 dark:bg-stone-700 text-amber-400 flex items-center justify-center text-[8px]"><i class="fa-solid fa-feather-pointed"></i></span>';
         if (type === 'reply') return '<span class="w-4 h-4 rounded-full bg-rose-800 text-white flex items-center justify-center text-[8px]"><i class="fa-solid fa-reply"></i></span>';
         if (type === 'comment') return '<span class="w-4 h-4 rounded-full bg-amber-700 text-white flex items-center justify-center text-[8px]"><i class="fa-solid fa-comment-dots"></i></span>';
         if (type === 'vote_agree') return '<span class="w-4 h-4 rounded-full bg-emerald-700 text-white flex items-center justify-center text-[8px]"><i class="fa-solid fa-thumbs-up"></i></span>';
