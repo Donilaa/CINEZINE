@@ -701,7 +701,8 @@
                                 </label>
                                 <div class="flex items-center space-x-2 w-full sm:w-auto justify-end">
                                     <span id="saveStatusIndicator" class="text-[11px] font-mono text-emerald-600 dark:text-emerald-400 hidden"><i class="fa-solid fa-check mr-1"></i>Guardado</span>
-                                    <button onclick="savePersonalReview()" class="py-1.5 px-3 bg-stone-800 hover:bg-stone-700 dark:bg-stone-800 text-stone-100 journal-border text-xs font-mono font-semibold transition uppercase tracking-wider">Guardar apunte</button>
+                                    <button type="button" id="deletePersonalReviewBtn" onclick="deletePersonalReviewFromDetail()" class="hidden py-1.5 px-2.5 bg-rose-950/90 hover:bg-rose-900 text-rose-200 journal-border text-xs font-mono transition uppercase tracking-wider cursor-pointer" title="Eliminar este apunte"><i class="fa-solid fa-trash-can mr-1"></i>Borrar</button>
+                                    <button onclick="savePersonalReview()" class="py-1.5 px-3 bg-stone-800 hover:bg-stone-700 dark:bg-stone-800 text-stone-100 journal-border text-xs font-mono font-semibold transition uppercase tracking-wider cursor-pointer">Guardar apunte</button>
                                 </div>
                             </div>
                         </div>

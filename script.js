@@ -166,10 +166,36 @@ function openPersonalNotesModal(useViewedUser) {
     if (inp) inp.value = '';
     renderNotesModal();
 }
+function prunePersonalReviews() {
+    if (!personalReviews || typeof personalReviews !== 'object') return;
+    let changed = false;
+    Object.keys(personalReviews).forEach(k => {
+        const n = personalReviews[k];
+        const hasText = !!(n && ((n.review && String(n.review).trim()) || (n.reviewTitle && String(n.reviewTitle).trim())));
+        const hasRating = !!(n && Number(n.rating) > 0);
+        if (!n || (!hasText && !hasRating)) {
+            delete personalReviews[k];
+            changed = true;
+        }
+    });
+    if (changed) {
+        localStorage.setItem('cine_personal_reviews', JSON.stringify(personalReviews));
+    }
+}
+
+function countValidPersonalReviews(mapObj) {
+    const src = mapObj || personalReviews || {};
+    return Object.keys(src).filter(k => {
+        const n = src[k];
+        return n && ((n.review && String(n.review).trim()) || (n.reviewTitle && String(n.reviewTitle).trim()) || Number(n.rating) > 0);
+    }).length;
+}
+
 function renderNotesModal() {
     const body = document.getElementById('notesModalBody');
     if (!body) return;
     const lib = _activeLib();
+    if (lib.isMe) prunePersonalReviews();
     const q = (document.getElementById('notesSearchInput')?.value || '').trim().toLowerCase();
     const muralList = typeof getCommunityAndUserPosts === 'function' ? getCommunityAndUserPosts() : [];
     const all = Object.keys(lib.personalReviews).map(id => {
@@ -184,7 +210,7 @@ function renderNotesModal() {
             );
             if (match) postId = match.id;
         }
-        return { ...n, _m: _pmMovie(id, lib), _postId: postId || null };
+        return { ...n, _idKey: id, _m: _pmMovie(id, lib), _postId: postId || null };
     }).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
         .filter(n => (n.review || n.reviewTitle || n.rating) && (lib.isMe || n.isPublic !== false));
     document.getElementById('notesModalCount').innerText = all.length;
@@ -194,18 +220,27 @@ function renderNotesModal() {
         body.innerHTML = `<p class="text-center py-10 text-stone-400 text-xs italic">${all.length ? 'Sin resultados.' : (lib.isMe ? 'Aún no has escrito apuntes. Hazlo desde el detalle de cualquier película.' : 'Aún no tiene apuntes públicos.')}</p>`;
         return;
     }
-    body.innerHTML = `<div class="space-y-2.5">` + notes.map((n, i) => `
+    body.innerHTML = `<div class="space-y-2.5">` + notes.map((n, i) => {
+        const onWall = n.isPublic !== false && !!(n.review && String(n.review).trim()) && (!window.muralReady || !!n._postId);
+        const statusLabel = onWall ? 'Público' : (n.isPublic === false ? 'Privado' : 'Solo ficha');
+        const statusIcon = onWall ? 'fa-earth-americas' : (n.isPublic === false ? 'fa-lock' : 'fa-bookmark');
+        const statusCls = onWall ? 'text-emerald-700 dark:text-emerald-400' : 'text-stone-500';
+        return `
         <div onclick="openProfileItem(${i})" class="flex gap-3 p-2.5 bg-stone-100 dark:bg-stone-950 journal-border cursor-pointer hover:border-rose-800 transition">
             ${_pmPoster(n._m.poster, 'w-14 h-20 flex-shrink-0 journal-border')}
             <div class="min-w-0 flex-grow">
                 <div class="flex items-start justify-between gap-2">
                     <h4 class="font-heading font-bold text-xs text-rose-900 dark:text-rose-400 truncate">${_pmEsc(n.reviewTitle || n._m.title)}</h4>
-                    <span class="flex-shrink-0 text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 journal-border ${n.isPublic !== false ? 'text-emerald-700 dark:text-emerald-400' : 'text-stone-500'}"><i class="fa-solid ${n.isPublic !== false ? 'fa-earth-americas' : 'fa-lock'} mr-1"></i>${n.isPublic !== false ? 'Público' : 'Privado'}</span>
+                    <div class="flex items-center gap-1.5 flex-shrink-0">
+                        <span class="text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 journal-border ${statusCls}"><i class="fa-solid ${statusIcon} mr-1"></i>${statusLabel}</span>
+                        ${lib.isMe ? `<button type="button" onclick="event.stopPropagation(); confirmDeletePersonalReview('${_pmEsc(n._idKey)}')" title="Eliminar apunte" class="px-1.5 py-0.5 text-[10px] text-stone-400 hover:text-rose-600 journal-border bg-stone-200/60 dark:bg-stone-900 transition cursor-pointer"><i class="fa-solid fa-trash-can"></i></button>` : ''}
+                    </div>
                 </div>
                 <div class="text-[10px] font-mono text-stone-500 mt-0.5">${_pmEsc(n._m.title)}${n.rating ? ` · <span class="text-amber-600"><i class="fa-solid fa-star"></i> ${Number(n.rating).toFixed(1)}</span>` : ''}${n.updatedAt ? ` · ${relTime(n.updatedAt)}` : ''}</div>
                 ${n.review ? `<p class="text-xs font-serif italic text-stone-700 dark:text-stone-300 mt-1.5 leading-relaxed" style="display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden">${_pmEsc(n.review)}</p>` : ''}
             </div>
-        </div>`).join('') + `</div>`;
+        </div>`;
+    }).join('') + `</div>`;
 }
 
 function openCustomListsModal(useViewedUser) {
@@ -1402,9 +1437,12 @@ function deleteMuralPost(postId) {
     showDeleteConfirmationModal(async () => {
         try {
             await window.fbDeletePost(postId);
-            if (postId.startsWith('r_') && personalReviews[post.tmdbMovieId]) {
-                personalReviews[post.tmdbMovieId].isPublic = false;
+            const mid = post.tmdbMovieId || (post.movieObj && post.movieObj.id);
+            if (mid && personalReviews[mid]) {
+                delete personalReviews[mid];
                 localStorage.setItem('cine_personal_reviews', JSON.stringify(personalReviews));
+                updateProfileDrawerStats();
+                renderResultsGrid();
             }
             delete window._extraPosts[postId];
             closeMuralPostModal();
@@ -1468,7 +1506,8 @@ async function openUserProfileModal(uid, fallbackName, fallbackSeed) {
     const bio = isMe ? currentUserBio : ((prof && prof.bio) || '');
     const avatar = isMe ? getAvatarUrl() : _avatarOf(seed, name);
 
-    let vCount = watchedMovies.length, nCount = Object.keys(personalReviews).length, lCount = customLists.length;
+    if (isMe) prunePersonalReviews();
+    let vCount = watchedMovies.length, nCount = countValidPersonalReviews(personalReviews), lCount = customLists.length;
     if (isMe) {
         window._viewedUserLib = null;
     } else {
@@ -1911,26 +1950,6 @@ window.refreshNotifications = async function () {
             const isMyPost = (postOwnerUid && postOwnerUid === myUid) || (!postOwnerUid && myNameLower && postAuthorLower === myNameLower);
             const postTitle = _notifPostTitle(p);
             const postKind = p.type === 'review' ? 'reseña de' : 'debate';
-
-            // 0) Nueva publicación de otro miembro de la comunidad en el muro
-            if (!isMyPost && p.author) {
-                const verb = p.type === 'review' ? 'publicó una reseña de' : 'abrió el debate';
-                built.push({
-                    id: `post_${p.id}`,
-                    type: 'new_post',
-                    postId: p.id,
-                    commentId: null,
-                    actorUid: postOwnerUid,
-                    actorName: p.author || 'Cinéfilo/a',
-                    actorSeed: p.avatarSeed || p.author || 'Cinéfilo/a',
-                    postTitle,
-                    postKind,
-                    verb,
-                    snippet: String(p.reviewTitle || p.content || '').slice(0, 120),
-                    ts: _ms(p.createdAt),
-                    plainSummary: `${p.author} ${verb} «${postTitle}»`
-                });
-            }
 
             // A) Votos en mis publicaciones
             if (isMyPost && p.votes && typeof p.votes === 'object') {
@@ -2669,6 +2688,12 @@ function openDetailModal(movie, tag) {
     const publicCheck = document.getElementById('userPublicReviewCheck');
     if (publicCheck) publicCheck.checked = pReview ? pReview.isPublic !== false : true;
 
+    const delReviewBtn = document.getElementById('deletePersonalReviewBtn');
+    if (delReviewBtn) {
+        const hasSavedReview = !!(pReview && ((pReview.review && String(pReview.review).trim()) || (pReview.reviewTitle && String(pReview.reviewTitle).trim()) || Number(pReview.rating) > 0));
+        delReviewBtn.classList.toggle('hidden', !hasSavedReview);
+    }
+
     const detailModal = document.getElementById('detailModal');
     if (detailModal) {
         detailModal.classList.remove('hidden');
@@ -2755,17 +2780,71 @@ function renderStarSelector(val) {
 
 function clearPersonalRating() { selectedStarRating = 0; renderStarSelector(0); }
 
+async function _removePersonalReviewEverywhere(movieId) {
+    const key = String(movieId);
+    const numId = Number(movieId);
+    delete personalReviews[key];
+    if (numId) delete personalReviews[numId];
+    localStorage.setItem('cine_personal_reviews', JSON.stringify(personalReviews));
+
+    if (window.currentUser) {
+        try {
+            if (window.fbRemoveReviewPost && numId) await window.fbRemoveReviewPost(numId);
+            const myPosts = (window.muralPosts || []).filter(p =>
+                p.type === 'review' &&
+                (p.authorUid === window.currentUser.uid || p.userId === window.currentUser.uid) &&
+                String(p.tmdbMovieId || (p.movieObj && p.movieObj.id)) === key
+            );
+            for (const p of myPosts) {
+                if (window.fbDeletePost) await window.fbDeletePost(p.id);
+            }
+        } catch (e) { console.warn('No se pudo borrar del muro:', e); }
+    }
+
+    if (currentDetailMovie && String(currentDetailMovie.id) === key) {
+        renderStarSelector(0);
+        const rInput = document.getElementById('userPersonalReview');
+        if (rInput) { rInput.value = ''; autoResizeTextarea(rInput); }
+        const tInput = document.getElementById('userReviewTitleInput');
+        if (tInput) tInput.value = '';
+        const delBtn = document.getElementById('deletePersonalReviewBtn');
+        if (delBtn) delBtn.classList.add('hidden');
+    }
+
+    updateProfileDrawerStats();
+    renderResultsGrid();
+    renderMuralFeed();
+}
+
+function confirmDeletePersonalReview(movieId) {
+    showDeleteConfirmationModal(async () => {
+        await _removePersonalReviewEverywhere(movieId);
+        showToast('Apunte eliminado ✓', 'ok');
+    }, 'Eliminar apunte', '¿Seguro que deseas borrar este apunte y su calificación? Si estaba publicado en el muro, también se quitará de allí.');
+}
+
+function deletePersonalReviewFromDetail() {
+    if (!currentDetailMovie) return;
+    confirmDeletePersonalReview(currentDetailMovie.id);
+}
+
 async function savePersonalReview() {
     if (!currentDetailMovie) return;
     const reviewInput = document.getElementById('userPersonalReview').value.trim();
     const reviewTitleInput = document.getElementById('userReviewTitleInput') ? document.getElementById('userReviewTitleInput').value.trim() : '';
     const isPublic = document.getElementById('userPublicReviewCheck').checked;
+    const ratingNow = selectedStarRating > 0 ? selectedStarRating : null;
+
+    if (!reviewInput && !reviewTitleInput && !ratingNow) {
+        await _removePersonalReviewEverywhere(currentDetailMovie.id);
+        showToast('Apunte vacío eliminado ✓', 'info');
+        return;
+    }
 
     const nowMs = Date.now();
     const prev = personalReviews[currentDetailMovie.id];
-    const ratingNow = selectedStarRating > 0 ? selectedStarRating : null;
     personalReviews[currentDetailMovie.id] = {
-        movie: currentDetailMovie,
+        movie: slimMovie(currentDetailMovie),
         rating: ratingNow,
         review: reviewInput,
         reviewTitle: reviewTitleInput,
@@ -2777,6 +2856,8 @@ async function savePersonalReview() {
     if (ratingNow > 0) {
         ensureWatchedMovie(currentDetailMovie.id, currentDetailMovie);
     }
+    const delReviewBtn = document.getElementById('deletePersonalReviewBtn');
+    if (delReviewBtn) delReviewBtn.classList.remove('hidden');
     updateProfileDrawerStats();
 
     if (window.currentUser && window.fbUpsertReviewPost) {
@@ -4190,11 +4271,12 @@ window.updateProfileDrawerStats = function () {
     if (hAvatar) hAvatar.src = avatarUrl;
     if (dAvatar) dAvatar.src = avatarUrl;
 
+    prunePersonalReviews();
     const sWatched = document.getElementById('statWatchedCount');
     const sBitacora = document.getElementById('statBitacoraCount');
     const sLists = document.getElementById('statListsCount');
     if (sWatched) sWatched.innerText = watchedMovies.length;
-    if (sBitacora) sBitacora.innerText = Object.keys(personalReviews).length;
+    if (sBitacora) sBitacora.innerText = countValidPersonalReviews(personalReviews);
     if (sLists) sLists.innerText = customLists.length;
 
     let authSection = document.getElementById('drawerAuthSection');
