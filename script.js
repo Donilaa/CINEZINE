@@ -12,47 +12,6 @@ const CINE_SYNC_KEYS = [
 ];
 window.CINE_SYNC_KEYS = CINE_SYNC_KEYS;
 
-let muralSortDirection = "desc";
-
-function toggleMuralSortDirection() {
-    muralSortDirection = muralSortDirection === "desc" ? "asc" : "desc";
-    const icon = document.getElementById('muralSortDirectionIcon');
-    if (icon) {
-        icon.className = muralSortDirection === "desc"
-            ? "fa-solid fa-arrow-down-wide-short"
-            : "fa-solid fa-arrow-up-short-wide";
-    }
-    renderMuralFeed();
-}
-
-function getRelativeTime(item) {
-    let timestamp = 0;
-
-    // 1. Si viene de Firebase, tiene un objeto createdAt (Timestamp)
-    if (item.createdAt && typeof item.createdAt.toMillis === 'function') {
-        timestamp = item.createdAt.toMillis();
-    }
-    // 2. Si es un post local antiguo, extraemos los números de su ID (ej: post_1712345678901)
-    else if (item.id && typeof item.id === 'string') {
-        const match = item.id.match(/\d{13}/);
-        if (match) timestamp = parseInt(match[0]);
-    }
-
-    // Si no pudimos sacar la fecha, usamos la que estaba guardada por defecto
-    if (!timestamp) return item.date || "Hace un momento";
-
-    const now = Date.now();
-    const diffMs = now - timestamp;
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMins / 60);
-    const diffDays = Math.floor(diffHours / 24);
-
-    if (diffMins < 1) return "Hace un momento";
-    if (diffMins < 60) return `Hace ${diffMins} minuto${diffMins !== 1 ? 's' : ''}`;
-    if (diffHours < 24) return `Hace ${diffHours} hora${diffHours !== 1 ? 's' : ''}`;
-    return `Hace ${diffDays} día${diffDays !== 1 ? 's' : ''}`;
-}
-
 const _rawSetItem = Storage.prototype.setItem;
 const _rawRemoveItem = Storage.prototype.removeItem;
 window.cineRawStorage = {
@@ -111,7 +70,8 @@ let _pmItems = [];
 function _pmPoster(url, cls) {
     const fallback = `<div class="${cls} flex items-center justify-center bg-stone-200 dark:bg-stone-800 text-stone-400"><i class="fa-solid fa-film"></i></div>`;
     if (!url || /placeholder/.test(url)) return fallback;
-    return `<img src="${_pmEsc(url)}" loading="lazy" class="${cls} object-cover bg-stone-200 dark:bg-stone-800" onerror="this.outerHTML=this.dataset.fb" data-fb="${_pmEsc(fallback)}">`;
+    const thumb = typeof thumbPoster === 'function' ? thumbPoster(url, 'w342') : url;
+    return `<img src="${_pmEsc(thumb)}" loading="lazy" decoding="async" class="${cls} object-cover bg-stone-200 dark:bg-stone-800" onerror="this.outerHTML=this.dataset.fb" data-fb="${_pmEsc(fallback)}">`;
 }
 
 function openProfileModal(id) {
@@ -126,16 +86,46 @@ function closeProfileModal(id) {
 }
 function openProfileItem(i) {
     const it = _pmItems[i];
-    if (it) openDetailModal({ id: it.id, title: it.title, poster: it.poster, rating: it.rating || '8.5', overview: it.overview || 'Sin descripción' }, it.tag || 'Mi perfil');
+    if (!it) return;
+    if (it.postId) {
+        closeProfileModal('notesModal');
+        closeProfileModal('watchedModal');
+        closeProfileModal('listsModal');
+        openMuralPostModal(it.postId);
+        return;
+    }
+    openDetailModal({ id: it.id, title: it.title, subtitle: it.subtitle || '', poster: it.poster, rating: it.rating || '8.5', overview: it.overview || 'Sin descripción', votes: it.votes, year: it.year }, it.tag || 'Mi perfil');
 }
 
-function _pmMovie(id) {
-    const d = watchedMoviesData[id] || (personalReviews[id] && personalReviews[id].movie) || null;
-    if (d) return { id: d.id ?? id, title: d.title || 'Sin título', poster: d.poster, rating: d.rating, overview: d.overview };
-    return { id, title: 'Película #' + id, poster: null };
+window._viewedUserLib = null;
+
+function _activeLib() {
+    if (window._viewedUserLib && !window._viewedUserLib.isMe) return window._viewedUserLib;
+    return {
+        isMe: true,
+        name: currentUsername,
+        watchedMovies,
+        watchedMoviesData,
+        personalReviews,
+        customLists
+    };
 }
 
-function openWatchedMoviesModal() {
+function _pmMovie(id, lib) {
+    const src = lib || _activeLib();
+    const d = (src.watchedMoviesData && src.watchedMoviesData[id]) || (src.personalReviews && src.personalReviews[id] && src.personalReviews[id].movie) || watchedMoviesData[id] || (personalReviews[id] && personalReviews[id].movie) || null;
+    const base = d
+        ? { id: d.id ?? id, title: d.title || 'Sin título', subtitle: d.subtitle || '', poster: d.poster, rating: d.rating, overview: d.overview, year: d.year, votes: d.votes }
+        : { id, title: 'Película #' + id, poster: null };
+    if (typeof _resolveViewerMovie === 'function') {
+        const loc = _resolveViewerMovie({ type: 'review', tmdbMovieId: id, movieObj: base });
+        if (loc) return { ...base, ...loc };
+    }
+    return base;
+}
+
+function openWatchedMoviesModal(useViewedUser) {
+    if (!useViewedUser) window._viewedUserLib = null;
     openProfileModal('watchedModal');
     const inp = document.getElementById('watchedSearchInput');
     if (inp) inp.value = '';
@@ -144,16 +134,17 @@ function openWatchedMoviesModal() {
 function renderWatchedModal() {
     const body = document.getElementById('watchedModalBody');
     if (!body) return;
+    const lib = _activeLib();
     const q = (document.getElementById('watchedSearchInput')?.value || '').trim().toLowerCase();
-    document.getElementById('watchedModalCount').innerText = watchedMovies.length;
-    const movies = [...watchedMovies].reverse().map(_pmMovie).filter(m => m.title.toLowerCase().includes(q));
-    _pmItems = movies.map(m => ({ ...m, tag: 'Vistas' }));
+    document.getElementById('watchedModalCount').innerText = lib.watchedMovies.length;
+    const movies = [...lib.watchedMovies].reverse().map(id => _pmMovie(id, lib)).filter(m => m.title.toLowerCase().includes(q));
+    _pmItems = movies.map(m => ({ ...m, tag: lib.isMe ? 'Vistas' : `Vistas por ${lib.name}` }));
     if (!movies.length) {
-        body.innerHTML = `<p class="text-center py-10 text-stone-400 text-xs italic">${watchedMovies.length ? 'Sin resultados.' : 'Aún no has marcado películas como vistas.'}</p>`;
+        body.innerHTML = `<p class="text-center py-10 text-stone-400 text-xs italic">${lib.watchedMovies.length ? 'Sin resultados.' : (lib.isMe ? 'Aún no has marcado películas como vistas.' : 'Aún no ha marcado películas como vistas.')}</p>`;
         return;
     }
     body.innerHTML = `<div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2.5">` + movies.map((m, i) => {
-        const r = personalReviews[m.id]?.rating;
+        const r = lib.personalReviews[m.id]?.rating;
         return `<div onclick="openProfileItem(${i})" title="${_pmEsc(m.title)}" class="relative group cursor-pointer journal-border overflow-hidden hover:border-rose-800 transition">
             ${_pmPoster(m.poster, 'w-full aspect-[2/3]')}
             ${r ? `<span class="absolute top-1 right-1 text-[9px] font-mono font-bold bg-stone-950/80 text-amber-400 px-1.5 py-0.5"><i class="fa-solid fa-star"></i> ${Number(r).toFixed(1)}</span>` : ''}
@@ -163,7 +154,8 @@ function renderWatchedModal() {
     }).join('') + `</div>`;
 }
 
-function openPersonalNotesModal() {
+function openPersonalNotesModal(useViewedUser) {
+    if (!useViewedUser) window._viewedUserLib = null;
     openProfileModal('notesModal');
     const inp = document.getElementById('notesSearchInput');
     if (inp) inp.value = '';
@@ -172,14 +164,29 @@ function openPersonalNotesModal() {
 function renderNotesModal() {
     const body = document.getElementById('notesModalBody');
     if (!body) return;
+    const lib = _activeLib();
     const q = (document.getElementById('notesSearchInput')?.value || '').trim().toLowerCase();
-    const all = Object.keys(personalReviews).reverse().map(id => ({ ...personalReviews[id], _m: _pmMovie(id) }))
-        .filter(n => n.review || n.reviewTitle || n.rating);
+    const muralList = typeof getCommunityAndUserPosts === 'function' ? getCommunityAndUserPosts() : [];
+    const all = Object.keys(lib.personalReviews).map(id => {
+        const n = lib.personalReviews[id];
+        const mid = Number(id);
+        let postId = n && n.postId;
+        if (!postId && n && n.isPublic !== false && n.review) {
+            const match = muralList.find(p =>
+                p.type === 'review' &&
+                Number(p.tmdbMovieId || (p.movieObj && p.movieObj.id)) === mid &&
+                (lib.isMe ? p.mine : ((lib.uid && p.authorUid === lib.uid) || String(p.author || '').toLowerCase() === String(lib.name || '').toLowerCase()))
+            );
+            if (match) postId = match.id;
+        }
+        return { ...n, _m: _pmMovie(id, lib), _postId: postId || null };
+    }).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+        .filter(n => (n.review || n.reviewTitle || n.rating) && (lib.isMe || n.isPublic !== false));
     document.getElementById('notesModalCount').innerText = all.length;
     const notes = all.filter(n => (n._m.title + ' ' + (n.reviewTitle || '')).toLowerCase().includes(q));
-    _pmItems = notes.map(n => ({ ...n._m, tag: 'Mis apuntes' }));
+    _pmItems = notes.map(n => ({ ...n._m, tag: lib.isMe ? 'Mis apuntes' : `Apunte de ${lib.name}`, postId: n._postId }));
     if (!notes.length) {
-        body.innerHTML = `<p class="text-center py-10 text-stone-400 text-xs italic">${all.length ? 'Sin resultados.' : 'Aún no has escrito apuntes. Hazlo desde el detalle de cualquier película.'}</p>`;
+        body.innerHTML = `<p class="text-center py-10 text-stone-400 text-xs italic">${all.length ? 'Sin resultados.' : (lib.isMe ? 'Aún no has escrito apuntes. Hazlo desde el detalle de cualquier película.' : 'Aún no tiene apuntes públicos.')}</p>`;
         return;
     }
     body.innerHTML = `<div class="space-y-2.5">` + notes.map((n, i) => `
@@ -188,29 +195,37 @@ function renderNotesModal() {
             <div class="min-w-0 flex-grow">
                 <div class="flex items-start justify-between gap-2">
                     <h4 class="font-heading font-bold text-xs text-rose-900 dark:text-rose-400 truncate">${_pmEsc(n.reviewTitle || n._m.title)}</h4>
-                    <span class="flex-shrink-0 text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 journal-border ${n.isPublic ? 'text-emerald-700 dark:text-emerald-400' : 'text-stone-500'}"><i class="fa-solid ${n.isPublic ? 'fa-earth-americas' : 'fa-lock'} mr-1"></i>${n.isPublic ? 'Público' : 'Privado'}</span>
+                    <span class="flex-shrink-0 text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 journal-border ${n.isPublic !== false ? 'text-emerald-700 dark:text-emerald-400' : 'text-stone-500'}"><i class="fa-solid ${n.isPublic !== false ? 'fa-earth-americas' : 'fa-lock'} mr-1"></i>${n.isPublic !== false ? 'Público' : 'Privado'}</span>
                 </div>
-                <div class="text-[10px] font-mono text-stone-500 mt-0.5">${_pmEsc(n._m.title)}${n.rating ? ` · <span class="text-amber-600"><i class="fa-solid fa-star"></i> ${Number(n.rating).toFixed(1)}</span>` : ''}</div>
+                <div class="text-[10px] font-mono text-stone-500 mt-0.5">${_pmEsc(n._m.title)}${n.rating ? ` · <span class="text-amber-600"><i class="fa-solid fa-star"></i> ${Number(n.rating).toFixed(1)}</span>` : ''}${n.updatedAt ? ` · ${relTime(n.updatedAt)}` : ''}</div>
                 ${n.review ? `<p class="text-xs font-serif italic text-stone-700 dark:text-stone-300 mt-1.5 leading-relaxed" style="display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden">${_pmEsc(n.review)}</p>` : ''}
             </div>
         </div>`).join('') + `</div>`;
 }
 
-function openCustomListsModal() {
+function openCustomListsModal(useViewedUser) {
+    if (!useViewedUser) window._viewedUserLib = null;
     openProfileModal('listsModal');
     renderListsModal();
 }
 function renderListsModal(openIdx) {
     const body = document.getElementById('listsModalBody');
     if (!body) return;
-    document.getElementById('listsModalCount').innerText = customLists.length;
-    if (!customLists.length) {
-        body.innerHTML = `<p class="text-center py-10 text-stone-400 text-xs italic">Sin cuadernos creados. Puedes crear uno desde el catálogo.</p>`;
+    const lib = _activeLib();
+    const lists = lib.isMe ? lib.customLists : (lib.customLists || []).filter(l => l && l.isPublic !== false);
+    document.getElementById('listsModalCount').innerText = lists.length;
+    if (!lists.length) {
+        body.innerHTML = `<p class="text-center py-10 text-stone-400 text-xs italic">${lib.isMe ? 'Sin cuadernos creados. Puedes crear uno desde el catálogo.' : 'Aún no tiene cuadernos públicos.'}</p>`;
         return;
     }
     _pmItems = [];
-    body.innerHTML = `<div class="space-y-3">` + customLists.map((l, li) => {
-        const ms = (l.movies || []).map(m => ({ ...(typeof m === 'object' ? m : { title: m }), tag: 'Cuaderno: ' + l.name }));
+    body.innerHTML = `<div class="space-y-3">` + lists.map((l, li) => {
+        const isPublic = l.isPublic !== false;
+        const ms = (l.movies || []).map(m => {
+            const obj = typeof m === 'object' ? m : { title: m };
+            const loc = (obj.id && typeof _resolveViewerMovie === 'function') ? _resolveViewerMovie({ type: 'review', tmdbMovieId: obj.id, movieObj: obj }) : null;
+            return { ...obj, ...(loc || {}), tag: 'Cuaderno: ' + l.name };
+        });
         const start = _pmItems.length;
         _pmItems.push(...ms);
         const thumbs = ms.slice(0, 4).map(m => _pmPoster(m.poster, 'w-8 h-12 journal-border')).join('');
@@ -221,7 +236,11 @@ function renderListsModal(openIdx) {
             : `<p class="text-[11px] italic text-stone-400 text-center py-2">Este cuaderno está vacío.</p>`;
         return `<div class="bg-stone-100 dark:bg-stone-950 journal-border">
             <div onclick="document.getElementById('lmBody_${li}').classList.toggle('hidden')" class="p-3 flex items-center justify-between cursor-pointer hover:bg-stone-200/50 dark:hover:bg-stone-900 transition">
-                <div class="flex items-center gap-2 min-w-0"><i class="fa-solid fa-book text-rose-800 text-xs"></i><h4 class="text-xs font-heading font-bold text-rose-900 dark:text-rose-400 truncate">${_pmEsc(l.name)}</h4></div>
+                <div class="flex items-center gap-2 min-w-0">
+                    <i class="fa-solid fa-book text-rose-800 text-xs"></i>
+                    <h4 class="text-xs font-heading font-bold text-rose-900 dark:text-rose-400 truncate">${_pmEsc(l.name)}</h4>
+                    <i class="fa-solid ${isPublic ? 'fa-globe text-stone-400' : 'fa-lock text-amber-600'} text-[10px]" title="${isPublic ? 'Público' : 'Privado'}"></i>
+                </div>
                 <div class="flex items-center gap-3 flex-shrink-0"><div class="hidden sm:flex gap-1">${thumbs}</div><span class="text-[10px] font-mono bg-stone-200 dark:bg-stone-900 px-2 py-0.5 journal-border">${ms.length} obras</span></div>
             </div>
             <div id="lmBody_${li}" class="${li === openIdx ? '' : 'hidden'} border-t border-stone-200 dark:border-stone-800 p-3 bg-stone-50 dark:bg-stone-900/50">${grid}</div>
@@ -229,19 +248,20 @@ function renderListsModal(openIdx) {
     }).join('') + `</div>`;
 }
 
-// Mantiene al día los modales abiertos si los datos cambian (p. ej. desde el detalle de una película)
 window.refreshOpenProfileModals = function () {
     const open = (id) => { const m = document.getElementById(id); return m && !m.classList.contains('hidden'); };
     if (open('watchedModal')) renderWatchedModal();
     if (open('notesModal')) renderNotesModal();
     if (open('listsModal')) {
-        const opened = customLists.findIndex((_, i) => { const b = document.getElementById('lmBody_' + i); return b && !b.classList.contains('hidden'); });
+        const lib = _activeLib();
+        const lists = lib.isMe ? lib.customLists : (lib.customLists || []).filter(l => l && l.isPublic !== false);
+        const opened = lists.findIndex((_, i) => { const b = document.getElementById('lmBody_' + i); return b && !b.classList.contains('hidden'); });
         renderListsModal(opened);
     }
 };
 // ===== FIN MODALES DEL PERFIL =====
 
-// ===== RULETA, ÓSCARS, FILTROS DEL CATÁLOGO Y AVATAR (reconstruido) =====
+// ===== RULETA, ÓSCARS, FILTROS DEL CATÁLOGO Y AVATAR =====
 const _movieReg = new Map();
 function _regMovie(m, tag) {
     const key = tag + '|' + m.id;
@@ -253,7 +273,7 @@ function _regMovie(m, tag) {
 function openRegisteredMovie(i) {
     for (const e of _movieReg.values()) {
         if (e.idx === i) {
-            openDetailModal({ id: e.m.id, title: e.m.title, poster: e.m.poster, rating: e.m.rating || '8.5', overview: e.m.overview || 'Sin descripción', votes: e.m.votes, year: e.m.year }, e.tag);
+            openDetailModal({ id: e.m.id, title: e.m.title, subtitle: e.m.subtitle || '', poster: e.m.poster, rating: e.m.rating || '8.5', overview: e.m.overview || 'Sin descripción', votes: e.m.votes, year: e.m.year }, e.tag);
             return;
         }
     }
@@ -312,7 +332,7 @@ function renderDetailPublicReviews(movie) {
         <div onclick="closeDetailModal(); openMuralPostModal('${_pmEsc(p.id)}')" class="p-2 bg-stone-100 dark:bg-stone-950 journal-border cursor-pointer hover:border-rose-800 transition">
             <div class="flex items-center justify-between text-[10px] font-mono text-stone-500">
                 <span class="font-bold text-rose-900 dark:text-rose-400">${_pmEsc(p.author)}</span>
-                ${p.rating ? `<span class="text-amber-600"><i class="fa-solid fa-star"></i> ${Number(p.rating).toFixed(1)}</span>` : ''}
+                ${p.rating ? `<span class="text-amber-600"><i class="fa-solid fa-star"></i> ${_fmtRating(p.rating)}</span>` : ''}
             </div>
             <p class="text-[11px] font-serif italic text-stone-700 dark:text-stone-300 mt-1" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${_pmEsc(p.reviewTitle || p.title || p.content || '')}</p>
         </div>`).join('');
@@ -396,13 +416,13 @@ function wheelIndexAtPointer() {
     const n = moviesList.length;
     if (!n) return -1;
     const TAU = Math.PI * 2;
-    const a = (((1.5 * Math.PI - startAngle) % TAU) + TAU) % TAU; // el puntero está arriba
+    const a = (((1.5 * Math.PI - startAngle) % TAU) + TAU) % TAU;
     return Math.min(n - 1, Math.floor(a / (TAU / n)));
 }
 
 function spinWheel() {
     if (isSpinning) return;
-    if (moviesList.length === 0) { alert('Añade al menos una película al sorteo.'); return; }
+    if (moviesList.length === 0) { showToast('Añade al menos una película al sorteo.', 'info'); return; }
     if (moviesList.length === 1) { showWinnerModal(moviesList[0]); return; }
 
     isSpinning = true;
@@ -434,20 +454,26 @@ function spinWheel() {
     requestAnimationFrame(frame);
 }
 
-function getRandomRecommendation() {
-    const pool = moviesList.length ? moviesList : getVisibleCatalogMovies();
-    if (!pool.length) { alert('No hay películas disponibles. Añade obras al sorteo o espera a que cargue el catálogo.'); return; }
+async function getRandomRecommendation() {
+    let pool = moviesList.length ? moviesList : getVisibleCatalogMovies();
+    if (!pool.length && !_catalogInitialized) {
+        _catalogInitialized = true;
+        currentFilterPage = 3;
+        await fetchMultipleFilteredPages();
+        pool = getVisibleCatalogMovies();
+    }
+    if (!pool.length) { showToast('No hay películas disponibles. Añade obras al sorteo o espera a que cargue el catálogo.', 'info'); return; }
     closeModal();
     showWinnerModal(pool[Math.floor(Math.random() * pool.length)]);
 }
 
 function addAllFilteredToRoulette() {
     const visible = getVisibleCatalogMovies();
-    if (!visible.length) { alert('No hay obras visibles para cargar.'); return; }
-    const MAX = 30; // más segmentos hacen la ruleta ilegible
+    if (!visible.length) { showToast('No hay obras visibles para cargar.', 'info'); return; }
+    const MAX = 30;
     const pick = visible.length > MAX ? [...visible].sort(() => Math.random() - 0.5).slice(0, MAX) : visible;
     const added = addMoviesToRoulette(pick);
-    alert(`${added} obras añadidas al sorteo.` + (visible.length > MAX ? ` (Muestra aleatoria de ${MAX} entre ${visible.length} visibles.)` : ''));
+    showToast(`${added} obras añadidas al sorteo.` + (visible.length > MAX ? ` (Muestra de ${MAX})` : ''), 'ok');
 }
 
 // ----- Óscars -----
@@ -479,14 +505,14 @@ function renderOscarList() {
                     <span class="block text-[10px] font-mono ${m.isWinner ? 'text-amber-600' : 'text-stone-500'}"><i class="fa-solid ${m.isWinner ? 'fa-trophy' : 'fa-award'} mr-1"></i>${m.isWinner ? 'Ganadora' : 'Nominada'} · ${m.oscarYear}</span>
                 </div>
             </div>
-            <button onclick="addMoviesToRoulette([_findMovieById(${m.id})])" title="Añadir al sorteo" class="flex-shrink-0 text-stone-400 hover:text-amber-600 px-1.5 text-sm transition"><i class="fa-solid fa-plus"></i></button>
+            <button onclick="addMoviesToRoulette([_findMovieById(${m.id})]); showToast('Añadida al sorteo ✓', 'ok');" title="Añadir al sorteo" class="flex-shrink-0 text-stone-400 hover:text-amber-600 px-1.5 text-sm transition"><i class="fa-solid fa-plus"></i></button>
         </div>`).join('');
 }
 
 function addAllOscarsToRoulette() {
-    if (!currentOscarList.length) { alert('La lista de los Óscars aún no ha cargado.'); return; }
+    if (!currentOscarList.length) { showToast('La lista de los Óscars aún no ha cargado.', 'info'); return; }
     const added = addMoviesToRoulette(currentOscarList);
-    alert(`${added} obras añadidas al sorteo.`);
+    showToast(`${added} obras añadidas al sorteo.`, 'ok');
 }
 
 // ----- Avatar ampliado -----
@@ -504,10 +530,1256 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 // ===== FIN RULETA / ÓSCARS / FILTROS / AVATAR =====
 
-const TMDB_BEARER_TOKEN = "eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJjYjQwZTE1MTc4ZDYyNWY5N2Q5N2YxOWI1YTM5ZjE1NCIsIm5iZiI6MTc5MjEwMzE3Ni4wOTcsInN1YiI6IjZhZDE1MzA4MTg4NDAyOWU1ODE4ZTk3ZSIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.RUI9o-J4oFpIOCbXlLZ88KwBfN9WcWcf0bfOQUKq2dA";
+// ===== MURO COMPARTIDO (Firestore) =====
+const POSTER_FALLBACK = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="150"><rect width="100" height="150" fill="#292524"/><text x="50" y="84" font-size="34" text-anchor="middle">🎬</text></svg>');
 
-let currentLang = "es-MX";
-let currentTitleLang = "en-US";
+function showToast(msg, type = 'ok') {
+    let box = document.getElementById('toastBox');
+    if (!box) {
+        box = document.createElement('div');
+        box.id = 'toastBox';
+        box.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 z-[500] flex flex-col items-center gap-2 pointer-events-none px-3';
+        box.setAttribute('role', 'status');
+        box.setAttribute('aria-live', 'polite');
+        document.body.appendChild(box);
+    }
+    const colors = {
+        ok: 'bg-emerald-900 text-emerald-50 border-emerald-700',
+        info: 'bg-stone-900 text-stone-100 border-stone-600',
+        error: 'bg-rose-950 text-rose-50 border-rose-800'
+    };
+    const icons = { ok: 'fa-circle-check', info: 'fa-circle-info', error: 'fa-triangle-exclamation' };
+    const el = document.createElement('div');
+    el.className = `cz-toast pointer-events-auto flex items-center gap-2 border px-3.5 py-2 text-xs font-mono shadow-xl ${colors[type] || colors.info}`;
+    const ic = document.createElement('i');
+    ic.className = `fa-solid ${icons[type] || icons.info}`;
+    const tx = document.createElement('span');
+    tx.textContent = msg;
+    el.append(ic, tx);
+    box.appendChild(el);
+    setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity .3s'; setTimeout(() => el.remove(), 320); }, 3800);
+}
+
+function _isUserUnverified(u) {
+    if (!u || u.emailVerified) return false;
+    if (typeof window.isUnverifiedEmailUser === 'function') return window.isUnverifiedEmailUser(u);
+    const provs = u.providerData || [];
+    return provs.length === 0 || provs.some(p => p.providerId === 'password');
+}
+
+function requireAuth(msg) {
+    if (window.currentUser && !_isUserUnverified(window.currentUser)) return true;
+    if (window.currentUser && _isUserUnverified(window.currentUser)) {
+        showToast('Verifica tu correo electrónico para participar en el muro.', 'info');
+        if (typeof window.showAuthVerifyStep === 'function') window.showAuthVerifyStep(window.currentUser.email);
+        return false;
+    }
+    showToast(msg || 'Inicia sesión para participar en el muro.', 'info');
+    if (typeof window.showAuthLoginStep === 'function') window.showAuthLoginStep();
+    const m = document.getElementById('authModal');
+    if (m) m.classList.remove('hidden');
+    return false;
+}
+
+function handleWriteError(err, what) {
+    console.error('Error al ' + what + ':', err);
+    const code = err && err.code ? err.code : '';
+    if (code === 'permission-denied') {
+        showToast(`No tienes permiso para ${what}. Revisa tu sesión y las reglas de Firestore.`, 'error');
+    } else if (code === 'unavailable' || code === 'failed-precondition') {
+        showToast('Sin conexión con la nube. Inténtalo de nuevo en un momento.', 'error');
+    } else {
+        showToast(`No se pudo ${what}.`, 'error');
+    }
+}
+
+function relTime(ms) {
+    const s = Math.max(0, Math.floor((Date.now() - ms) / 1000));
+    if (s < 45) return 'Hace un momento';
+    const m = Math.floor(s / 60);
+    if (m < 60) return `Hace ${m} min`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `Hace ${h} h`;
+    const d = Math.floor(h / 24);
+    if (d === 1) return 'Ayer';
+    if (d < 7) return `Hace ${d} días`;
+    const dt = new Date(ms);
+    return dt.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: dt.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined });
+}
+
+function safePoster(url) {
+    return /^https:\/\/image\.tmdb\.org\//.test(url || '') ? url : POSTER_FALLBACK;
+}
+
+function thumbPoster(url, size = 'w342') {
+    if (!/^https:\/\/image\.tmdb\.org\//.test(url || '')) return POSTER_FALLBACK;
+    return url.replace('/t/p/w500/', `/t/p/${size}/`);
+}
+
+function slimMovie(m) {
+    if (!m) return null;
+    return {
+        id: Number(m.id) || 0,
+        title: String(m.title || '').slice(0, 200),
+        subtitle: String(m.subtitle || '').slice(0, 200),
+        poster: /^https:\/\/image\.tmdb\.org\//.test(m.poster || '') ? m.poster : '',
+        rating: m.rating != null ? String(m.rating).slice(0, 6) : null,
+        overview: String(m.overview || '').slice(0, 600),
+        year: m.year != null ? String(m.year).slice(0, 8) : null
+    };
+}
+
+function _myName() { return String(currentUsername || 'Anónimo').slice(0, 40); }
+function _avatarOf(seed, fallback) { return `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(seed || fallback || 'x')}`; }
+function _ms(ts) {
+    if (!ts) return Date.now();
+    if (typeof ts.toMillis === 'function') return ts.toMillis();
+    if (typeof ts.seconds === 'number') return ts.seconds * 1000;
+    if (typeof ts === 'number') return ts;
+    return Date.now();
+}
+
+function _countVotes(votes) {
+    let agree = 0, disagree = 0;
+    Object.values(votes || {}).forEach(v => { if (v === 'agree') agree++; else if (v === 'disagree') disagree++; });
+    return { agree, disagree };
+}
+
+const _VIEWER_CACHE_KEY = 'cine_viewer_movie_cache_v1';
+const _viewerMovieCache = new Map((() => {
+    try { return Object.entries(JSON.parse(localStorage.getItem(_VIEWER_CACHE_KEY) || '{}')); }
+    catch (e) { return []; }
+})());
+const _viewerMoviePromises = new Map();
+let _viewerMovieRefreshTimer = null;
+
+function _saveViewerMovieCache() {
+    try {
+        const obj = {};
+        for (const [k, v] of _viewerMovieCache.entries()) obj[k] = v;
+        window.cineRawStorage.set(_VIEWER_CACHE_KEY, JSON.stringify(obj));
+    } catch (e) { }
+}
+
+function _scheduleViewerMovieRefresh() {
+    clearTimeout(_viewerMovieRefreshTimer);
+    _viewerMovieRefreshTimer = setTimeout(() => {
+        if (typeof renderMuralFeed === 'function') renderMuralFeed();
+        if (typeof refreshPostModal === 'function') refreshPostModal();
+        if (typeof window.refreshOpenProfileModals === 'function') window.refreshOpenProfileModals();
+    }, 40);
+}
+
+function _viewerMovieKey(r) {
+    if (!r || r.type !== 'review') return '';
+    const base = r.movieObj || {};
+    const mid = Number(r.tmdbMovieId || base.id || 0);
+    const tLang = typeof currentTitleLang !== 'undefined' ? currentTitleLang : 'en-US';
+    const iLang = typeof currentLang !== 'undefined' ? currentLang : 'es-MX';
+    return mid ? `id:${mid}|${tLang}|${iLang}` : (base.title ? `q:${base.title}|${tLang}|${iLang}` : '');
+}
+
+function _ensureViewerMovie(r) {
+    const key = _viewerMovieKey(r);
+    if (!key || _viewerMovieCache.has(key)) return Promise.resolve();
+    if (_viewerMoviePromises.has(key)) return _viewerMoviePromises.get(key);
+    if (typeof fetchDualLanguageMovie !== 'function') return Promise.resolve();
+
+    const base = r.movieObj || {};
+    const mid = Number(r.tmdbMovieId || base.id || 0);
+    const req = (mid
+        ? fetchDualLanguageMovie(`/movie/${mid}`)
+        : (typeof fetchSearchMovieDual === 'function' ? fetchSearchMovieDual(base.title).then(res => (res && res[0]) || null) : Promise.resolve(null))
+    ).then(loc => {
+        _viewerMoviePromises.delete(key);
+        if (loc) {
+            _viewerMovieCache.set(key, loc);
+            _saveViewerMovieCache();
+            _scheduleViewerMovieRefresh();
+        }
+    }).catch(() => { _viewerMoviePromises.delete(key); });
+
+    _viewerMoviePromises.set(key, req);
+    return req;
+}
+
+function _resolveViewerMovie(r) {
+    if (!r || r.type !== 'review') return r && r.movieObj ? r.movieObj : null;
+    const base = r.movieObj || {};
+    const key = _viewerMovieKey(r);
+    if (!key) return r.movieObj || null;
+
+    if (_viewerMovieCache.has(key)) {
+        return { ...base, ..._viewerMovieCache.get(key) };
+    }
+    _ensureViewerMovie(r);
+    return r.movieObj || null;
+}
+
+function normPost(r) {
+    const uid = window.currentUser ? window.currentUser.uid : null;
+    const authorUid = r.authorUid || r.userId || '';
+    const ms = _ms(r.createdAt);
+    const edited = r.updatedAt && _ms(r.updatedAt) - ms > 60000;
+
+    // Compatibilidad dual con estructura de votos nueva (votes) y antigua (reactions/userVotes)
+    let reactions = _countVotes(r.votes);
+    if (!r.votes && r.reactions) {
+        reactions = { agree: Number(r.reactions.agree) || 0, disagree: Number(r.reactions.disagree) || 0 };
+    }
+    let myVote = uid && r.votes ? (r.votes[uid] || null) : null;
+    if (!myVote && r.userVotes && currentUsername) {
+        myVote = r.userVotes[currentUsername] || (uid ? r.userVotes[uid] : null) || null;
+    }
+
+    const commentCount = typeof r.commentCount === 'number'
+        ? r.commentCount
+        : (Array.isArray(r.comments) ? r.comments.length : 0);
+
+    let lastComment = r.lastComment || null;
+    if (!lastComment && Array.isArray(r.comments) && r.comments.length > 0) {
+        const lc = r.comments[r.comments.length - 1];
+        lastComment = { author: lc.author || 'Usuario', avatarSeed: lc.avatarSeed || '', text: String(lc.text || '').slice(0, 160) };
+    }
+
+    return {
+        ...r,
+        movieObj: _resolveViewerMovie(r),
+        authorUid,
+        author: r.author || 'Usuario',
+        reactions,
+        myVote,
+        mine: !!uid && authorUid === uid,
+        ms,
+        date: relTime(ms) + (edited ? ' · editado' : ''),
+        commentCount,
+        lastComment
+    };
+}
+
+function normComment(r) {
+    const uid = window.currentUser ? window.currentUser.uid : null;
+    const ms = _ms(r.createdAt);
+    const edited = r.updatedAt && _ms(r.updatedAt) - ms > 60000;
+    return {
+        ...r,
+        author: r.author || 'Usuario',
+        reactions: _countVotes(r.votes),
+        myVote: uid && r.votes ? (r.votes[uid] || null) : null,
+        mine: !!uid && r.authorUid === uid,
+        ms,
+        date: relTime(ms) + (edited ? ' · editado' : '')
+    };
+}
+
+window._extraPosts = window._extraPosts || {};
+function getCommunityAndUserPosts() { return (window.muralPosts || []).map(normPost); }
+function findPost(id) {
+    const raw = (window.muralPosts || []).find(p => p.id === id) || window._extraPosts[id];
+    return raw ? normPost(raw) : null;
+}
+
+// ----- Filtros y feed -----
+function filterMural(filter, btn) {
+    document.querySelectorAll('.mural-filter-btn').forEach(b => b.classList.remove('active'));
+    const target = btn || (typeof event !== 'undefined' && event && event.currentTarget);
+    if (target && target.classList) target.classList.add('active');
+    renderMuralFeed(filter);
+}
+
+// ----- Orden del muro -----
+const _SORT_MODES = ['date', 'reactions', 'comments'];
+const _SORT_LABELS = {
+    date: ['Más recientes primero', 'Más antiguas primero'],
+    reactions: ['Más reaccionadas primero', 'Menos reaccionadas primero'],
+    comments: ['Más comentadas primero', 'Menos comentadas primero']
+};
+function _loadMuralSort() {
+    try {
+        const v = JSON.parse(localStorage.getItem('cine_mural_sort'));
+        if (v && _SORT_MODES.includes(v.mode) && (v.dir === 'asc' || v.dir === 'desc')) return v;
+    } catch (e) { }
+    return { mode: 'date', dir: 'desc' };
+}
+window.muralSort = _loadMuralSort();
+
+function syncMuralSortControls() {
+    const sel = document.getElementById('muralSortSelect');
+    if (sel) sel.value = window.muralSort.mode;
+    const icon = document.getElementById('muralSortDirectionIcon');
+    const desc = window.muralSort.dir === 'desc';
+    if (icon) icon.className = desc ? 'fa-solid fa-arrow-down-wide-short' : 'fa-solid fa-arrow-up-short-wide';
+    const btn = document.getElementById('muralSortDirectionBtn');
+    if (btn) {
+        const label = _SORT_LABELS[window.muralSort.mode][desc ? 0 : 1];
+        btn.title = label + ' (clic para invertir)';
+        btn.setAttribute('aria-label', label + '. Pulsa para invertir el orden');
+    }
+}
+function _saveMuralSort() { localStorage.setItem('cine_mural_sort', JSON.stringify(window.muralSort)); }
+function setMuralSort(mode) {
+    if (!_SORT_MODES.includes(mode)) return;
+    window.muralSort.mode = mode;
+    _saveMuralSort();
+    renderMuralFeed();
+}
+function toggleMuralSortDirection() {
+    window.muralSort.dir = window.muralSort.dir === 'desc' ? 'asc' : 'desc';
+    _saveMuralSort();
+    renderMuralFeed();
+}
+function sortMuralPosts(posts) {
+    const { mode, dir } = window.muralSort;
+    const key = (p) => mode === 'reactions' ? p.reactions.agree + p.reactions.disagree : mode === 'comments' ? p.commentCount : p.ms;
+    return posts.sort((a, b) => {
+        const d = key(b) - key(a);
+        if (d !== 0) return dir === 'desc' ? d : -d;
+        return b.ms - a.ms;
+    });
+}
+
+function _typeChip(type) {
+    return type === 'review'
+        ? `<span class="cz-chip text-rose-800 dark:text-rose-300 bg-rose-900/10 border-rose-900/30"><i class="fa-solid fa-feather-pointed"></i> Reseña</span>`
+        : `<span class="cz-chip text-amber-700 dark:text-amber-300 bg-amber-600/10 border-amber-600/30"><i class="fa-solid fa-comments"></i> Debate</span>`;
+}
+
+function _fmtRating(r) {
+    const n = Number(r);
+    return Number.isInteger(n) ? String(n) : n.toFixed(1);
+}
+
+function postCardHtml(p) {
+    const movie = p.type === 'review' ? p.movieObj : null;
+    const heading = p.type === 'review' ? p.reviewTitle : p.title;
+    const regIdx = movie ? _regMovie({ ...movie, id: movie.id || p.tmdbMovieId }, 'Reseña de ' + p.author) : -1;
+    const movieBox = movie ? `
+        <div data-act="movie" data-reg="${regIdx}" class="cz-moviebox flex items-center gap-3 p-2 cursor-pointer">
+            <img src="${_pmEsc(safePoster(movie.poster))}" alt="" loading="lazy" onerror="this.src='${POSTER_FALLBACK}'" class="w-12 h-[4.5rem] object-cover flex-shrink-0 shadow-md">
+            <div class="min-w-0">
+                <h4 class="font-heading font-bold text-sm leading-tight truncate">${_pmEsc(movie.title)}</h4>
+                ${movie.subtitle ? `<span class="block text-[10px] font-serif italic text-stone-500 truncate">${_pmEsc(movie.subtitle)}</span>` : ''}
+                ${p.rating != null ? `<span class="inline-flex items-center gap-1 mt-1 text-[11px] font-mono font-bold text-amber-600 dark:text-amber-400"><i class="fa-solid fa-star"></i> ${_fmtRating(p.rating)}<span class="text-stone-400 font-normal">/10</span></span>` : ''}
+            </div>
+        </div>` : '';
+    const lc = p.lastComment;
+    const preview = lc ? `
+        <div class="cz-preview text-[11px] font-serif px-2.5 py-1.5 italic text-stone-600 dark:text-stone-400 truncate">
+            <span class="font-bold not-italic text-stone-800 dark:text-stone-200">${_pmEsc(lc.author)}:</span> ${_pmEsc(lc.text)}
+        </div>` : '';
+    const ag = p.myVote === 'agree' ? 'cz-vote-on-agree' : '';
+    const dg = p.myVote === 'disagree' ? 'cz-vote-on-disagree' : '';
+    return `
+    <article data-post="${_pmEsc(p.id)}" class="cz-card p-4 flex flex-col justify-between gap-3 cursor-pointer group">
+        <div class="space-y-3">
+            <div class="flex items-center justify-between gap-2">
+                <button type="button" data-act="user" data-uid="${_pmEsc(p.authorUid)}" data-uname="${_pmEsc(p.author)}" data-useed="${_pmEsc(p.avatarSeed)}" class="flex items-center gap-2.5 min-w-0 text-left hover:opacity-80 transition">
+                    <img src="${_avatarOf(p.avatarSeed, p.author)}" alt="" class="w-8 h-8 rounded-full cz-avatar flex-shrink-0">
+                    <span class="min-w-0">
+                        <span class="block font-heading text-[13px] font-bold truncate">${_pmEsc(p.author)}</span>
+                        <span class="block text-[10px] font-mono text-stone-500 uppercase tracking-wide">${_pmEsc(p.date)}</span>
+                    </span>
+                </button>
+                ${_typeChip(p.type)}
+            </div>
+            ${movieBox}
+            ${heading ? `<h3 class="font-heading font-bold text-base leading-snug text-rose-900 dark:text-stone-100 group-hover:text-rose-800 dark:group-hover:text-rose-300 transition-colors">${_pmEsc(heading)}</h3>` : ''}
+            <p class="cz-quote font-serif text-[13px] text-stone-700 dark:text-stone-300 leading-relaxed" style="display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden">${_pmEsc(p.content)}</p>
+            ${preview}
+        </div>
+        <div class="pt-3 border-t border-stone-200 dark:border-stone-800 flex items-center justify-between text-xs font-mono">
+            <div class="flex items-center gap-1.5">
+                <button type="button" data-act="vote" data-type="agree" aria-label="Estoy de acuerdo" class="cz-vote ${ag}"><i class="fa-solid fa-thumbs-up text-emerald-600"></i><span>${p.reactions.agree}</span></button>
+                <button type="button" data-act="vote" data-type="disagree" aria-label="Discrepo" class="cz-vote ${dg}"><i class="fa-solid fa-thumbs-down text-rose-600"></i><span>${p.reactions.disagree}</span></button>
+                <button type="button" data-act="open" aria-label="Ver comentarios" class="cz-vote"><i class="fa-solid fa-comments"></i><span>${p.commentCount}</span></button>
+            </div>
+            <span class="text-stone-500 dark:text-stone-400 font-bold group-hover:text-rose-800 dark:group-hover:text-rose-300 transition-colors">Ver debate →</span>
+        </div>
+    </article>`;
+}
+
+function _feedClick(e) {
+    const act = e.target.closest('[data-act]');
+    const card = e.target.closest('[data-post]');
+    if (act && act.dataset.act === 'more') { window.fbLoadMorePosts(() => { renderMuralFeed(); refreshPostModal(); }); return; }
+    if (!card) return;
+    const id = card.dataset.post;
+    if (act) {
+        e.stopPropagation();
+        const a = act.dataset.act;
+        if (a === 'vote') reactToMuralPost(id, act.dataset.type);
+        else if (a === 'user') openUserProfileModal(act.dataset.uid, act.dataset.uname, act.dataset.useed);
+        else if (a === 'movie') openRegisteredMovie(Number(act.dataset.reg));
+        else openMuralPostModal(id);
+        return;
+    }
+    openMuralPostModal(id);
+}
+
+function renderMuralFeed(filter) {
+    const feed = document.getElementById('muralPostsFeed');
+    if (!feed) return;
+    if (typeof filter === 'string') window.muralFilter = filter;
+    const f = window.muralFilter || 'all';
+    syncMuralSortControls();
+
+    const rawList = window.muralPosts || [];
+    const uncachedReviews = rawList.filter(r => r && r.type === 'review' && _viewerMovieKey(r) && !_viewerMovieCache.has(_viewerMovieKey(r)));
+    if (!window.muralReady || uncachedReviews.length > 0) {
+        if (uncachedReviews.length > 0) uncachedReviews.forEach(_ensureViewerMovie);
+        if (!feed.children.length || !window.muralReady) {
+            feed.innerHTML = Array.from({ length: 4 }, () => `<div class="cz-card p-4 space-y-3"><div class="flex items-center gap-2.5"><div class="cz-skeleton w-8 h-8 rounded-full"></div><div class="space-y-1.5 flex-grow"><div class="cz-skeleton h-3 w-1/3"></div><div class="cz-skeleton h-2 w-1/4"></div></div></div><div class="cz-skeleton h-16 w-full"></div><div class="cz-skeleton h-3 w-5/6"></div><div class="cz-skeleton h-3 w-2/3"></div></div>`).join('');
+        }
+        return;
+    }
+    if (window.muralError) {
+        feed.innerHTML = `<div class="col-span-full text-center py-10 text-xs font-serif text-stone-500"><i class="fa-solid fa-plug-circle-exclamation text-2xl text-rose-800 mb-2 block"></i>No se pudo cargar el muro.<br><span class="font-mono text-[10px]">Revisa tu conexión y que las reglas de Firestore estén publicadas.</span></div>`;
+        return;
+    }
+    const posts = sortMuralPosts(getCommunityAndUserPosts().filter(p => f === 'reviews' ? p.type === 'review' : f === 'discussions' ? p.type === 'discussion' : true));
+    if (!posts.length) {
+        feed.innerHTML = `<div class="col-span-full text-center py-12 text-stone-500"><i class="fa-regular fa-newspaper text-3xl mb-3 block text-stone-400"></i><p class="font-heading font-bold text-sm">${f === 'all' ? 'El muro está vacío' : 'Nada en esta sección todavía'}</p><p class="text-xs font-serif italic mt-1">Sé la primera persona en publicar una reseña o abrir un debate.</p></div>`;
+        return;
+    }
+    feed.innerHTML = posts.map(postCardHtml).join('') +
+        (window.muralHasMore ? `<div class="col-span-full text-center pt-2"><button type="button" data-act="more" class="px-4 py-2 text-xs font-mono uppercase tracking-wider cz-btn-ghost">Cargar más publicaciones</button></div>` : '');
+    feed.onclick = _feedClick;
+}
+
+// ----- Detalle de publicación (con estética editorial y botones 100% reactivos) -----
+function _movieBoxHtml(p) {
+    if (p.type !== 'review' || !p.movieObj) {
+        return `<div class="space-y-1">
+            <span class="block text-[9px] font-mono uppercase tracking-widest text-amber-600 dark:text-amber-400 font-bold">Debate abierto</span>
+            ${p.title ? `<h3 class="font-heading font-extrabold text-lg sm:text-xl text-stone-900 dark:text-stone-100 leading-tight">${_pmEsc(p.title)}</h3>` : ''}
+        </div>`;
+    }
+    const m = p.movieObj;
+    const reg = _regMovie({ ...m, id: m.id || p.tmdbMovieId, rating: p.rating != null ? p.rating : m.rating }, 'Reseña cinematográfica');
+    return `
+        <div data-act="movie" data-reg="${reg}" class="flex items-center gap-4 cursor-pointer group">
+            <img src="${_pmEsc(safePoster(m.poster))}" alt="" onerror="this.src='${POSTER_FALLBACK}'" class="w-24 h-36 object-cover flex-shrink-0 shadow-md journal-border group-hover:opacity-95 transition">
+            <div class="min-w-0 space-y-0.5">
+                <span class="block text-[9px] font-mono uppercase tracking-widest text-rose-700 dark:text-rose-400 font-bold">Reseña cinematográfica</span>
+                <h4 class="font-heading font-extrabold text-xl sm:text-2xl text-stone-900 dark:text-stone-100 leading-tight group-hover:text-rose-700 dark:group-hover:text-rose-300 transition">${_pmEsc(m.title)}</h4>
+                ${m.subtitle ? `<span class="block text-xs font-serif italic text-stone-500 dark:text-stone-400">${_pmEsc(m.subtitle)}</span>` : ''}
+                ${p.rating != null ? `<span class="inline-flex items-center gap-1 pt-1.5 text-amber-500 text-xs font-mono font-bold"><i class="fa-solid fa-star"></i>${_fmtRating(p.rating)}/10</span>` : ''}
+            </div>
+        </div>`;
+}
+
+function renderPostBody(p) {
+    const el = document.getElementById('pmBody');
+    if (!el) return;
+    const isReview = p.type === 'review';
+    const quoteText = isReview ? `"${_pmEsc(p.content)}"` : _pmEsc(p.content);
+    el.innerHTML = `
+        ${_movieBoxHtml(p)}
+        <div class="relative bg-stone-100 dark:bg-[#11100f] p-3.5 sm:p-4 border border-stone-200 dark:border-stone-800/90 border-l-[3px] border-l-stone-400 dark:border-l-stone-700">
+            <i class="fa-solid fa-quote-left absolute top-2.5 right-3.5 text-2xl text-stone-300/60 dark:text-stone-800/70 pointer-events-none select-none"></i>
+            ${isReview && p.reviewTitle ? `<h3 class="font-heading font-bold text-sm sm:text-base text-rose-700 dark:text-rose-400 mb-1 pr-7">${_pmEsc(p.reviewTitle)}</h3>` : ''}
+            <p class="font-serif text-xs sm:text-[13px] text-stone-700 dark:text-stone-300 leading-relaxed italic pr-5" style="white-space:pre-wrap">${quoteText}</p>
+        </div>`;
+}
+
+function renderPostAuthor(p) {
+    const el = document.getElementById('pmAuthor');
+    if (!el) return;
+    const roleLabel = p.type === 'review' ? 'CRÍTICO' : 'AUTOR';
+    el.innerHTML = `
+        <button type="button" data-act="user" data-uid="${_pmEsc(p.authorUid)}" data-uname="${_pmEsc(p.author)}" data-useed="${_pmEsc(p.avatarSeed)}" class="flex items-center gap-2.5 text-left hover:opacity-80 transition min-w-0 cursor-pointer">
+            <img src="${_avatarOf(p.avatarSeed, p.author)}" alt="" class="w-8 h-8 rounded-full cz-avatar flex-shrink-0">
+            <span class="min-w-0">
+                <span class="block font-mono font-bold text-[11px] uppercase tracking-wider text-stone-900 dark:text-stone-100 truncate hover:underline">POR ${_pmEsc(p.author)}</span>
+                <span class="block text-[9px] font-mono uppercase tracking-widest text-stone-500">${roleLabel} · ${_pmEsc(p.date)}</span>
+            </span>
+        </button>
+        <div class="flex items-center gap-3 text-[10px] font-mono text-stone-500 flex-shrink-0">
+            ${p.mine ? `<button type="button" data-act="edit" class="hover:text-stone-900 dark:hover:text-stone-200 transition cursor-pointer"><i class="fa-solid fa-pen mr-1"></i>Editar</button>
+            <button type="button" data-act="delete" class="hover:text-rose-600 transition cursor-pointer"><i class="fa-solid fa-trash mr-1"></i>Borrar</button>` : ''}
+        </div>`;
+}
+
+function renderPostReactions(p) {
+    const el = document.getElementById('pmReactions');
+    if (!el) return;
+    const agOn = p.myVote === 'agree';
+    const dgOn = p.myVote === 'disagree';
+    el.innerHTML = `
+        <button type="button" data-act="vote" data-type="agree" class="inline-flex items-center gap-1.5 transition cursor-pointer ${agOn ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200'}"><i class="${agOn ? 'fa-solid' : 'fa-regular'} fa-thumbs-up"></i><span>Acuerdo (${p.reactions.agree})</span></button>
+        <button type="button" data-act="vote" data-type="disagree" class="inline-flex items-center gap-1.5 transition cursor-pointer ${dgOn ? 'text-rose-600 dark:text-rose-400 font-bold' : 'text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200'}"><i class="${dgOn ? 'fa-solid' : 'fa-regular'} fa-thumbs-down"></i><span>Discrepo (${p.reactions.disagree})</span></button>`;
+}
+
+function formatCommentText(text) {
+    return _pmEsc(text).replace(/(@[A-Za-z0-9_ÁÉÍÓÚáéíóúÑñ]+)/g, '<span class="text-rose-800 dark:text-rose-400 font-bold">$1</span>');
+}
+
+function renderSingleCommentBlock(postId, c, post) {
+    const isSynthetic = String(c.id || '').startsWith('lc_');
+    const canDelete = !isSynthetic && (c.mine || (post && post.mine));
+    const actions = !isSynthetic ? `
+        ${c.mine ? `<button type="button" data-act="cedit" data-cid="${_pmEsc(c.id)}" class="text-stone-500 hover:text-stone-900 dark:hover:text-white cursor-pointer"><i class="fa-solid fa-pen mr-0.5"></i>Editar</button>` : ''}
+        ${canDelete ? `<button type="button" data-act="cdel" data-cid="${_pmEsc(c.id)}" class="text-rose-800 hover:text-rose-600 cursor-pointer"><i class="fa-solid fa-trash mr-0.5"></i>Borrar</button>` : ''}` : '';
+    return `
+        <div id="commentRow_${_pmEsc(c.id)}" class="cz-comment p-2.5 text-xs">
+            <div class="flex items-start gap-2.5">
+                <button type="button" data-act="user" data-uid="${_pmEsc(c.authorUid)}" data-uname="${_pmEsc(c.author)}" data-useed="${_pmEsc(c.avatarSeed)}" aria-label="Ver perfil de ${_pmEsc(c.author)}"><img src="${_avatarOf(c.avatarSeed, c.author)}" alt="" class="w-6 h-6 rounded-full cz-avatar flex-shrink-0 mt-0.5 hover:opacity-80 transition"></button>
+                <div class="space-y-1 flex-grow min-w-0">
+                    <div class="flex items-center justify-between gap-2">
+                        <button type="button" data-act="user" data-uid="${_pmEsc(c.authorUid)}" data-uname="${_pmEsc(c.author)}" data-useed="${_pmEsc(c.avatarSeed)}" class="font-heading font-bold hover:underline truncate text-left">${_pmEsc(c.author)}</button>
+                        <span class="text-[9px] font-mono text-stone-400 flex-shrink-0">${_pmEsc(c.date)}</span>
+                    </div>
+                    <p id="commentText_${_pmEsc(c.id)}" class="font-serif text-stone-700 dark:text-stone-300 leading-relaxed" style="white-space:pre-wrap;overflow-wrap:anywhere">${formatCommentText(c.text)}</p>
+                    <div class="flex items-center justify-between pt-1 border-t border-stone-300/40 dark:border-stone-800/60">
+                        <div class="flex items-center gap-2 text-[10px] font-mono">
+                            <button type="button" data-act="reply" data-cid="${_pmEsc(c.parentId || c.id)}" data-author-of="${_pmEsc(c.id)}" class="text-rose-800 dark:text-rose-400 font-bold hover:underline cursor-pointer"><i class="fa-solid fa-reply mr-1"></i>Responder</button>
+                            ${actions}
+                        </div>
+                        ${!isSynthetic ? `<div class="flex items-center gap-1.5 text-[10px] font-mono ml-auto">
+                            <button type="button" data-act="cvote" data-type="agree" data-cid="${_pmEsc(c.id)}" class="cz-vote-sm ${c.myVote === 'agree' ? 'cz-vote-on-agree' : ''}" title="Acuerdo"><i class="fa-solid fa-thumbs-up text-emerald-600 text-[9px]"></i><span>${c.reactions.agree}</span></button>
+                            <button type="button" data-act="cvote" data-type="disagree" data-cid="${_pmEsc(c.id)}" class="cz-vote-sm ${c.myVote === 'disagree' ? 'cz-vote-on-disagree' : ''}" title="Discrepo"><i class="fa-solid fa-thumbs-down text-rose-600 text-[9px]"></i><span>${c.reactions.disagree}</span></button>
+                        </div>` : ''}
+                    </div>
+                </div>
+            </div>
+        </div>`;
+}
+
+function renderCommentsTreeHtml(postId, comments, post) {
+    if (!comments.length) {
+        return `<div class="text-center py-3 text-stone-500 dark:text-stone-400 text-[11px] font-serif italic">Aún no hay comentarios en este debate. ¡Sé el primero en aportar!</div>`;
+    }
+    const ids = new Set(comments.map(c => c.id));
+    const mains = comments.filter(c => !c.parentId || !ids.has(c.parentId));
+    let html = '';
+    mains.forEach(c => {
+        html += renderSingleCommentBlock(postId, c, post);
+        const replies = comments.filter(r => r.parentId === c.id);
+        if (replies.length) {
+            html += `<div class="ml-6 border-l-2 border-rose-900/40 pl-3 space-y-2 mt-2">${replies.map(r => renderSingleCommentBlock(postId, r, post)).join('')}</div>`;
+        }
+    });
+    return html;
+}
+
+function _getEffectiveComments(post) {
+    const sub = Array.isArray(window.muralComments) ? window.muralComments : [];
+    const emb = (post && Array.isArray(post.comments)) ? post.comments : [];
+    const seen = new Set();
+    const merged = [];
+    [...sub, ...emb].forEach((c, idx) => {
+        if (!c || !c.text) return;
+        const id = c.id || `emb_${idx}`;
+        const sig = `${c.author || ''}|${c.text}`;
+        if (seen.has(id) || seen.has(sig)) return;
+        seen.add(id);
+        seen.add(sig);
+        merged.push(normComment({ ...c, id }));
+    });
+    if (!merged.length && post && post.lastComment && post.lastComment.text) {
+        const lc = post.lastComment;
+        merged.push(normComment({
+            id: `lc_${post.id}`,
+            author: lc.author || 'Usuario',
+            authorUid: lc.authorUid || '',
+            avatarSeed: lc.avatarSeed || lc.author || 'Usuario',
+            text: lc.text,
+            createdAt: lc.createdAt || post.updatedAt || post.createdAt,
+            votes: lc.votes || {}
+        }));
+    }
+    return merged;
+}
+
+function renderComments(post) {
+    const list = document.getElementById('pmComments');
+    if (!list) return;
+    const comments = _getEffectiveComments(post);
+    const top = list.scrollTop;
+    list.innerHTML = renderCommentsTreeHtml(post.id, comments, post);
+    list.scrollTop = top;
+    const t = document.getElementById('pmCommentsTitle');
+    if (t) t.textContent = `NOTAS AL MARGEN (${comments.length})`;
+}
+
+function refreshPostModal() {
+    const modal = document.getElementById('muralPostModal');
+    if (!modal || modal.classList.contains('hidden') || !window._openPostId) return;
+    const post = findPost(window._openPostId);
+    if (!post) { closeMuralPostModal(); showToast('Esa publicación ya no existe.', 'info'); return; }
+    renderPostReactions(post);
+    renderPostAuthor(post);
+    if (!window._editingPost) renderPostBody(post);
+    if (!window._editingComment) renderComments(post);
+}
+
+function _muralModalClick(e) {
+    const el = e.target.closest('[data-act]');
+    if (!el) return;
+    const act = el.dataset.act, pid = window._openPostId, cid = el.dataset.cid;
+    switch (act) {
+        case 'close': closeMuralPostModal(); break;
+        case 'vote': reactToMuralPost(pid, el.dataset.type); break;
+        case 'user': openUserProfileModal(el.dataset.uid, el.dataset.uname, el.dataset.useed); break;
+        case 'movie': openRegisteredMovie(Number(el.dataset.reg)); break;
+        case 'edit': enableEditMuralPost(pid); break;
+        case 'delete': deleteMuralPost(pid); break;
+        case 'pcancel': window._editingPost = false; refreshPostModal(); break;
+        case 'psave': saveEditedMuralPost(pid); break;
+        case 'stars0': if (window._editSet) window._editSet(0); break;
+        case 'reply': setReplyTarget(pid, cid, el.dataset.authorOf); break;
+        case 'clearReply': clearReplyTarget(pid); break;
+        case 'cedit': enableEditComment(pid, cid); break;
+        case 'ccancel': window._editingComment = null; refreshPostModal(); break;
+        case 'csave': saveEditedComment(pid, cid); break;
+        case 'cdel': deleteMuralComment(pid, cid); break;
+        case 'cvote': reactToComment(pid, cid, el.dataset.type); break;
+        case 'send': submitMuralComment(pid); break;
+    }
+}
+
+async function openMuralPostModal(postId) {
+    let post = findPost(postId);
+    if (!post && window.fbGetPost) {
+        const raw = await window.fbGetPost(postId);
+        if (raw) { window._extraPosts[postId] = raw; post = normPost(raw); }
+    }
+    if (!post) { showToast('No se encontró esa publicación.', 'info'); return; }
+    await _ensureViewerMovie(post);
+    post = findPost(postId) || normPost(post);
+
+    resetModalPosition('muralPostModal');
+    let modal = document.getElementById('muralPostModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'muralPostModal';
+        modal.className = 'fixed inset-0 bg-stone-950/80 backdrop-blur-sm z-[120] hidden flex items-center justify-center p-4';
+        document.body.appendChild(modal);
+    }
+    window._openPostId = postId;
+    window._editingPost = false;
+    window._editingComment = null;
+
+    modal.innerHTML = `
+        <div class="bg-stone-50 dark:bg-[#1a1816] journal-border rounded-none max-w-lg w-full p-0 text-left relative shadow-2xl draggable-modal-content flex flex-col">
+            <div id="muralPostHeader" class="modal-header-drag flex items-center justify-between border-b border-stone-200 dark:border-stone-800 px-5 py-2.5 bg-stone-100/80 dark:bg-[#141312] flex-shrink-0">
+                <span class="text-[10px] font-mono text-stone-600 dark:text-stone-300 uppercase tracking-widest flex items-center gap-2"><i class="fa-solid fa-grip-lines text-stone-400"></i> CINEZINE — ARTÍCULO</span>
+                <button type="button" data-act="close" aria-label="Cerrar" class="text-stone-400 hover:text-stone-800 dark:hover:text-white text-base p-0.5 transition cursor-pointer"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="px-5 pt-3.5 pb-3 space-y-3.5 flex-shrink-0">
+                <div id="pmAuthor" class="flex items-center justify-between gap-3"></div>
+                <div id="pmBody" class="space-y-3"></div>
+                <div id="pmReactions" class="flex items-center gap-4 pt-2.5 border-t border-stone-200 dark:border-stone-800/80 text-[11px] font-mono"></div>
+            </div>
+            <div class="px-5 py-3 border-t border-stone-200 dark:border-stone-800 bg-stone-100/50 dark:bg-[#141312] space-y-2 flex-grow flex flex-col min-h-0">
+                <h4 class="font-heading font-bold text-[11px] uppercase tracking-wider text-stone-800 dark:text-stone-200 flex items-center gap-1.5 flex-shrink-0">
+                    <i class="fa-solid fa-comments text-rose-700 dark:text-rose-500"></i>
+                    <span id="pmCommentsTitle">NOTAS AL MARGEN (0)</span>
+                </h4>
+                <div id="pmComments" class="space-y-2 flex-grow overflow-y-auto custom-scrollbar pr-1 min-h-[44px]"></div>
+                <div class="space-y-1 pt-0.5 flex-shrink-0">
+                    <div id="replyIndicator_${postId}" class="text-[10px] font-mono text-stone-500 hidden"></div>
+                    <div class="flex items-center gap-2 relative border-b border-stone-300 dark:border-stone-800 focus-within:border-rose-800 pb-1">
+                        <input type="text" maxlength="1000" id="newCommentInput_${postId}" placeholder="Escribe tu apunte..." class="bg-transparent flex-grow px-1 py-0.5 text-xs font-serif text-stone-800 dark:text-stone-200 placeholder-stone-500 focus:outline-none">
+                        <button type="button" id="emojiBtn_newCommentInput_${postId}" onclick="toggleEmojiPicker('newCommentInput_${postId}')" aria-label="Añadir emoji" class="px-1 py-0.5 text-xs hover:opacity-80 transition cursor-pointer">🎬</button>
+                        <button type="button" data-act="send" class="px-3 py-1 bg-stone-200 dark:bg-stone-800 hover:bg-rose-900 hover:text-white dark:hover:bg-rose-900 text-stone-700 dark:text-stone-200 font-mono text-[10px] font-bold transition uppercase tracking-wider cursor-pointer">Enviar</button>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+    modal.onclick = (e) => { if (e.target === modal) closeMuralPostModal(); else _muralModalClick(e); };
+    const input = document.getElementById(`newCommentInput_${postId}`);
+    if (input) input.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') submitMuralComment(postId); });
+
+    makeModalDraggable('muralPostModal', 'muralPostHeader');
+    modal.classList.remove('hidden');
+    renderPostAuthor(post); renderPostBody(post); renderPostReactions(post); renderComments(post);
+    window.fbWatchComments(postId, () => refreshPostModal());
+}
+
+function closeMuralPostModal() {
+    const modal = document.getElementById('muralPostModal');
+    if (modal) modal.classList.add('hidden');
+    window._openPostId = null;
+    window._editingPost = false;
+    window._editingComment = null;
+    if (window.fbStopComments) window.fbStopComments();
+}
+
+async function _afterPostWrite(postId) {
+    if (window._extraPosts[postId] && window.fbGetPost) {
+        const raw = await window.fbGetPost(postId);
+        if (raw) window._extraPosts[postId] = raw; else delete window._extraPosts[postId];
+    }
+    refreshPostModal();
+    renderMuralFeed();
+}
+
+// ----- Votos -----
+async function reactToMuralPost(postId, type) {
+    if (!requireAuth('Inicia sesión para reaccionar.')) return;
+    const post = findPost(postId);
+    if (!post) return;
+    try {
+        await window.fbVotePost(postId, post.myVote === type ? null : type);
+        await _afterPostWrite(postId);
+    } catch (err) { handleWriteError(err, 'reaccionar'); }
+}
+
+async function reactToComment(postId, commentId, type) {
+    if (!requireAuth('Inicia sesión para reaccionar.')) return;
+    const c = (window.muralComments || []).map(normComment).find(x => x.id === commentId);
+    if (!c) return;
+    try { await window.fbVoteComment(postId, commentId, c.myVote === type ? null : type); }
+    catch (err) { handleWriteError(err, 'reaccionar'); }
+}
+
+// ----- Comentarios -----
+function setReplyTarget(postId, parentCommentId, repliedCommentId) {
+    const target = (window.muralComments || []).find(c => c.id === repliedCommentId);
+    const author = target ? (target.author || 'Usuario') : 'Usuario';
+    replyingTargetMap[postId] = { commentId: parentCommentId, author };
+    const input = document.getElementById(`newCommentInput_${postId}`);
+    const indicator = document.getElementById(`replyIndicator_${postId}`);
+    if (input) { input.value = `@${author} `; input.focus(); }
+    if (indicator) {
+        indicator.classList.remove('hidden');
+        indicator.innerHTML = 'Respondiendo a <strong></strong> <button type="button" data-act="clearReply" aria-label="Cancelar respuesta" class="ml-1 text-rose-800 hover:underline"><i class="fa-solid fa-xmark"></i></button>';
+        indicator.querySelector('strong').textContent = '@' + author;
+    }
+}
+
+function clearReplyTarget(postId) {
+    delete replyingTargetMap[postId];
+    const input = document.getElementById(`newCommentInput_${postId}`);
+    const indicator = document.getElementById(`replyIndicator_${postId}`);
+    if (input) {
+        if (input.value.startsWith('@')) input.value = '';
+        input.placeholder = 'Escribe tu apunte...';
+    }
+    if (indicator) indicator.classList.add('hidden');
+}
+
+async function submitMuralComment(postId) {
+    if (!requireAuth('Inicia sesión para comentar.')) return;
+    const input = document.getElementById(`newCommentInput_${postId}`);
+    if (!input) return;
+    let text = input.value.trim();
+    if (!text) return;
+    const t = replyingTargetMap[postId];
+    if (t && !text.startsWith('@' + t.author)) text = `@${t.author} ${text}`;
+    if (text.length > 1000) { showToast('El comentario es demasiado largo (máx. 1000 caracteres).', 'error'); return; }
+    input.disabled = true;
+    try {
+        await window.fbAddComment(postId, {
+            text, parentId: t ? t.commentId : null, replyToAuthor: t ? t.author : null,
+            author: _myName(), avatarSeed: currentAvatarSeed
+        });
+        input.value = '';
+        clearReplyTarget(postId);
+        await _afterPostWrite(postId);
+    } catch (err) { handleWriteError(err, 'comentar'); }
+    finally { input.disabled = false; input.focus(); }
+}
+
+function deleteMuralComment(postId, commentId) {
+    showDeleteConfirmationModal(async () => {
+        try {
+            const rest = (window.muralComments || []).filter(c => c.id !== commentId).sort((a, b) => _ms(a.createdAt) - _ms(b.createdAt));
+            const last = rest.length ? rest[rest.length - 1] : null;
+            await window.fbDeleteComment(postId, commentId, last ? { author: last.author, avatarSeed: last.avatarSeed, text: String(last.text).slice(0, 160) } : null);
+            await _afterPostWrite(postId);
+        } catch (err) { handleWriteError(err, 'borrar el comentario'); }
+    });
+}
+
+function enableEditComment(postId, commentId) {
+    const textEl = document.getElementById(`commentText_${commentId}`);
+    const c = (window.muralComments || []).find(x => x.id === commentId);
+    if (!textEl || !c) return;
+    window._editingComment = commentId;
+    textEl.innerHTML = `
+        <span class="flex items-center gap-2 pt-1 relative">
+            <input type="text" maxlength="1000" id="editCommentInput_${_pmEsc(commentId)}" class="cz-input flex-grow px-2 py-1 text-xs font-serif">
+            <button type="button" id="emojiBtn_editCommentInput_${_pmEsc(commentId)}" onclick="toggleEmojiPicker('editCommentInput_${_pmEsc(commentId)}')" aria-label="Añadir emoji" class="px-2 py-1 bg-stone-200 dark:bg-stone-800 text-xs journal-border">🎬</button>
+            <button type="button" data-act="csave" data-cid="${_pmEsc(commentId)}" class="px-2.5 py-1 bg-rose-900 text-stone-100 text-[10px] font-mono journal-border">Guardar</button>
+            <button type="button" data-act="ccancel" class="px-2 py-1 text-[10px] font-mono text-stone-500 hover:text-stone-900 dark:hover:text-white">Cancelar</button>
+        </span>`;
+    const input = document.getElementById(`editCommentInput_${commentId}`);
+    input.value = c.text;
+    input.focus();
+}
+
+async function saveEditedComment(postId, commentId) {
+    const input = document.getElementById(`editCommentInput_${commentId}`);
+    if (!input || !input.value.trim()) return;
+    try {
+        await window.fbEditComment(postId, commentId, input.value.trim().slice(0, 1000));
+        window._editingComment = null;
+        refreshPostModal();
+    } catch (err) { handleWriteError(err, 'editar el comentario'); }
+}
+
+// ----- Editar / borrar publicación -----
+function enableEditMuralPost(postId) {
+    const post = findPost(postId);
+    const body = document.getElementById('pmBody');
+    if (!post || !post.mine || !body) return;
+    window._editingPost = true;
+    const isReview = post.type === 'review';
+    body.innerHTML = `
+        <div class="space-y-3 bg-stone-100 dark:bg-stone-950 p-3 journal-border">
+            <span class="text-[10px] font-mono uppercase tracking-wider text-rose-800 dark:text-rose-400 font-bold">Editando publicación</span>
+            <div class="space-y-1">
+                <label for="pmEditTitle" class="text-[10px] font-mono text-stone-500 uppercase">${isReview ? 'Titular (opcional)' : 'Título del debate'}</label>
+                <input type="text" id="pmEditTitle" maxlength="150" class="cz-input w-full px-2 py-1.5 text-xs font-heading font-bold">
+            </div>
+            ${isReview ? `<div class="space-y-1">
+                <span class="text-[10px] font-mono text-stone-500 uppercase">Calificación (admite medias estrellas)</span>
+                <div class="flex items-center gap-2 flex-wrap"><div id="pmEditStars" class="flex items-center"></div><span id="pmEditStarText" class="font-mono text-xs text-amber-600 w-16"></span><button type="button" data-act="stars0" class="text-[10px] font-mono text-stone-400 hover:text-rose-700 underline">Quitar</button></div>
+            </div>` : ''}
+            <div class="space-y-1">
+                <label for="pmEditContent" class="text-[10px] font-mono text-stone-500 uppercase">Contenido</label>
+                <textarea id="pmEditContent" rows="5" maxlength="5000" class="cz-input w-full p-2 text-xs font-serif"></textarea>
+            </div>
+            <div class="flex items-center justify-end gap-2 pt-1 font-mono text-xs">
+                <button type="button" data-act="pcancel" class="px-3 py-1 bg-stone-300 dark:bg-stone-800 text-stone-700 dark:text-stone-300 journal-border transition cursor-pointer">Cancelar</button>
+                <button type="button" data-act="psave" class="px-3 py-1 bg-rose-900 hover:bg-rose-800 text-stone-100 journal-border transition font-bold cursor-pointer">Guardar cambios</button>
+            </div>
+        </div>`;
+    document.getElementById('pmEditTitle').value = isReview ? (post.reviewTitle || '') : (post.title || '');
+    document.getElementById('pmEditContent').value = post.content || '';
+    if (isReview) {
+        window._editRating = post.rating != null ? Number(post.rating) : 0;
+        window._editSet = mountStars('pmEditStars', 'pmEditStarText', window._editRating, v => { window._editRating = v; });
+    }
+}
+
+async function saveEditedMuralPost(postId) {
+    const post = findPost(postId);
+    const content = (document.getElementById('pmEditContent') || {}).value;
+    const title = ((document.getElementById('pmEditTitle') || {}).value || '').trim();
+    if (!post || !post.mine || content === undefined) return;
+    if (!content.trim()) { showToast('El contenido no puede estar vacío.', 'error'); return; }
+    if (post.type === 'discussion' && !title) { showToast('El debate necesita un título.', 'error'); return; }
+    const isReview = post.type === 'review';
+    const rating = window._editRating > 0 ? window._editRating : null;
+    const fields = isReview
+        ? { reviewTitle: title, content: content.trim(), rating, author: _myName(), avatarSeed: currentAvatarSeed }
+        : { title, content: content.trim(), author: _myName(), avatarSeed: currentAvatarSeed };
+    try {
+        await window.fbUpdatePost(postId, fields);
+        if (isReview && postId.startsWith('r_') && personalReviews[post.tmdbMovieId]) {
+            Object.assign(personalReviews[post.tmdbMovieId], { review: content.trim(), reviewTitle: title, rating, updatedAt: Date.now() });
+            localStorage.setItem('cine_personal_reviews', JSON.stringify(personalReviews));
+        }
+        window._editingPost = false;
+        await _afterPostWrite(postId);
+        showToast('Cambios guardados ✓', 'ok');
+    } catch (err) { handleWriteError(err, 'guardar los cambios'); }
+}
+
+function deleteMuralPost(postId) {
+    const post = findPost(postId);
+    if (!post || !post.mine) return;
+    showDeleteConfirmationModal(async () => {
+        try {
+            await window.fbDeletePost(postId);
+            if (postId.startsWith('r_') && personalReviews[post.tmdbMovieId]) {
+                personalReviews[post.tmdbMovieId].isPublic = false;
+                localStorage.setItem('cine_personal_reviews', JSON.stringify(personalReviews));
+            }
+            delete window._extraPosts[postId];
+            closeMuralPostModal();
+            renderMuralFeed();
+            showToast('Publicación eliminada.', 'ok');
+        } catch (err) { handleWriteError(err, 'eliminar la publicación'); }
+    }, 'Eliminar publicación', 'Se borrará la publicación y todos sus comentarios. Esta acción no se puede deshacer.');
+}
+
+// ----- Ficha de usuario (datos reales) -----
+function closeUserProfileModal() {
+    const m = document.getElementById('userProfileModal');
+    if (m) m.classList.add('hidden');
+}
+
+async function openUserProfileModal(uid, fallbackName, fallbackSeed) {
+    if (!uid && !fallbackName) { showToast('Esta publicación es antigua y no tiene ficha de autor.', 'info'); return; }
+    let modal = document.getElementById('userProfileModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'userProfileModal';
+        modal.className = 'fixed inset-0 bg-stone-950/80 backdrop-blur-sm z-[150] hidden flex items-center justify-center p-4';
+        document.body.appendChild(modal);
+    }
+    modal.onclick = (e) => {
+        if (e.target === modal) { closeUserProfileModal(); return; }
+        const el = e.target.closest('[data-act]');
+        if (!el) return;
+        const a = el.dataset.act;
+        if (a === 'close') closeUserProfileModal();
+        else if (a === 'post') { closeUserProfileModal(); openMuralPostModal(el.dataset.pid); }
+        else if (a === 'mywatched') { closeUserProfileModal(); openWatchedMoviesModal(true); }
+        else if (a === 'mynotes') { closeUserProfileModal(); openPersonalNotesModal(true); }
+        else if (a === 'mylists') { closeUserProfileModal(); openCustomListsModal(true); }
+    };
+    const wrap = (inner) => `<div class="bg-stone-50 dark:bg-stone-900 journal-border rounded-none max-w-sm w-full p-6 space-y-4 text-center relative shadow-2xl z-[155]">
+        <button type="button" data-act="close" aria-label="Cerrar" class="absolute top-4 right-4 text-stone-400 hover:text-stone-800 dark:hover:text-white text-base transition"><i class="fa-solid fa-xmark"></i></button>${inner}</div>`;
+    modal.innerHTML = wrap(`<div class="py-10 text-xs font-mono text-stone-400"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Cargando ficha...</div>`);
+    modal.classList.remove('hidden');
+
+    const isMe = (!!window.currentUser && !!uid && window.currentUser.uid === uid) ||
+        (!uid && !!fallbackName && String(currentUsername || '').toLowerCase() === String(fallbackName).toLowerCase());
+    const [prof, rawPosts] = await Promise.all([
+        (!isMe && uid && window.fbGetProfile) ? window.fbGetProfile(uid) : null,
+        (uid && window.fbGetUserPosts) ? window.fbGetUserPosts(uid) : []
+    ]);
+    if (modal.classList.contains('hidden')) return;
+
+    const targetNameLower = String((prof && prof.username) || fallbackName || '').trim().toLowerCase();
+    const muralMatches = getCommunityAndUserPosts().filter(p =>
+        (uid && p.authorUid === uid) || (targetNameLower && String(p.author || '').trim().toLowerCase() === targetNameLower)
+    );
+    (rawPosts || []).forEach(r => { if (r && r.id) window._extraPosts[r.id] = r; });
+    const byId = new Map();
+    [...muralMatches, ...(rawPosts || []).map(normPost)].forEach(p => { if (p && p.id && !byId.has(p.id)) byId.set(p.id, p); });
+    const posts = [...byId.values()].sort((a, b) => b.ms - a.ms);
+
+    const first = posts[0];
+    const name = isMe ? currentUsername : ((prof && prof.username) || (first && first.author) || fallbackName || 'Usuario');
+    const seed = isMe ? currentAvatarSeed : ((prof && prof.avatarSeed) || (first && first.avatarSeed) || fallbackSeed || name);
+    const bio = isMe ? currentUserBio : ((prof && prof.bio) || '');
+    const avatar = isMe ? getAvatarUrl() : _avatarOf(seed, name);
+
+    let vCount = watchedMovies.length, nCount = Object.keys(personalReviews).length, lCount = customLists.length;
+    if (isMe) {
+        window._viewedUserLib = null;
+    } else {
+        const parseJson = (raw, def) => { try { return raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : def; } catch (e) { return def; } };
+        const libRaw = (prof && prof.library) || {};
+        const uWatchedSet = new Set(parseJson(libRaw.cine_watched_movies, []).map(Number).filter(Boolean));
+        const uWatchedData = { ...parseJson(libRaw.cine_watched_movies_data, {}) };
+        const uReviewsAll = parseJson(libRaw.cine_personal_reviews, {});
+        const uReviews = {};
+        Object.keys(uReviewsAll).forEach(k => {
+            const rv = uReviewsAll[k];
+            if (rv && rv.isPublic !== false) uReviews[k] = { ...rv };
+        });
+        posts.filter(p => p.type === 'review').forEach(p => {
+            const mid = Number(p.tmdbMovieId || (p.movieObj && p.movieObj.id) || 0);
+            if (!mid) return;
+            if (p.rating > 0 || !String(p.id || '').startsWith('r_')) {
+                uWatchedSet.add(mid);
+            }
+            if (p.movieObj && !uWatchedData[mid]) uWatchedData[mid] = p.movieObj;
+            if (!uReviews[mid]) {
+                uReviews[mid] = {
+                    movie: p.movieObj || { id: mid, title: 'Película #' + mid },
+                    rating: p.rating,
+                    review: p.content,
+                    reviewTitle: p.reviewTitle,
+                    isPublic: true,
+                    updatedAt: p.ms,
+                    postId: p.id
+                };
+            } else if (!uReviews[mid].postId) {
+                uReviews[mid].postId = p.id;
+            }
+        });
+        Object.keys(uReviews).forEach(k => {
+            const rv = uReviews[k];
+            const mid = Number(k);
+            if (rv && !rv.postId && mid && (rv.review || rv.reviewTitle || rv.rating)) {
+                const synthId = `r_${uid || name}_${mid}`;
+                if (!window._extraPosts[synthId]) {
+                    window._extraPosts[synthId] = {
+                        id: synthId,
+                        type: 'review',
+                        authorUid: uid || '',
+                        author: name,
+                        avatarSeed: seed,
+                        tmdbMovieId: mid,
+                        movieObj: rv.movie || uWatchedData[mid] || { id: mid, title: 'Película #' + mid },
+                        reviewTitle: rv.reviewTitle || '',
+                        content: rv.review || '',
+                        rating: rv.rating != null ? rv.rating : null,
+                        createdAt: rv.createdAt || rv.updatedAt || Date.now(),
+                        updatedAt: rv.updatedAt || Date.now()
+                    };
+                }
+                rv.postId = synthId;
+            }
+        });
+        const uWatched = [...uWatchedSet];
+        const uLists = (parseJson(libRaw.cine_custom_lists, []) || []).filter(l => l && l.isPublic !== false);
+        window._viewedUserLib = {
+            isMe: false,
+            uid: uid || '',
+            name,
+            watchedMovies: uWatched,
+            watchedMoviesData: uWatchedData,
+            personalReviews: uReviews,
+            customLists: uLists
+        };
+        vCount = uWatched.length;
+        nCount = Object.keys(uReviews).filter(id => { const n = uReviews[id]; return n && (n.review || n.reviewTitle || n.rating); }).length;
+        lCount = uLists.length;
+    }
+
+    const tile = (n, label, color, act) => `<button type="button" data-act="${act}" class="cz-tile p-2 text-center cursor-pointer transition"><span class="block text-sm font-bold ${color}">${n}</span><span class="text-[9px] text-stone-500 uppercase">${label}</span></button>`;
+    const tiles = tile(vCount, 'Vistas', 'text-amber-600', 'mywatched') +
+        tile(nCount, 'Apuntes', 'text-rose-800 dark:text-rose-400', 'mynotes') +
+        tile(lCount, 'Cuadernos', 'text-stone-700 dark:text-stone-300', 'mylists');
+
+    const recent = posts.slice(0, 6).map(p => `
+        <button type="button" data-act="post" data-pid="${_pmEsc(p.id)}" class="cz-tile w-full text-left p-2.5 flex items-center justify-between gap-2 cursor-pointer">
+            <span class="min-w-0"><span class="block text-[10px] font-mono text-stone-500">${p.type === 'review' ? _pmEsc((p.movieObj && p.movieObj.title) || 'Reseña') : 'Debate'} · ${_pmEsc(p.date)}</span>
+            <span class="block text-xs font-heading font-bold text-rose-900 dark:text-rose-300 truncate">${_pmEsc((p.type === 'review' ? p.reviewTitle : p.title) || p.content)}</span></span>
+            <span class="text-[10px] font-mono text-stone-400 flex-shrink-0">Ver →</span>
+        </button>`).join('');
+
+    modal.innerHTML = wrap(`
+        <div class="relative w-24 h-24 mx-auto mt-2"><img src="${_pmEsc(avatar)}" alt="" class="w-24 h-24 rounded-full cz-avatar shadow-md object-cover"></div>
+        <div class="space-y-1">
+            <h3 class="font-heading font-bold text-lg">${_pmEsc(name)}</h3>
+            ${isMe ? '<span class="inline-block text-[10px] font-mono tracking-widest uppercase bg-rose-900/10 text-rose-800 dark:text-rose-400 journal-border px-2 py-0.5">Tu ficha</span>' : ''}
+            ${bio ? `<p class="text-xs font-serif italic text-stone-600 dark:text-stone-400 pt-2 px-2 leading-relaxed" style="white-space:pre-wrap">${_pmEsc(bio)}</p>` : ''}
+        </div>
+        <div class="grid grid-cols-3 gap-2 pt-2 border-t border-stone-200 dark:border-stone-800 font-mono">${tiles}</div>
+        <div class="text-left space-y-2">
+            <h4 class="font-heading font-bold text-[11px] uppercase tracking-wider text-stone-500">Publicaciones recientes</h4>
+            <div class="space-y-1.5 max-h-48 overflow-y-auto custom-scrollbar pr-1">${recent || '<p class="text-xs font-serif italic text-stone-400 text-center py-3">Todavía no ha publicado nada.</p>'}</div>
+        </div>
+        <button type="button" data-act="close" class="w-full py-2 bg-stone-800 hover:bg-stone-700 text-stone-100 font-mono text-xs journal-border transition uppercase tracking-wider">Cerrar ficha</button>`);
+}
+
+// ----- Estrellas reutilizables con soporte de medias estrellas (0.5) -----
+function mountStars(containerId, textId, initial, onChange) {
+    const c = document.getElementById(containerId);
+    if (!c) return null;
+    let val = Number(initial) || 0;
+    const paint = (hover) => {
+        const v = hover != null ? hover : val;
+        c.querySelectorAll('i').forEach((ic, idx) => {
+            const starNum = idx + 1;
+            if (v >= starNum) ic.className = 'fa-solid fa-star text-amber-500';
+            else if (v >= starNum - 0.5) ic.className = 'fa-solid fa-star-half-stroke text-amber-500';
+            else ic.className = 'fa-regular fa-star text-stone-300 dark:text-stone-600';
+        });
+        const t = document.getElementById(textId);
+        if (t) t.textContent = v ? `${_fmtRating(v)}/10` : 'Sin nota';
+    };
+    c.innerHTML = '';
+    c.setAttribute('role', 'radiogroup');
+    c.setAttribute('aria-label', 'Calificación de 0.5 a 10');
+    for (let i = 1; i <= 10; i++) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'px-0.5 text-base leading-none transition-transform hover:scale-125 cursor-pointer';
+        b.setAttribute('aria-label', `${i} de 10`);
+        b.innerHTML = '<i></i>';
+        const pickVal = (e) => {
+            const rect = b.getBoundingClientRect();
+            return (e.clientX - rect.left) < rect.width / 2 ? i - 0.5 : i;
+        };
+        b.onmousemove = (e) => paint(pickVal(e));
+        b.onfocus = () => paint(i);
+        b.onclick = (e) => { val = pickVal(e); paint(); onChange(val); };
+        c.appendChild(b);
+    }
+    c.onmouseleave = () => paint();
+    c.onfocusout = () => paint();
+    paint();
+    return (v) => { val = Number(v) || 0; paint(); onChange(val); };
+}
+
+function setSmartStars(v) { if (window._smartSet) window._smartSet(v); }
+
+// ----- Publicar desde el muro (respeta privacidad y limpia estado al cerrar) -----
+async function handleSmartPublishSubmit(e) {
+    e.preventDefault();
+    if (!requireAuth('Inicia sesión para publicar en el muro.')) return;
+
+    const titleVal = document.getElementById('smartPostTitle').value.trim();
+    const contentVal = document.getElementById('smartPostContent').value.trim();
+    const ratingVal = parseFloat(document.getElementById('smartPostRating').value);
+    const movieIdVal = document.getElementById('selectedTmdbMovieId').value;
+    const publishToWall = document.getElementById('wallPublishCheck')?.checked ?? true;
+
+    if (!contentVal) { showToast('Escribe algo antes de publicar.', 'error'); return; }
+    if (contentVal.length > 5000) { showToast('El texto es demasiado largo (máx. 5000 caracteres).', 'error'); return; }
+
+    const ratingClean = isNaN(ratingVal) || ratingVal <= 0 ? null : ratingVal;
+    const post = { type: currentPublishMode, author: _myName(), avatarSeed: currentAvatarSeed, content: contentVal };
+
+    if (currentPublishMode === 'review') {
+        if (!movieIdVal || !cachedSelectedMovieObj) { showToast('Selecciona una película del buscador para tu reseña.', 'error'); return; }
+        post.tmdbMovieId = parseInt(movieIdVal);
+        post.movieObj = slimMovie(cachedSelectedMovieObj);
+        post.reviewTitle = titleVal.slice(0, 150);
+        post.rating = ratingClean;
+        post.title = '';
+    } else {
+        if (!titleVal) { showToast('El debate necesita un título.', 'error'); return; }
+        post.title = titleVal.slice(0, 150);
+        post.reviewTitle = '';
+    }
+
+    const submitBtn = e.submitter || document.querySelector('#smartPublishForm button[type="submit"]');
+    if (submitBtn) submitBtn.disabled = true;
+    try {
+        if (currentPublishMode === 'review') {
+            const nowMs = Date.now();
+            const prev = personalReviews[post.tmdbMovieId];
+            personalReviews[post.tmdbMovieId] = {
+                movie: cachedSelectedMovieObj,
+                rating: ratingClean,
+                review: contentVal,
+                reviewTitle: post.reviewTitle,
+                isPublic: publishToWall,
+                createdAt: (prev && prev.createdAt) || nowMs,
+                updatedAt: nowMs
+            };
+            localStorage.setItem('cine_personal_reviews', JSON.stringify(personalReviews));
+            ensureWatchedMovie(post.tmdbMovieId, cachedSelectedMovieObj);
+            updateProfileDrawerStats();
+
+            if (publishToWall) {
+                await window.fbUpsertReviewPost(post.tmdbMovieId, post);
+                showToast('Reseña publicada en el muro ✓', 'ok');
+            } else {
+                await window.fbRemoveReviewPost(post.tmdbMovieId);
+                showToast('Guardada en tus apuntes privados ✓', 'ok');
+            }
+        } else {
+            await window.fbCreatePost(post);
+            showToast('Debate publicado en el muro ✓', 'ok');
+        }
+        clearModalMovieSelection();
+        closeSmartPublishModal();
+    } catch (err) { handleWriteError(err, 'publicar'); }
+    finally { if (submitBtn) submitBtn.disabled = false; }
+}
+
+// ----- Migración única de publicaciones antiguas guardadas en este navegador -----
+async function migrateLegacyMural() {
+    if (!window.currentUser || window._legacyMigrated) return;
+    window._legacyMigrated = true;
+    let saved = [];
+    try { saved = JSON.parse(localStorage.getItem('cine_diario_mural_posts') || '[]'); } catch (e) { return; }
+    const mine = saved.filter(p => p && p.author === currentUsername && String(p.id).startsWith('post_') && p.content);
+    if (mine.length) {
+        for (const p of mine) {
+            try {
+                await window.fbCreatePost({
+                    type: p.type === 'review' ? 'review' : 'discussion',
+                    author: _myName(), avatarSeed: currentAvatarSeed,
+                    title: String(p.title || '').slice(0, 150), reviewTitle: String(p.reviewTitle || '').slice(0, 150),
+                    content: String(p.content).slice(0, 5000),
+                    rating: typeof p.rating === 'number' ? p.rating : null,
+                    tmdbMovieId: p.tmdbMovieId || null,
+                    movieObj: p.movieObj ? slimMovie(p.movieObj) : null
+                });
+            } catch (err) { console.warn('Migración del muro interrumpida:', err); window._legacyMigrated = false; return; }
+        }
+        showToast(`Se movieron ${mine.length} publicación(es) tuyas al muro compartido.`, 'ok');
+    }
+    localStorage.removeItem('cine_diario_mural_posts');
+}
+
+// ----- Aviso de correo sin verificar -----
+window.maybeShowVerifyBanner = function (user) {
+    let b = document.getElementById('verifyBanner');
+    const needs = !!user && !user.emailVerified && (user.providerData || []).some(p => p.providerId === 'password');
+    if (!needs) { if (b) b.remove(); return; }
+    if (b || sessionStorage.getItem('cineVerifyDismissed') === '1') return;
+    b = document.createElement('div');
+    b.id = 'verifyBanner';
+    b.className = 'fixed bottom-0 inset-x-0 z-[400] bg-amber-100 dark:bg-amber-950 text-amber-950 dark:text-amber-100 border-t border-amber-400 dark:border-amber-800 text-xs font-mono flex flex-wrap items-center justify-center gap-x-4 gap-y-1 px-3 py-2';
+    b.innerHTML = `<span><i class="fa-solid fa-envelope-circle-check mr-1.5"></i>Verifica tu correo para proteger tu cuenta.</span>
+        <button type="button" data-v="resend" class="underline font-bold">Reenviar enlace</button>
+        <button type="button" data-v="check" class="underline font-bold">Ya lo verifiqué</button>
+        <button type="button" data-v="close" aria-label="Cerrar aviso"><i class="fa-solid fa-xmark"></i></button>`;
+    b.onclick = async (e) => {
+        const v = e.target.closest('[data-v]');
+        if (!v) return;
+        try {
+            if (v.dataset.v === 'resend') { await window.fbResendVerification(); showToast('Te enviamos otro enlace. Revisa tu bandeja (y el spam).', 'ok'); }
+            else if (v.dataset.v === 'check') {
+                const u = await window.fbRefreshUser();
+                if (u && u.emailVerified) { showToast('¡Correo verificado!', 'ok'); b.remove(); }
+                else showToast('Aún no aparece verificado. Abre el enlace del correo y vuelve a intentarlo.', 'info');
+            } else { sessionStorage.setItem('cineVerifyDismissed', '1'); b.remove(); }
+        } catch (err) { showToast('No se pudo completar la acción. Inténtalo más tarde.', 'error'); }
+    };
+    document.body.appendChild(b);
+};
+
+// ----- Recuperar contraseña -----
+document.addEventListener('DOMContentLoaded', () => {
+    const btn = document.getElementById('btnForgotPassword');
+    if (!btn) return;
+    btn.addEventListener('click', async () => {
+        const email = (document.getElementById('authEmail') || {}).value;
+        if (!email || !email.trim()) { showToast('Escribe tu correo en el campo de arriba y vuelve a pulsar.', 'info'); return; }
+        try {
+            await window.fbResetPassword(email.trim());
+            showToast('Si ese correo tiene cuenta, recibirás un enlace para crear una contraseña nueva.', 'ok');
+        } catch (err) { showToast('No se pudo enviar el correo. Revisa que la dirección sea válida.', 'error'); }
+    });
+});
+
+// ----- Calidad de vida: Esc cierra el modal superior, etiquetas de accesibilidad -----
+document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    const open = [...document.querySelectorAll('.fixed.inset-0')]
+        .filter(el => el.id && el.id !== 'authModal' && !el.classList.contains('hidden'))
+        .sort((a, b) => (parseInt(getComputedStyle(b).zIndex) || 0) - (parseInt(getComputedStyle(a).zIndex) || 0));
+    const top = open[0];
+    if (!top) return;
+    if (top.id === 'muralPostModal') closeMuralPostModal();
+    else if (top.id === 'smartPublishModal') closeSmartPublishModal();
+    else if (top.id === 'profileDrawerBackdrop') toggleProfileDrawer();
+    else top.classList.add('hidden');
+});
+
+const _ICON_LABELS = { 'fa-xmark': 'Cerrar', 'fa-moon': 'Cambiar tema', 'fa-sun': 'Cambiar tema', 'fa-pen': 'Editar', 'fa-trash': 'Borrar', 'fa-plus': 'Añadir', 'fa-magnifying-glass': 'Buscar', 'fa-reply': 'Responder', 'fa-chevron-down': 'Abrir menú', 'fa-volume-high': 'Sonido', 'fa-volume-xmark': 'Sonido' };
+function autoLabelButtons() {
+    document.querySelectorAll('button:not([aria-label])').forEach(b => {
+        if (b.textContent.trim()) return;
+        const ic = b.querySelector('i[class*="fa-"]');
+        if (!ic) return;
+        const hit = Object.keys(_ICON_LABELS).find(k => ic.classList.contains(k));
+        if (hit) b.setAttribute('aria-label', b.getAttribute('title') || _ICON_LABELS[hit]);
+    });
+    document.querySelectorAll('.fixed.inset-0[id]:not([role])').forEach(m => {
+        if (/modal$/i.test(m.id)) { m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); }
+    });
+}
+document.addEventListener('DOMContentLoaded', () => {
+    autoLabelButtons();
+    let t = null;
+    new MutationObserver(() => {
+        if (document.hidden) return;
+        clearTimeout(t);
+        t = setTimeout(autoLabelButtons, 600);
+    }).observe(document.body, { childList: true, subtree: true });
+    setInterval(() => {
+        const viewMural = document.getElementById('mainViewMural');
+        const muralVisible = viewMural && !viewMural.classList.contains('hidden');
+        if (!document.hidden && muralVisible && window.muralReady && !window.muralError) renderMuralFeed();
+    }, 60000);
+});
+// ===== FIN MURO COMPARTIDO =====
+
+// ===== VARIABLES GLOBALES Y ESTADO PRINCIPAL =====
+const TMDB_PROXY_URL = window.CINE_TMDB_PROXY || '/api/tmdb';
+let _catalogInitialized = false;
+let _oscarsInitialized = false;
+let _rouletteSeeded = false;
+
+let currentLang = localStorage.getItem('cine_lang') || "es-MX";
+let currentTitleLang = localStorage.getItem('cine_title_lang') || "en-US";
 let oscarMode = "WINNERS";
 let moviesList = [];
 let fetchedResults = [];
@@ -539,10 +1811,10 @@ let soundEnabled = true;
 let autocompleteDebounceTimer = null;
 let replyingTargetMap = {};
 
-window.currentUsername = localStorage.getItem('cine_username') || 'Invitado/a';
-window.currentAvatarSeed = localStorage.getItem('cine_avatar_seed') || 'Invitado/a';
-window.currentUserBio = localStorage.getItem('cine_user_bio') || 'Apasionado del cine de autor y el análisis fílmico.';
-window.currentAvatarCustomUrl = localStorage.getItem('cine_avatar_custom_url') || null;
+window.currentUsername = currentUsername;
+window.currentAvatarSeed = currentAvatarSeed;
+window.currentUserBio = currentUserBio;
+window.currentAvatarCustomUrl = currentAvatarCustomUrl;
 
 const EMOJI_LIST = ["🎬", "🍿", "🔥", "❤️", "👏", "🧠", "😲", "☕", "👎", "⭐", "🎭", "🎥", "🏆", "💀", "🍷", "✨"];
 
@@ -576,6 +1848,7 @@ function makeModalDraggable(modalId, headerId) {
     header.style.cursor = 'move';
 
     header.addEventListener('mousedown', (e) => {
+        if (e.target.closest('button')) return;
         isDragging = true;
         startX = e.clientX;
         startY = e.clientY;
@@ -698,10 +1971,10 @@ function toggleMute() {
     const text = document.getElementById('muteText');
     if (soundEnabled) {
         if (icon) icon.className = "fa-solid fa-volume-high text-rose-800 dark:text-rose-500";
-        if (text) text.innerText = "Sonido On";
+        if (text) text.innerText = "Sonido activado";
     } else {
         if (icon) icon.className = "fa-solid fa-volume-xmark text-stone-400";
-        if (text) text.innerText = "Muteado";
+        if (text) text.innerText = "Silenciado";
     }
 }
 
@@ -710,14 +1983,19 @@ function toggleSettingsModal() {
     const modal = document.getElementById('settingsModal');
     const uInput = document.getElementById('usernameInput');
     const startPageSelect = document.getElementById('startPageSelect');
+    const titleLangSelect = document.getElementById('titleLangSelect');
+    const languageSelect = document.getElementById('languageSelect');
     if (uInput) uInput.value = currentUsername;
     if (startPageSelect) startPageSelect.value = defaultMainTab;
+    if (titleLangSelect) titleLangSelect.value = currentTitleLang;
+    if (languageSelect) languageSelect.value = currentLang;
     if (modal) modal.classList.toggle('hidden');
 }
 
 function updateUsername(val) {
     if (val.trim()) {
         currentUsername = val.trim();
+        window.currentUsername = currentUsername;
         localStorage.setItem('cine_username', currentUsername);
         if (window.fbSaveProfile) window.fbSaveProfile({ username: currentUsername });
         updateProfileDrawerStats();
@@ -729,16 +2007,32 @@ function setStartPage(tabName) {
     localStorage.setItem('cine_default_tab', tabName);
 }
 
+async function ensureInitialRouletteSeed() {
+    if (_rouletteSeeded) return;
+    _rouletteSeeded = true;
+    if (moviesList.length > 0) return;
+    const initialIds = [872585, 98];
+    const seeded = await Promise.all(initialIds.map(id => fetchDualLanguageMovie(`/movie/${id}`)));
+    seeded.forEach(m => { if (m && !moviesList.some(x => x.id === m.id)) moviesList.push(m); });
+    refreshRoulette();
+}
+
 function changeLanguage(newLang) {
     currentLang = newLang;
-    resetAndFetchFilteredMovies();
-    loadOscarMovies();
+    localStorage.setItem('cine_lang', newLang);
+    if (_catalogInitialized) resetAndFetchFilteredMovies();
+    if (_oscarsInitialized) loadOscarMovies();
+    if (typeof renderMuralFeed === 'function') renderMuralFeed();
+    if (typeof refreshPostModal === 'function') refreshPostModal();
 }
 
 function changeTitleLanguage(newTitleLang) {
     currentTitleLang = newTitleLang;
-    resetAndFetchFilteredMovies();
-    loadOscarMovies();
+    localStorage.setItem('cine_title_lang', newTitleLang);
+    if (_catalogInitialized) resetAndFetchFilteredMovies();
+    if (_oscarsInitialized) loadOscarMovies();
+    if (typeof renderMuralFeed === 'function') renderMuralFeed();
+    if (typeof refreshPostModal === 'function') refreshPostModal();
 }
 
 function switchMainTab(tabName) {
@@ -764,461 +2058,22 @@ function switchMainTab(tabName) {
     if (tabName === 'mural') {
         if (viewMural) {
             viewMural.classList.remove('hidden');
-            renderMuralFeed('all');
+            renderMuralFeed();
         }
         if (btnMural) btnMural.className = activeClasses;
     } else if (tabName === 'catalog') {
         if (viewCatalog) viewCatalog.classList.remove('hidden');
         if (btnCatalog) btnCatalog.className = activeClasses;
+        if (!_catalogInitialized) {
+            _catalogInitialized = true;
+            resetAndFetchFilteredMovies();
+        }
     } else if (tabName === 'roulette') {
         if (viewRoulette) viewRoulette.classList.remove('hidden');
         if (btnRoulette) btnRoulette.className = activeClasses;
+        ensureInitialRouletteSeed();
         drawWheel();
     }
-}
-
-function filterMural(filter) {
-    document.querySelectorAll('.mural-filter-btn').forEach(btn => {
-        btn.className = "mural-filter-btn text-stone-500 hover:text-stone-900 dark:hover:text-white px-3 py-1.5 transition";
-    });
-    if (event && event.currentTarget) {
-        event.currentTarget.className = "mural-filter-btn active bg-stone-200 dark:bg-stone-800 px-3 py-1.5 journal-border";
-    }
-    renderMuralFeed(filter);
-}
-
-let currentMuralRenderToken = 0;
-
-async function renderMuralFeed(filter = 'all') {
-    const feedContainer = document.getElementById('muralPostsFeed');
-    if (!feedContainer) return;
-
-    // 1. Limpiamos el contenedor inmediatamente para evitar duplicados visuales
-    feedContainer.innerHTML = `<div class="col-span-full text-center py-6 text-stone-400 text-xs font-mono"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Cargando muro editorial...</div>`;
-
-    // 2. Creamos un token único para esta ejecución
-    const thisRenderToken = ++currentMuralRenderToken;
-
-    let allPosts = [];
-    if (window.currentFirestorePosts && window.currentFirestorePosts.length > 0) {
-        allPosts = window.currentFirestorePosts;
-    } else {
-        allPosts = getCommunityAndUserPosts();
-    }
-
-    // 3. Filtrar por categoría
-    let filtered = allPosts.filter(p => {
-        if (filter === 'reviews') return p.type === 'review';
-        if (filter === 'discussions') return p.type === 'discussion';
-        return true;
-    });
-
-    // 4. Ocultar duplicados (misma película, mismo autor)
-    const uniquePosts = [];
-    const seenKeys = new Set();
-    filtered.forEach(p => {
-        if (p.type === 'review' && p.tmdbMovieId) {
-            const key = `${p.userId || p.author}_${p.tmdbMovieId}`;
-            if (seenKeys.has(key)) return;
-            seenKeys.add(key);
-        }
-        uniquePosts.push(p);
-    });
-
-    // 5. Ordenar
-    const sortMode = document.getElementById('muralSortSelect')?.value || 'date';
-    uniquePosts.sort((a, b) => {
-        const dateA = a.createdAt ? a.createdAt.toMillis() : (a.id ? parseInt(a.id.replace(/\D/g, '')) || 0 : 0);
-        const dateB = b.createdAt ? b.createdAt.toMillis() : (b.id ? parseInt(b.id.replace(/\D/g, '')) || 0 : 0);
-
-        if (sortMode === 'date') {
-            return muralSortDirection === 'desc' ? dateB - dateA : dateA - dateB;
-        }
-        if (sortMode === 'popular') {
-            const reactA = (a.reactions?.agree || 0) + (a.reactions?.disagree || 0);
-            const reactB = (b.reactions?.agree || 0) + (b.reactions?.disagree || 0);
-            return muralSortDirection === 'desc' ? reactB - reactA : reactA - reactB;
-        }
-        return 0;
-    });
-
-    // 6. Pre-cargamos los datos de las películas en paralelo para que el orden no se rompa
-    const postsWithMovies = await Promise.all(uniquePosts.map(async (post) => {
-        if (post.type === 'review' && (post.tmdbMovieId || post.movieObj)) {
-            let fetchedMovieObj = null;
-            if (post.tmdbMovieId) {
-                fetchedMovieObj = await fetchDualLanguageMovie(`/movie/${post.tmdbMovieId}`);
-            }
-            if (!fetchedMovieObj) fetchedMovieObj = post.movieObj;
-            return { ...post, _fetchedMovieObj: fetchedMovieObj };
-        }
-        return post;
-    }));
-
-    // Si mientras cargábamos los datos se lanzó otro render, abortamos este
-    if (thisRenderToken !== currentMuralRenderToken) return;
-
-    feedContainer.innerHTML = '';
-
-    if (postsWithMovies.length === 0) {
-        feedContainer.innerHTML = `<div class="col-span-full text-center py-8 text-stone-400 text-xs font-serif italic">No hay publicaciones en esta categoría.</div>`;
-        return;
-    }
-
-    // 7. Renderizamos las tarjetas
-    for (const post of postsWithMovies) {
-        const card = document.createElement('article');
-        card.className = "bg-stone-100 dark:bg-stone-950 journal-border p-4 space-y-3 flex flex-col justify-between hover:border-rose-900 transition cursor-pointer group";
-        card.onclick = (e) => {
-            if (!e.target.closest('.card-action-btn') && !e.target.closest('.user-profile-trigger')) {
-                openMuralPostModal(post.id);
-            }
-        };
-
-        const isMe = post.author === currentUsername;
-        const avatarUrl = isMe ? getAvatarUrl() : `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(post.avatarSeed || post.author)}`;
-
-        let movieBox = '';
-        if (post._fetchedMovieObj) {
-            const score = post.rating || post._fetchedMovieObj.rating;
-            // Añadimos una función onclick con event.stopPropagation() para que abra la ficha y no el debate
-            const movieJson = JSON.stringify(post._fetchedMovieObj).replace(/"/g, '&quot;');
-            movieBox = `
-                <div onclick="event.stopPropagation(); openDetailModal(${movieJson}, 'Reseña cinematográfica')" 
-                     class="flex items-center space-x-3 bg-stone-200 dark:bg-stone-900 p-2 journal-border group-hover:border-rose-800 transition cursor-pointer">
-                    <img src="${post._fetchedMovieObj.poster}" onerror="this.src='https://via.placeholder.com/150'" class="w-10 h-14 object-cover journal-border flex-shrink-0">
-                    <div>
-                        <h4 class="font-serif font-bold text-xs group-hover:text-rose-800 dark:group-hover:text-rose-400 transition">${post._fetchedMovieObj.title}</h4>
-                        ${post._fetchedMovieObj.subtitle ? `<span class="block text-[9px] font-serif text-stone-500 truncate">${post._fetchedMovieObj.subtitle}</span>` : ''}
-                        <span class="text-amber-600 text-xs font-mono"><i class="fa-solid fa-star"></i> ${score}/10</span>
-                    </div>
-                </div>
-            `;
-        }
-
-        let optionalTitleHeading = (post.reviewTitle && post.reviewTitle.trim() !== '')
-            ? `<h4 class="font-heading font-bold text-sm text-rose-900 dark:text-rose-400">${post.reviewTitle}</h4>`
-            : (post.title ? `<h3 class="font-heading font-bold text-sm text-rose-900 dark:text-rose-400 group-hover:underline">${post.title}</h3>` : '');
-
-        let previewCommentHtml = '';
-        const allComments = post.comments || [];
-        if (allComments.length > 0) {
-            const lastComm = allComments[allComments.length - 1];
-            previewCommentHtml = `
-                <div class="text-[11px] font-serif bg-stone-200/40 dark:bg-stone-900 p-2 journal-border border-dashed italic text-stone-600 dark:text-stone-400 truncate">
-                    <span class="font-bold not-italic text-stone-800 dark:text-stone-200 user-profile-trigger cursor-pointer hover:underline" onclick="event.stopPropagation(); openUserProfileModal('${lastComm.author}', '${lastComm.avatarSeed || lastComm.author}', 'Crítico', '${post.userId || ''}')">${lastComm.author}:</span> "${lastComm.text}"
-                </div>
-            `;
-        }
-
-        const reactions = post.reactions || { agree: 0, disagree: 0 };
-        const userVote = post.userVotes ? post.userVotes[currentUsername] : null;
-
-        const agreeActive = userVote === 'agree' ? 'bg-emerald-800/30 text-emerald-500 font-bold' : 'hover:bg-stone-200 dark:hover:bg-stone-800';
-        const disagreeActive = userVote === 'disagree' ? 'bg-rose-800/30 text-rose-500 font-bold' : 'hover:bg-stone-200 dark:hover:bg-stone-800';
-
-        card.innerHTML = `
-            <div class="space-y-2">
-                <div class="flex items-center justify-between border-b border-stone-200 dark:border-stone-800 pb-2">
-                    <div class="flex items-center space-x-2 user-profile-trigger cursor-pointer hover:opacity-80 transition" onclick="openUserProfileModal('${post.author}', '${post.avatarSeed || post.author}', '${post.role || 'Crítico'}', '${post.userId || ''}')">
-                        <img src="${avatarUrl}" class="w-7 h-7 rounded-full journal-border bg-stone-300">
-                        <div>
-                            <span class="block font-heading text-xs font-bold hover:underline">${post.author}</span>
-                            <span class="block text-[9px] font-mono text-stone-500 uppercase">${post.role || 'Crítico'}</span>
-                        </div>
-                    </div>
-                    <span class="text-[10px] font-mono text-stone-400">${getRelativeTime(post)}</span>
-                </div>
-                ${movieBox}
-                ${optionalTitleHeading}
-                <p class="font-serif text-xs text-stone-700 dark:text-stone-300 leading-relaxed line-clamp-2">"${post.content}"</p>
-                ${previewCommentHtml}
-            </div>
-            <div class="pt-3 border-t border-stone-200 dark:border-stone-800 flex items-center justify-between text-xs font-mono">
-                <div class="flex items-center space-x-2">
-                    <button onclick="event.stopPropagation(); reactToMuralPost('${post.id}', 'agree')" class="card-action-btn bg-stone-200 dark:bg-stone-900 px-2 py-1 journal-border transition flex items-center space-x-1 ${agreeActive}">
-                        <i class="fa-solid fa-thumbs-up text-emerald-600"></i><span>${reactions.agree || 0}</span>
-                    </button>
-                    <button onclick="event.stopPropagation(); reactToMuralPost('${post.id}', 'disagree')" class="card-action-btn bg-stone-200 dark:bg-stone-900 px-2 py-1 journal-border transition flex items-center space-x-1 ${disagreeActive}">
-                        <i class="fa-solid fa-thumbs-down text-rose-600"></i><span>${reactions.disagree || 0}</span>
-                    </button>
-                    <button onclick="event.stopPropagation(); openMuralPostModal('${post.id}')" class="card-action-btn bg-stone-200 dark:bg-stone-900 px-2 py-1 journal-border transition flex items-center space-x-1 hover:bg-stone-300 dark:hover:bg-stone-800" title="Ver comentarios y debate">
-                        <i class="fa-solid fa-comments"></i><span>${allComments.length}</span>
-                    </button>
-                </div>
-                <span class="text-rose-800 dark:text-rose-400 font-bold hover:underline">Ver debate →</span>
-            </div>
-        `;
-        feedContainer.appendChild(card);
-    }
-}
-
-async function openUserProfileModal(username, avatarSeed, role, userId) {
-    let modal = document.getElementById('userProfileModal');
-    if (!modal) {
-        modal = document.createElement('div');
-        modal.id = 'userProfileModal';
-        modal.className = 'fixed inset-0 bg-stone-950/80 backdrop-blur-sm z-[150] hidden flex items-center justify-center p-4';
-        document.body.appendChild(modal);
-    }
-
-    const isMe = username === currentUsername;
-    const bio = isMe ? currentUserBio : `Apasionado crítico de cine y analista de obras cinematográficas en CineZine.`;
-    const avatarUrl = isMe ? getAvatarUrl() : `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(avatarSeed)}`;
-
-    let statWatched = 0, statReviews = 0, statLists = 0;
-    let publicData = { watched: [], lists: [], reviews: {} };
-
-    if (isMe) {
-        statWatched = watchedMovies.length;
-        statReviews = Object.keys(personalReviews).length;
-        statLists = customLists.length;
-        publicData = {
-            watched: watchedMovies,
-            lists: customLists.filter(l => l.isPublic !== false),
-            reviews: personalReviews
-        };
-    } else {
-        // Buscamos sus posts en el muro (por userId o por nombre de autor para los antiguos)
-        const allPosts = window.currentFirestorePosts || [];
-        const userPosts = allPosts.filter(p => p.userId === userId || p.author === username);
-
-        // Contamos sus reseñas
-        statReviews = userPosts.filter(p => p.type === 'review').length;
-
-        // Traemos sus datos públicos de Firestore
-        if (userId && window.fbGetPublicStats) {
-            const fetched = await window.fbGetPublicStats(userId);
-            if (fetched) {
-                statWatched = fetched.publicWatched ? fetched.publicWatched.length : 0;
-                statLists = fetched.publicLists ? fetched.publicLists.length : 0;
-                publicData = {
-                    watched: fetched.publicWatched || [],
-                    lists: fetched.publicLists || [],
-                    reviews: fetched.publicPersonalReviews || {},
-                    watchedData: fetched.publicWatchedData || {}
-                };
-            }
-        }
-    }
-
-    // Guardamos esta info en la variable global
-    window._currentViewedUserStats = {
-        username, isMe, ...publicData, statWatched, statReviews, statLists,
-        authorPosts: !isMe ? (window.currentFirestorePosts || []).filter(p => p.author === username) : []
-    };
-
-    modal.innerHTML = `
-        <div class="bg-stone-50 dark:bg-stone-900 journal-border rounded-none max-w-sm w-full p-6 space-y-4 text-center relative shadow-2xl z-[155]">
-            <button onclick="document.getElementById('userProfileModal').classList.add('hidden')" class="absolute top-4 right-4 text-stone-400 hover:text-stone-800 dark:hover:text-white text-base transition"><i class="fa-solid fa-xmark"></i></button>
-            
-            <div class="relative w-24 h-24 mx-auto mt-2">
-                <img src="${avatarUrl}" class="w-24 h-24 rounded-full journal-border shadow-md object-cover bg-stone-200 dark:bg-stone-900">
-            </div>
-
-            <div class="space-y-1">
-                <h3 class="font-heading font-bold text-lg text-stone-900 dark:text-stone-100">${username}</h3>
-                <span class="inline-block text-[10px] font-mono tracking-widest uppercase bg-rose-900/10 text-rose-800 dark:text-rose-400 journal-border px-2 py-0.5">${role}</span>
-                <p class="text-xs font-serif italic text-stone-600 dark:text-stone-400 pt-2 px-2 leading-relaxed">"${bio}"</p>
-            </div>
-
-            <div class="grid grid-cols-3 gap-2 pt-2 border-t border-stone-200 dark:border-stone-800 text-center font-mono">
-                <div onclick="openUserStatsDetail('watched')" class="bg-stone-100 dark:bg-stone-950 p-2 journal-border cursor-pointer hover:border-rose-900 transition">
-                    <span class="block text-sm font-bold text-amber-600">${statWatched}</span>
-                    <span class="text-[9px] text-stone-500 uppercase">Vistas</span>
-                </div>
-                <div onclick="openUserStatsDetail('reviews')" class="bg-stone-100 dark:bg-stone-950 p-2 journal-border cursor-pointer hover:border-rose-900 transition">
-                    <span class="block text-sm font-bold text-rose-800 dark:text-rose-400">${statReviews}</span>
-                    <span class="text-[9px] text-stone-500 uppercase">Apuntes</span>
-                </div>
-                <div onclick="openUserStatsDetail('lists')" class="bg-stone-100 dark:bg-stone-950 p-2 journal-border cursor-pointer hover:border-rose-900 transition">
-                    <span class="block text-sm font-bold text-stone-700 dark:text-stone-300">${statLists}</span>
-                    <span class="text-[9px] text-stone-500 uppercase">Cuadernos</span>
-                </div>
-            </div>
-
-            <button onclick="document.getElementById('userProfileModal').classList.add('hidden')" class="w-full py-2 bg-stone-800 hover:bg-stone-700 text-stone-100 font-mono text-xs journal-border transition uppercase tracking-wider">Cerrar ficha</button>
-        </div>
-    `;
-    modal.classList.remove('hidden');
-}
-
-async function openUserStatsDetail(type) {
-    const stats = window._currentViewedUserStats;
-    if (!stats) return;
-
-    let detailModal = document.getElementById('userStatsDetailModal');
-    if (!detailModal) {
-        detailModal = document.createElement('div');
-        detailModal.id = 'userStatsDetailModal';
-        detailModal.className = 'fixed inset-0 bg-stone-950/85 backdrop-blur-sm z-[200] hidden flex items-center justify-center p-4';
-        document.body.appendChild(detailModal);
-    }
-
-    let titleHeader = "";
-    let contentHtml = "";
-
-    if (type === 'watched') {
-        titleHeader = `Películas vistas de ${stats.username}`;
-        let items = stats.isMe
-            ? watchedMovies.map(id => watchedMoviesData[id] || { id, title: `ID: ${id}`, poster: '' })
-            : stats.watched.map(id => (stats.watchedData || {})[id] || { id, title: `ID: ${id}`, poster: '' });
-
-        if (items.length === 0) {
-            contentHtml = `<p class="text-xs font-serif italic text-stone-400 text-center py-6">No hay registros de películas vistas.</p>`;
-        } else {
-            contentHtml = `<ul class="space-y-2 max-h-60 overflow-y-auto custom-scrollbar pr-1">`;
-            items.forEach(m => {
-                contentHtml += `
-                    <li onclick="closeUserStatsDetailModal(); openRegisteredMovie(${_regMovie({ id: m.id, title: m.title, poster: m.poster, rating: m.rating || '8.0', overview: m.overview || 'Sin descripción' }, 'Vistas de ' + stats.username)})" class="bg-stone-100 dark:bg-stone-950 p-2.5 journal-border text-xs font-serif flex items-center justify-between cursor-pointer hover:border-rose-900 transition">
-                        <span class="font-bold text-rose-900 dark:text-rose-400">🎬 ${_pmEsc(m.title)}</span>
-                        <span class="text-[10px] font-mono text-stone-400">Ver detalle →</span>
-                    </li>
-                `;
-            });
-            contentHtml += `</ul>`;
-        }
-    } else if (type === 'reviews') {
-        titleHeader = `Apuntes de ${stats.username}`;
-
-        // Unificamos la lista de apuntes (sean tuyos o de otros)
-        let revs = [];
-        if (stats.isMe) {
-            revs = Object.keys(stats.reviews).map(id => ({ id, ...stats.reviews[id] })).filter(r => r.isPublic);
-        } else {
-            // Mapeamos los posts de otros usuarios para que tengan la misma estructura
-            revs = stats.authorPosts.filter(p => p.type === 'review').map(p => {
-                return {
-                    id: p.id, // ID del post en el muro
-                    movie: p.movieObj || { title: 'Película desconocida', poster: '' },
-                    reviewTitle: p.reviewTitle,
-                    review: p.content,
-                    rating: p.rating,
-                    isPost: true // Bandera para saber que viene del muro
-                };
-            });
-        }
-
-        if (revs.length === 0) {
-            contentHtml = `<p class="text-xs font-serif italic text-stone-400 text-center py-6">No hay apuntes públicos.</p>`;
-        } else {
-            contentHtml = `<div class="space-y-2.5 max-h-60 overflow-y-auto custom-scrollbar pr-1">`;
-            revs.forEach(r => {
-                const poster = r.movie ? r.movie.poster : '';
-                const movieTitle = r.movie ? r.movie.title : 'Sin título';
-
-                // Si es un post ajeno, al hacer clic abrimos el debate. Si es tuyo, abrimos la película.
-                const clickAction = r.isPost
-                    ? `closeUserStatsDetailModal(); openMuralPostModal('${r.id}')`
-                    : `closeUserStatsDetailModal(); openRegisteredMovie(${_regMovie(r.movie, 'Apunte de ' + stats.username)})`;
-
-                contentHtml += `
-                    <div onclick="${clickAction}" class="flex gap-3 p-2.5 bg-stone-100 dark:bg-stone-950 journal-border cursor-pointer hover:border-rose-800 transition">
-                        ${_pmPoster(poster, 'w-14 h-20 flex-shrink-0 journal-border')}
-                        <div class="min-w-0 flex-grow">
-                            <div class="flex items-start justify-between gap-2">
-                                <h4 class="font-heading font-bold text-xs text-rose-900 dark:text-rose-400 truncate">${_pmEsc(r.reviewTitle || movieTitle)}</h4>
-                                <span class="flex-shrink-0 text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 journal-border text-emerald-700 dark:text-emerald-400">
-                                    <i class="fa-solid fa-earth-americas mr-1"></i>Público
-                                </span>
-                            </div>
-                            <div class="text-[10px] font-mono text-stone-500 mt-0.5">
-                                ${_pmEsc(movieTitle)}${r.rating ? ` · <span class="text-amber-600"><i class="fa-solid fa-star"></i> ${Number(r.rating).toFixed(1)}</span>` : ''}
-                            </div>
-                            ${r.review ? `<p class="text-xs font-serif italic text-stone-700 dark:text-stone-300 mt-1.5 leading-relaxed" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${_pmEsc(r.review)}</p>` : ''}
-                        </div>
-                    </div>
-                `;
-            });
-            contentHtml += `</div>`;
-        }
-    } else if (type === 'lists') {
-        titleHeader = `Cuadernos públicos de ${stats.username}`;
-        let lists = stats.lists;
-
-        if (lists.length === 0) {
-            contentHtml = `<p class="text-xs font-serif italic text-stone-400 text-center py-6">No hay cuadernos públicos.</p>`;
-        } else {
-            contentHtml = `<div class="space-y-2 max-h-60 overflow-y-auto custom-scrollbar pr-1">`;
-            lists.forEach(l => {
-                contentHtml += `
-                    <div onclick="openUserListContentModal('${l.name}', ${JSON.stringify(l.movies || []).replace(/"/g, '&quot;')})" class="bg-stone-100 dark:bg-stone-950 p-3 journal-border flex items-center justify-between text-xs font-serif cursor-pointer hover:border-rose-900 transition">
-                        <span class="font-bold text-rose-900 dark:text-rose-400">📓 ${_pmEsc(l.name)}</span>
-                        <span class="text-[10px] font-mono bg-stone-200 dark:bg-stone-900 px-2 py-0.5 journal-border">${l.movies ? l.movies.length : 0} películas →</span>
-                    </div>
-                `;
-            });
-            contentHtml += `</div>`;
-        }
-    }
-
-    detailModal.innerHTML = `
-        <div class="bg-stone-50 dark:bg-stone-900 journal-border rounded-none max-w-md w-full p-6 space-y-4 text-left relative shadow-2xl">
-            <button onclick="document.getElementById('userStatsDetailModal').classList.add('hidden')" class="absolute top-4 right-4 text-stone-400 hover:text-stone-800 dark:hover:text-white text-base transition"><i class="fa-solid fa-xmark"></i></button>
-            <h3 class="font-heading font-bold text-sm text-rose-900 dark:text-rose-400 uppercase tracking-wider border-b border-stone-200 dark:border-stone-800 pb-2">${titleHeader}</h3>
-            ${contentHtml}
-            <button onclick="document.getElementById('userStatsDetailModal').classList.add('hidden')" class="w-full py-2 bg-stone-800 hover:bg-stone-700 text-stone-100 font-mono text-xs journal-border transition uppercase tracking-wider">Regresar</button>
-        </div>
-    `;
-    detailModal.classList.remove('hidden');
-}
-
-function closeUserStatsDetailModal() {
-    const m1 = document.getElementById('userStatsDetailModal');
-    const m2 = document.getElementById('userProfileModal');
-    if (m1) m1.classList.add('hidden');
-    if (m2) m2.classList.add('hidden');
-}
-
-function openUserListContentModal(listName, moviesArray) {
-    let listModal = document.getElementById('userListContentModal');
-    if (!listModal) {
-        listModal = document.createElement('div');
-        listModal.id = 'userListContentModal';
-        listModal.className = 'fixed inset-0 bg-stone-950/85 backdrop-blur-sm z-[210] hidden flex items-center justify-center p-4';
-        document.body.appendChild(listModal);
-    }
-
-    let moviesHtml = '';
-    if (!moviesArray || moviesArray.length === 0) {
-        moviesHtml = `<p class="text-xs font-serif italic text-stone-400 text-center py-4">Este cuaderno no contiene películas guardadas.</p>`;
-    } else {
-        moviesHtml = `<ul class="space-y-2 max-h-56 overflow-y-auto custom-scrollbar pr-1">`;
-        moviesArray.forEach(m => {
-            const mTitle = m.title || m;
-            const movieId = m.id || 872585;
-            const poster = m.poster || 'https://via.placeholder.com/150';
-            const rating = m.rating || '8.5';
-            const overview = m.overview || 'Sin descripción disponible.';
-
-            moviesHtml += `
-                <li onclick="closeUserListContentModal(); openRegisteredMovie(${_regMovie({ id: movieId, title: String(mTitle), poster, rating, overview }, 'Cuaderno: ' + listName)})" 
-                    class="bg-stone-100 dark:bg-stone-950 p-2.5 journal-border text-xs font-serif text-stone-800 dark:text-stone-200 flex items-center justify-between cursor-pointer hover:border-rose-900 transition group">
-                    <span class="font-bold group-hover:text-rose-800 dark:group-hover:text-rose-400 transition">🎬 ${_pmEsc(mTitle)}</span>
-                    <span class="text-[10px] font-mono text-stone-400">Ver película →</span>
-                </li>`;
-        });
-        moviesHtml += `</ul>`;
-    }
-
-    listModal.innerHTML = `
-        <div class="bg-stone-50 dark:bg-stone-900 journal-border rounded-none max-w-sm w-full p-6 space-y-4 text-left relative shadow-2xl">
-            <button onclick="document.getElementById('userListContentModal').classList.add('hidden')" class="absolute top-4 right-4 text-stone-400 hover:text-stone-800 dark:hover:text-white text-base transition"><i class="fa-solid fa-xmark"></i></button>
-            <h3 class="font-heading font-bold text-sm text-rose-900 dark:text-rose-400 uppercase tracking-wider border-b border-stone-200 dark:border-stone-800 pb-2">📓 Cuaderno: ${listName}</h3>
-            ${moviesHtml}
-            <button onclick="document.getElementById('userListContentModal').classList.add('hidden')" class="w-full py-2 bg-stone-800 hover:bg-stone-700 text-stone-100 font-mono text-xs journal-border transition uppercase tracking-wider">Cerrar</button>
-        </div>
-    `;
-    listModal.classList.remove('hidden');
-}
-
-function closeUserListContentModal() {
-    const listModal = document.getElementById('userListContentModal');
-    const statsModal = document.getElementById('userStatsDetailModal');
-    const profileModal = document.getElementById('userProfileModal');
-    if (listModal) listModal.classList.add('hidden');
-    if (statsModal) statsModal.classList.add('hidden');
-    if (profileModal) profileModal.classList.add('hidden');
 }
 
 function toggleWatchedStatus(movieId) {
@@ -1232,13 +2087,7 @@ function toggleWatchedStatus(movieId) {
         watchedMovies.push(movieId);
         const found = _findMovieById(movieId);
         if (found) {
-            watchedMoviesData[movieId] = {
-                id: found.id,
-                title: found.title,
-                poster: found.poster,
-                rating: found.rating,
-                overview: found.overview
-            };
+            watchedMoviesData[movieId] = slimMovie(found);
         }
     }
 
@@ -1246,6 +2095,23 @@ function toggleWatchedStatus(movieId) {
     localStorage.setItem('cine_watched_movies_data', JSON.stringify(watchedMoviesData));
 
     updateWatchedBtnUI(movieId);
+    updateProfileDrawerStats();
+    renderResultsGrid();
+}
+
+function ensureWatchedMovie(movieId, movieObj) {
+    const mid = Number(movieId);
+    if (!mid) return;
+    if (!watchedMovies.includes(mid)) {
+        watchedMovies.push(mid);
+    }
+    const found = movieObj || _findMovieById(mid);
+    if (found && !watchedMoviesData[mid]) {
+        watchedMoviesData[mid] = slimMovie({ ...found, id: mid });
+    }
+    localStorage.setItem('cine_watched_movies', JSON.stringify(watchedMovies));
+    localStorage.setItem('cine_watched_movies_data', JSON.stringify(watchedMoviesData));
+    updateWatchedBtnUI(mid);
     updateProfileDrawerStats();
     renderResultsGrid();
 }
@@ -1288,12 +2154,12 @@ function openDetailModal(movie, tag) {
     if (detailTag) detailTag.innerText = tag || "Reseña crítica";
 
     const detailTitle = document.getElementById('detailTitle');
-    if (detailTitle) detailTitle.innerHTML = movie.title;
+    if (detailTitle) detailTitle.textContent = movie.title || '';
 
     const detailSubtitle = document.getElementById('detailSubtitle');
     if (detailSubtitle) {
-        if (movie.subtitle && movie.subtitle.trim() !== '') {
-            detailSubtitle.innerText = movie.subtitle;
+        if (movie.subtitle && movie.subtitle.trim() !== '' && movie.subtitle !== movie.title) {
+            detailSubtitle.textContent = movie.subtitle;
             detailSubtitle.classList.remove('hidden');
         } else {
             detailSubtitle.classList.add('hidden');
@@ -1301,7 +2167,7 @@ function openDetailModal(movie, tag) {
     }
 
     const detailPoster = document.getElementById('detailPoster');
-    if (detailPoster) detailPoster.src = movie.poster;
+    if (detailPoster) detailPoster.src = safePoster(movie.poster);
 
     const detailRating = document.getElementById('detailRating');
     if (detailRating) {
@@ -1356,6 +2222,9 @@ function openDetailModal(movie, tag) {
     const userReviewTitleInput = document.getElementById('userReviewTitleInput');
     if (userReviewTitleInput) userReviewTitleInput.value = pReview ? pReview.reviewTitle || '' : '';
 
+    const publicCheck = document.getElementById('userPublicReviewCheck');
+    if (publicCheck) publicCheck.checked = pReview ? pReview.isPublic !== false : true;
+
     const detailModal = document.getElementById('detailModal');
     if (detailModal) {
         detailModal.classList.remove('hidden');
@@ -1377,7 +2246,7 @@ function showWinnerModal(movie) {
     if (modalTitle) modalTitle.innerText = movie.title;
 
     const modalPoster = document.getElementById('modalPoster');
-    if (modalPoster) modalPoster.src = movie.poster;
+    if (modalPoster) modalPoster.src = safePoster(movie.poster);
 
     const modalRating = document.getElementById('modalRating');
     if (modalRating) {
@@ -1411,41 +2280,31 @@ function closeModal() {
     if (modal) modal.classList.add('hidden');
 }
 
-function renderStarSelector(val, containerId = 'starContainer', textId = 'starRatingText') {
-    selectedStarRating = val || 0;
-    const container = document.getElementById(containerId);
+// Selector de estrellas del modal de detalle con soporte de medias estrellas (0.5)
+function renderStarSelector(val) {
+    selectedStarRating = Number(val) || 0;
+    const container = document.getElementById('starContainer');
     if (!container) return;
     container.innerHTML = '';
-    const textEl = document.getElementById(textId);
+    const textEl = document.getElementById('starRatingText');
     if (textEl) textEl.innerText = selectedStarRating.toFixed(1);
 
     for (let i = 1; i <= 10; i++) {
         const starWrapper = document.createElement('div');
-        // Añadimos w-6 h-6 para darle un área de clic más grande y cómoda
         starWrapper.className = "relative w-6 h-6 flex items-center justify-center cursor-pointer text-sm px-0.5 text-stone-300 dark:text-stone-700 hover:scale-110 transition-transform";
-
-        let iconClass = "fa-regular fa-star text-stone-300 dark:text-stone-700"; // Vacía
-
+        let iconClass = "fa-regular fa-star text-stone-300 dark:text-stone-700";
         if (selectedStarRating >= i) {
-            iconClass = "fa-solid fa-star text-amber-600"; // Llena
-        } else if (selectedStarRating === i - 0.5) {
-            iconClass = "fa-solid fa-star-half-stroke text-amber-600"; // Media
+            iconClass = "fa-solid fa-star text-amber-600";
+        } else if (selectedStarRating >= i - 0.5) {
+            iconClass = "fa-solid fa-star-half-stroke text-amber-600";
         }
-
         starWrapper.innerHTML = `<i class="${iconClass}"></i>`;
-
-        // La magia: detectar si el clic es en la mitad izquierda o derecha
         starWrapper.onclick = (e) => {
             const rect = starWrapper.getBoundingClientRect();
             const clickX = e.clientX - rect.left;
-
-            if (clickX < rect.width / 2) {
-                renderStarSelector(i - 0.5, containerId, textId); // Media estrella
-            } else {
-                renderStarSelector(i, containerId, textId);       // Estrella entera
-            }
+            selectedStarRating = (clickX < rect.width / 2) ? i - 0.5 : i;
+            renderStarSelector(selectedStarRating);
         };
-
         container.appendChild(starWrapper);
     }
 }
@@ -1458,25 +2317,38 @@ async function savePersonalReview() {
     const reviewTitleInput = document.getElementById('userReviewTitleInput') ? document.getElementById('userReviewTitleInput').value.trim() : '';
     const isPublic = document.getElementById('userPublicReviewCheck').checked;
 
+    const nowMs = Date.now();
+    const prev = personalReviews[currentDetailMovie.id];
+    const ratingNow = selectedStarRating > 0 ? selectedStarRating : null;
     personalReviews[currentDetailMovie.id] = {
         movie: currentDetailMovie,
-        rating: selectedStarRating > 0 ? selectedStarRating : null,
+        rating: ratingNow,
         review: reviewInput,
         reviewTitle: reviewTitleInput,
-        isPublic: isPublic
+        isPublic: isPublic,
+        createdAt: (prev && prev.createdAt) || nowMs,
+        updatedAt: nowMs
     };
     localStorage.setItem('cine_personal_reviews', JSON.stringify(personalReviews));
+    if (ratingNow > 0) {
+        ensureWatchedMovie(currentDetailMovie.id, currentDetailMovie);
+    }
+    updateProfileDrawerStats();
 
-    // Si decide hacerlo público y hay sesión iniciada, lo publicamos en el muro de Firestore
-    if (isPublic && reviewInput && window.currentUser && window.fbCreatePost) {
-        await window.fbCreatePost({
-            type: 'review',
-            tmdbMovieId: currentDetailMovie.id,
-            movieObj: currentDetailMovie,
-            reviewTitle: reviewTitleInput,
-            content: reviewInput,
-            rating: selectedStarRating > 0 ? selectedStarRating : null
-        });
+    if (window.currentUser && window.fbUpsertReviewPost) {
+        try {
+            if (isPublic && reviewInput) {
+                await window.fbUpsertReviewPost(currentDetailMovie.id, {
+                    author: _myName(), avatarSeed: currentAvatarSeed,
+                    reviewTitle: reviewTitleInput.slice(0, 150), content: reviewInput.slice(0, 5000),
+                    rating: ratingNow, movieObj: slimMovie(currentDetailMovie)
+                });
+            } else {
+                await window.fbRemoveReviewPost(currentDetailMovie.id);
+            }
+        } catch (err) { handleWriteError(err, 'publicar tu reseña en el muro'); }
+    } else if (isPublic && reviewInput) {
+        showToast('Inicia sesión para que tu reseña pública aparezca en el muro.', 'info');
     }
 
     const indicator = document.getElementById('saveStatusIndicator');
@@ -1486,18 +2358,27 @@ async function savePersonalReview() {
     }
 }
 
+// ===== CUADERNOS PERSONALIZADOS (con opción Pública/Privada y Drag & Drop) =====
 function createNewList() {
     const input = document.getElementById('newListInput');
     const name = input.value.trim();
     if (!name) return;
-    customLists.push({ id: Date.now(), name: name, movies: [] });
+    customLists.push({ id: Date.now(), name: name, isPublic: true, movies: [] });
     saveAndRenderCustomLists();
+    updateProfileDrawerStats();
     input.value = '';
 }
 
 function saveAndRenderCustomLists() {
     localStorage.setItem('cine_custom_lists', JSON.stringify(customLists));
     renderCustomLists();
+}
+
+function toggleListPrivacy(listIndex) {
+    if (!customLists[listIndex]) return;
+    customLists[listIndex].isPublic = customLists[listIndex].isPublic === false ? true : false;
+    saveAndRenderCustomLists();
+    showToast(customLists[listIndex].isPublic ? 'Cuaderno marcado como público' : 'Cuaderno marcado como privado', 'info');
 }
 
 function renderCustomLists() {
@@ -1517,18 +2398,17 @@ function renderCustomLists() {
 
         let headerHtml = `
             <div class="p-3 flex items-center justify-between bg-stone-100 dark:bg-stone-950 hover:bg-stone-200/50 dark:hover:bg-stone-900 transition select-none">
-                <div onclick="toggleListAccordion(${listIndex})" class="flex items-center space-x-2 flex-grow cursor-pointer">
+                <div onclick="toggleListAccordion(${listIndex})" class="flex items-center space-x-2 flex-grow cursor-pointer min-w-0">
                     <i class="fa-solid fa-book text-rose-800 text-xs"></i>
-                    <h4 class="text-xs font-heading font-bold text-rose-900 dark:text-rose-400">${_pmEsc(list.name)}</h4>
+                    <h4 class="text-xs font-heading font-bold text-rose-900 dark:text-rose-400 truncate">${_pmEsc(list.name)}</h4>
                 </div>
                 <div class="flex items-center space-x-2 flex-shrink-0">
-                    <!-- BOTÓN DE PRIVACIDAD -->
-                    <button onclick="toggleListPrivacy(${listIndex})" title="${isPublic ? 'Lista Pública (Clic para hacerla privada)' : 'Lista Privada (Clic para hacerla pública)'}" class="text-stone-400 hover:text-rose-600 px-1 py-0.5 text-xs transition">
-                        <i class="fa-solid ${isPublic ? 'fa-globe' : 'fa-lock'}"></i>
+                    <button onclick="toggleListPrivacy(${listIndex})" title="${isPublic ? 'Cuaderno público (clic para hacer privado)' : 'Cuaderno privado (clic para hacer público)'}" class="text-stone-400 hover:text-rose-600 px-1 py-0.5 text-xs transition cursor-pointer">
+                        <i class="fa-solid ${isPublic ? 'fa-globe' : 'fa-lock text-amber-600'}"></i>
                     </button>
                     <span class="text-[10px] font-mono bg-stone-200 dark:bg-stone-900 px-2 py-0.5 journal-border">${list.movies ? list.movies.length : 0} obras</span>
-                    <button onclick="confirmDeleteCustomList(${listIndex})" title="Eliminar cuaderno" class="text-stone-400 hover:text-rose-600 px-1 py-0.5 text-xs transition"><i class="fa-solid fa-trash-can"></i></button>
-                    <button onclick="toggleListAccordion(${listIndex})" class="text-stone-400 hover:text-stone-800 dark:hover:text-white text-xs px-1">
+                    <button onclick="confirmDeleteCustomList(${listIndex})" title="Eliminar cuaderno" class="text-stone-400 hover:text-rose-600 px-1 py-0.5 text-xs transition cursor-pointer"><i class="fa-solid fa-trash-can"></i></button>
+                    <button onclick="toggleListAccordion(${listIndex})" class="text-stone-400 hover:text-stone-800 dark:hover:text-white text-xs px-1 cursor-pointer">
                         <i id="listChevron_${listIndex}" class="fa-solid fa-chevron-down transition-transform"></i>
                     </button>
                 </div>
@@ -1544,7 +2424,7 @@ function renderCustomLists() {
             list.movies.forEach((m, mIndex) => {
                 const mTitle = m.title || m;
                 const movieId = m.id || 872585;
-                const poster = m.poster || 'https://via.placeholder.com/150';
+                const poster = m.poster || POSTER_FALLBACK;
 
                 moviesContentHtml += `
                     <div draggable="true" 
@@ -1552,12 +2432,12 @@ function renderCustomLists() {
                          ondragover="onDragOverMovie(event)" 
                          ondrop="onDropMovie(event, ${listIndex}, ${mIndex})" 
                          class="flex items-center justify-between bg-stone-100 dark:bg-stone-950 p-2 journal-border text-xs group cursor-grab active:cursor-grabbing hover:border-rose-800 transition">
-                        <div class="flex items-center space-x-2 overflow-hidden flex-grow" onclick="openRegisteredMovie(${_regMovie({ id: movieId, title: String(mTitle), poster, rating: m.rating || '8.5', overview: m.overview || 'Sin descripción' }, 'Cuaderno: ' + list.name)})">
+                        <div class="flex items-center space-x-2 overflow-hidden flex-grow cursor-pointer" onclick="openRegisteredMovie(${_regMovie({ id: movieId, title: String(mTitle), subtitle: m.subtitle || '', poster, rating: m.rating || '8.5', overview: m.overview || 'Sin descripción', year: m.year }, 'Cuaderno: ' + list.name)})">
                             <i class="fa-solid fa-grip-vertical text-stone-400 text-[10px] group-hover:text-stone-700 dark:group-hover:text-stone-200"></i>
                             <span class="font-mono text-[10px] text-stone-400 w-4 text-right">${mIndex + 1}.</span>
                             <span class="font-serif font-bold text-stone-800 dark:text-stone-200 truncate hover:text-rose-800 dark:hover:text-rose-400 transition">${_pmEsc(mTitle)}</span>
                         </div>
-                        <button onclick="confirmRemoveMovieFromList(${listIndex}, ${movieId})" title="Quitar de la lista" class="text-stone-400 hover:text-rose-600 px-1.5 py-0.5 text-xs transition"><i class="fa-solid fa-xmark"></i></button>
+                        <button onclick="confirmRemoveMovieFromList(${listIndex}, ${movieId})" title="Quitar de la lista" class="text-stone-400 hover:text-rose-600 px-1.5 py-0.5 text-xs transition cursor-pointer"><i class="fa-solid fa-xmark"></i></button>
                     </div>
                 `;
             });
@@ -1568,14 +2448,6 @@ function renderCustomLists() {
         item.innerHTML = headerHtml + moviesContentHtml;
         container.appendChild(item);
     });
-}
-
-// Función para cambiar la privacidad
-function toggleListPrivacy(listIndex) {
-    if (!customLists[listIndex]) return;
-    customLists[listIndex].isPublic = customLists[listIndex].isPublic === false ? true : false;
-    saveAndRenderCustomLists(); // Esto ya guarda en localStorage
-    if (window.fbSyncPublicStats) window.fbSyncPublicStats();
 }
 
 function toggleListAccordion(listIndex) {
@@ -1631,33 +2503,10 @@ function mantenerAcordeonAbierto(listIndex) {
     if (chevron) chevron.classList.add('rotate-180');
 }
 
-function moveMovieInList(listIndex, movieIndex, direction) {
-    const targetIndex = movieIndex + direction;
-    if (targetIndex < 0 || targetIndex >= customLists[listIndex].movies.length) return;
-
-    const movies = customLists[listIndex].movies;
-    const temp = movies[movieIndex];
-    movies[movieIndex] = movies[targetIndex];
-    movies[targetIndex] = temp;
-
-    saveAndRenderCustomLists();
-    setTimeout(() => {
-        const body = document.getElementById(`listBody_${listIndex}`);
-        const chevron = document.getElementById(`listChevron_${listIndex}`);
-        if (body) body.classList.remove('hidden');
-        if (chevron) chevron.classList.add('rotate-180');
-    }, 50);
-}
-
 function removeMovieFromList(listIndex, movieId) {
     customLists[listIndex].movies = customLists[listIndex].movies.filter(m => m.id !== movieId);
     saveAndRenderCustomLists();
-    setTimeout(() => {
-        const body = document.getElementById(`listBody_${listIndex}`);
-        const chevron = document.getElementById(`listChevron_${listIndex}`);
-        if (body) body.classList.remove('hidden');
-        if (chevron) chevron.classList.add('rotate-180');
-    }, 50);
+    setTimeout(() => mantenerAcordeonAbierto(listIndex), 50);
 }
 
 function toggleEmojiPicker(inputId) {
@@ -1713,316 +2562,6 @@ function insertEmojiAtCursor(input, emoji) {
     input.focus();
 }
 
-function renderCommentsTreeHtml(postId, comments) {
-    if (!comments || comments.length === 0) {
-        return `<div class="text-center py-4 text-stone-400 text-xs font-serif italic">Aún no hay comentarios en este debate. ¡Sé el primero en aportar!</div>`;
-    }
-
-    const mainComments = comments.filter(c => !c.parentId);
-    let html = '';
-
-    mainComments.forEach(c => {
-        html += renderSingleCommentBlock(postId, c, false);
-
-        const replies = comments.filter(r => r.parentId === c.id);
-        if (replies.length > 0) {
-            html += `<div class="ml-6 border-l-2 border-rose-900/40 pl-3 space-y-2 mt-2">`;
-            replies.forEach(reply => {
-                html += renderSingleCommentBlock(postId, reply, true);
-            });
-            html += `</div>`;
-        }
-    });
-
-    return html;
-}
-
-function formatCommentText(text) {
-    if (!text) return '';
-    return text.replace(/(@[a-zA-Z0-9_ÁÉÍÓÚáéíóúÑñ]+)/g, '<span class="text-rose-800 dark:text-rose-400 font-bold">$1</span>');
-}
-
-function renderSingleCommentBlock(postId, c, isReply = false) {
-    const cAvatar = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(c.avatarSeed || c.author)}`;
-    const isAuthor = c.author === currentUsername;
-    const cReactions = c.reactions || { agree: 0, disagree: 0 };
-    const userVote = c.userVotes ? c.userVotes[currentUsername] : null;
-
-    const agreeActive = userVote === 'agree' ? 'bg-emerald-800/40 text-emerald-400 font-bold' : '';
-    const disagreeActive = userVote === 'disagree' ? 'bg-rose-800/40 text-rose-400 font-bold' : '';
-
-    let actionButtons = '';
-    if (isAuthor) {
-        actionButtons = `
-            <button onclick="enableEditComment('${postId}', '${c.id}')" class="text-stone-500 hover:text-stone-900 dark:hover:text-white"><i class="fa-solid fa-pen mr-0.5"></i>Editar</button>
-            <button onclick="deleteMuralComment('${postId}', '${c.id}')" class="text-rose-800 hover:text-rose-600"><i class="fa-solid fa-trash mr-0.5"></i>Borrar</button>
-        `;
-    }
-
-    const parentIdForReply = isReply ? c.parentId : c.id;
-    const formattedText = formatCommentText(c.text);
-
-    return `
-        <div id="commentRow_${c.id}" class="bg-stone-200/50 dark:bg-stone-900 p-2.5 journal-border text-xs space-y-1.5">
-            <div class="flex items-start space-x-2.5">
-                <img src="${cAvatar}" class="w-6 h-6 rounded-full journal-border bg-stone-300 flex-shrink-0 mt-0.5 cursor-pointer hover:opacity-80 transition" onclick="openUserProfileModal('${c.author}', '${c.avatarSeed || c.author}', 'Crítico', '')">
-                <div class="space-y-1 flex-grow">
-                    <div class="flex items-center justify-between">
-                        <span class="font-heading font-bold cursor-pointer hover:underline" onclick="openUserProfileModal('${c.author}', '${c.avatarSeed || c.author}', 'Crítico', '')">${c.author}</span>
-                        <span class="text-[9px] font-mono text-stone-400">${getRelativeTime(c)}</span>
-                    </div>
-                    <p id="commentText_${c.id}" class="font-serif text-stone-700 dark:text-stone-300 leading-relaxed">${formattedText}</p>
-                    
-                    <div class="flex items-center justify-between pt-1 border-t border-stone-300/40 dark:border-stone-800/60">
-                        <div class="flex items-center space-x-2 text-[10px] font-mono">
-                            <button onclick="setReplyTarget('${postId}', '${parentIdForReply}', '${c.author}')" class="text-rose-800 dark:text-rose-400 font-bold hover:underline"><i class="fa-solid fa-reply mr-1"></i>Responder</button>
-                            ${actionButtons}
-                        </div>
-                        <div class="flex items-center space-x-1.5 text-[10px] font-mono ml-auto">
-                            <button onclick="reactToComment('${postId}', '${c.id}', 'agree')" class="hover:text-emerald-600 flex items-center space-x-1 bg-stone-300/50 dark:bg-stone-800 px-1.5 py-0.5 journal-border cursor-pointer ${agreeActive}" title="Acuerdo">
-                                <i class="fa-solid fa-thumbs-up text-emerald-600 text-[9px]"></i><span>${cReactions.agree || 0}</span>
-                            </button>
-                            <button onclick="reactToComment('${postId}', '${c.id}', 'disagree')" class="hover:text-rose-600 flex items-center space-x-1 bg-stone-300/50 dark:bg-stone-800 px-1.5 py-0.5 journal-border cursor-pointer ${disagreeActive}" title="Discrepo">
-                                <i class="fa-solid fa-thumbs-down text-rose-600 text-[9px]"></i><span>${cReactions.disagree || 0}</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-}
-
-function setReplyTarget(postId, commentId, authorName) {
-    replyingTargetMap[postId] = { commentId: commentId, author: authorName };
-    const input = document.getElementById(`newCommentInput_${postId}`);
-    const indicator = document.getElementById(`replyIndicator_${postId}`);
-
-    if (input) {
-        input.value = `@${authorName} `;
-        input.focus();
-    }
-    if (indicator) {
-        indicator.classList.remove('hidden');
-        indicator.innerHTML = `Respondiendo a <strong>@${authorName}</strong> <button onclick="clearReplyTarget('${postId}')" class="ml-1 text-rose-800 hover:underline"><i class="fa-solid fa-xmark"></i></button>`;
-    }
-}
-
-function clearReplyTarget(postId) {
-    delete replyingTargetMap[postId];
-    const input = document.getElementById(`newCommentInput_${postId}`);
-    const indicator = document.getElementById(`replyIndicator_${postId}`);
-    if (input) {
-        if (input.value.startsWith('@')) {
-            input.value = '';
-        }
-        input.placeholder = "Añadir un apunte al debate...";
-    }
-    if (indicator) indicator.classList.add('hidden');
-}
-
-async function openMuralPostModal(postId) {
-    resetModalPosition('muralPostModal');
-
-    const allPosts = [...(window.currentFirestorePosts || []), ...getCommunityAndUserPosts()];
-    let post = allPosts.find(p => String(p.id) === String(postId));
-    if (!post) return;
-
-    let modal = document.getElementById('muralPostModal');
-    if (!modal) {
-        modal = document.createElement('div');
-        modal.id = 'muralPostModal';
-        modal.className = 'fixed inset-0 bg-stone-950/80 backdrop-blur-sm z-[120] hidden flex items-center justify-center p-4';
-        document.body.appendChild(modal);
-    }
-
-    const comments = post.comments || [];
-    const reactions = post.reactions || { agree: 0, disagree: 0 };
-    const userVote = post.userVotes ? post.userVotes[currentUsername] : null;
-
-    const agreeActive = userVote === 'agree' ? 'text-emerald-600 font-bold' : 'text-stone-400 hover:text-stone-800 dark:hover:text-stone-200';
-    const disagreeActive = userVote === 'disagree' ? 'text-rose-600 font-bold' : 'text-stone-400 hover:text-stone-800 dark:hover:text-stone-200';
-
-    const commentsTreeHtml = renderCommentsTreeHtml(postId, comments);
-
-    let headerBlockHtml = '';
-    if (post.type === 'review' && (post.tmdbMovieId || post.movieObj)) {
-        let fetchedMovieObj = null;
-        if (post.tmdbMovieId) {
-            fetchedMovieObj = await fetchDualLanguageMovie(`/movie/${post.tmdbMovieId}`);
-        }
-        if (!fetchedMovieObj) fetchedMovieObj = post.movieObj;
-
-        if (fetchedMovieObj) {
-            const score = post.rating || fetchedMovieObj.rating || 'N/A';
-            const movieDataJson = JSON.stringify({
-                id: fetchedMovieObj.id || post.tmdbMovieId,
-                title: fetchedMovieObj.title,
-                subtitle: fetchedMovieObj.subtitle || '',
-                poster: fetchedMovieObj.poster,
-                rating: score,
-                overview: fetchedMovieObj.overview || 'Sin descripción disponible.'
-            }).replace(/"/g, '&quot;');
-
-            headerBlockHtml = `
-                <div class="flex flex-row gap-5 mb-5">
-                    <div onclick="openDetailModal(${movieDataJson}, 'Reseña cinematográfica')" class="cursor-pointer group flex-shrink-0">
-                        <img src="${fetchedMovieObj.poster}" onerror="this.src='https://via.placeholder.com/150'" class="w-20 h-30 sm:w-24 sm:h-36 object-cover shadow-md border border-stone-200 dark:border-stone-800 group-hover:opacity-90 transition">
-                    </div>
-                    <div class="flex flex-col justify-center">
-                        <div class="text-[9px] font-mono uppercase tracking-widest text-rose-800 dark:text-rose-400 mb-0.5">
-                            Reseña cinematográfica
-                        </div>
-                        <h2 class="text-xl sm:text-2xl font-black font-heading leading-tight text-stone-900 dark:text-stone-100 mb-1">
-                            ${fetchedMovieObj.title}
-                        </h2>
-                        ${fetchedMovieObj.subtitle ? `<span class="text-xs font-serif text-stone-500 dark:text-stone-400 italic mb-1 line-clamp-1">${fetchedMovieObj.subtitle}</span>` : ''}
-                        
-                        <div class="flex items-center space-x-2 mt-1">
-                            <span class="text-amber-600 font-mono text-sm font-bold"><i class="fa-solid fa-star mr-1"></i>${score}/10</span>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
-    } else if (post.title) {
-        headerBlockHtml = `
-            <h2 class="text-xl font-black font-heading leading-tight text-stone-900 dark:text-stone-100 mb-3">
-                ${post.title}
-            </h2>
-        `;
-    }
-
-    let editButtonHtml = '';
-    if (post.author === currentUsername) {
-        editButtonHtml = `
-            <div class="flex items-center ml-auto mr-2 space-x-3">
-                <button onclick="enableEditMuralPost('${post.id}')" class="text-[10px] font-mono text-stone-500 hover:text-rose-800 transition"><i class="fa-solid fa-pen mr-1"></i>Editar</button>
-                <button onclick="deleteMuralPost('${post.id}')" class="text-[10px] font-mono text-stone-500 hover:text-rose-800 transition"><i class="fa-solid fa-trash mr-1"></i>Borrar</button>
-            </div>
-        `;
-    }
-
-    modal.innerHTML = `
-        <div class="bg-stone-50 dark:bg-stone-900 journal-border rounded-none max-w-xl w-full p-0 text-left relative shadow-2xl draggable-modal-content flex flex-col max-h-[90vh]">
-            
-            <div id="muralPostHeader" class="modal-header-drag flex items-center justify-between border-b border-stone-300 dark:border-stone-800 p-3 flex-shrink-0 bg-stone-50 dark:bg-stone-900">
-                <span class="text-[10px] font-mono font-bold text-stone-800 dark:text-stone-200 uppercase tracking-widest flex items-center gap-2">
-                    <i class="fa-solid fa-grip-lines text-stone-400"></i> CineZine — Artículo
-                </span>
-                <button onclick="document.getElementById('muralPostModal').classList.add('hidden')" class="text-stone-400 hover:text-rose-800 dark:hover:text-rose-400 text-lg p-1 transition"><i class="fa-solid fa-xmark"></i></button>
-            </div>
-            
-            <div class="overflow-y-auto custom-scrollbar flex-grow flex flex-col">
-                
-                <!-- Padding general reducido para que sea más compacto -->
-                <div class="p-5 flex-grow">
-                    <!-- FIRMA DEL AUTOR -->
-                    <div class="flex items-center justify-between mb-4">
-                        <div class="flex items-center space-x-2 cursor-pointer hover:opacity-80 transition" onclick="openUserProfileModal('${post.author}', '${post.avatarSeed || post.author}', '${post.role || 'Crítico'}', '${post.userId || ''}')">
-                            <img src="${post.author === currentUsername ? getAvatarUrl() : `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(post.avatarSeed || post.author)}`}" class="w-7 h-7 rounded-full border border-stone-300 dark:border-stone-700">
-                            <div class="text-[9px] font-mono uppercase tracking-widest">
-                                <span class="font-bold text-stone-800 dark:text-stone-200 block hover:underline">Por ${post.author}</span>
-                                <span class="text-stone-500">${post.role || 'Crítico'} · ${getRelativeTime(post)}</span>
-                            </div>
-                        </div>
-                        ${editButtonHtml}
-                    </div>
-
-                    ${headerBlockHtml}
-
-                    <!-- CAJA DE LA RESEÑA (Texto en text-sm y padding p-4) -->
-                    <div class="relative mt-4 bg-stone-100 dark:bg-stone-950 p-4 border-l-4 border-rose-800 border-y border-r border-stone-200 dark:border-stone-800 shadow-sm">
-                        <i class="fa-solid fa-quote-left absolute top-2 right-2 text-4xl text-stone-200 dark:text-stone-800 opacity-30 z-0"></i>
-                        <div class="relative z-10">
-                            ${(post.reviewTitle && post.reviewTitle.trim() !== '') ? `<h3 class="font-heading font-bold text-base text-rose-900 dark:text-rose-400 mb-1">${post.reviewTitle}</h3>` : ''}
-                            <p class="font-serif text-sm text-stone-700 dark:text-stone-300 leading-relaxed italic">"${post.content}"</p>
-                        </div>
-                    </div>
-
-                    <!-- REACCIONES -->
-                    <div class="flex items-center space-x-5 mt-5 pt-3 border-t border-stone-200 dark:border-stone-800 font-mono text-[10px] uppercase tracking-wider">
-                        <button onclick="reactToMuralPost('${post.id}', 'agree')" class="${agreeActive} transition flex items-center space-x-1.5">
-                            <i class="fa-regular fa-thumbs-up"></i><span>Acuerdo (${reactions.agree || 0})</span>
-                        </button>
-                        <button onclick="reactToMuralPost('${post.id}', 'disagree')" class="${disagreeActive} transition flex items-center space-x-1.5">
-                            <i class="fa-regular fa-thumbs-down"></i><span>Discrepo (${reactions.disagree || 0})</span>
-                        </button>
-                    </div>
-                </div>
-
-                <!-- COMENTARIOS -->
-                <div class="bg-stone-100/60 dark:bg-stone-950/60 p-5 border-t border-stone-300 dark:border-stone-800 flex-shrink-0">
-                    <h4 class="font-heading font-bold text-[11px] uppercase tracking-widest text-stone-800 dark:text-stone-200 mb-3 flex items-center">
-                        <i class="fa-solid fa-comments mr-1.5 text-rose-800"></i> Notas al margen (${comments.length})
-                    </h4>
-                    
-                    <div id="muralCommentsList_${post.id}" class="space-y-3 mb-3">
-                        ${commentsTreeHtml}
-                    </div>
-
-                    <div class="space-y-1">
-                        <div id="replyIndicator_${post.id}" class="text-[10px] font-mono text-rose-800 hidden"></div>
-                        <div class="flex items-center border-b border-stone-300 dark:border-stone-700 focus-within:border-rose-800 transition-colors pb-0.5">
-                            <input type="text" id="newCommentInput_${postId}" placeholder="Escribe tu apunte..." class="flex-grow bg-transparent px-1 py-1 text-xs font-serif focus:outline-none placeholder-stone-400" onkeydown="if(event.key === 'Enter') submitMuralComment('${post.id}')">
-                            <button type="button" id="emojiBtn_newCommentInput_${postId}" onclick="toggleEmojiPicker('newCommentInput_${postId}')" class="px-1.5 text-stone-400 hover:text-rose-800 transition text-sm" title="Añadir Emoji">🎬</button>
-                            <button onclick="submitMuralComment('${post.id}')" class="ml-2 px-3 py-1 bg-stone-800 hover:bg-rose-900 text-white font-mono text-[9px] transition uppercase tracking-widest font-bold">Enviar</button>
-                        </div>
-                    </div>
-                </div>
-
-            </div>
-        </div>
-    `;
-    makeModalDraggable('muralPostModal', 'muralPostHeader');
-    modal.classList.remove('hidden');
-}
-
-async function submitMuralComment(postId) {
-    const input = document.getElementById(`newCommentInput_${postId}`);
-    if (!input || !input.value.trim()) return;
-
-    let textVal = input.value.trim();
-    const targetObj = replyingTargetMap[postId];
-    const parentId = targetObj ? targetObj.commentId : null;
-    const replyToAuthor = targetObj ? targetObj.author : null;
-
-    if (replyToAuthor && !textVal.startsWith(`@${replyToAuthor}`)) {
-        textVal = `@${replyToAuthor} ${textVal}`;
-    }
-
-    const newComment = {
-        id: 'c_' + Date.now() + Math.random().toString(36).substring(2, 7),
-        parentId: parentId,
-        replyToAuthor: replyToAuthor,
-        author: currentUsername,
-        avatarSeed: currentAvatarSeed,
-        text: textVal,
-        date: "Hace un momento",
-        reactions: { agree: 0, disagree: 0 },
-        userVotes: {}
-    };
-
-    // Si hay un usuario autenticado, guardamos en Firestore
-    if (window.currentUser && window.fbAddCommentFirestore) {
-        await window.fbAddCommentFirestore(postId, newComment);
-    } else {
-        // Fallback local para invitados
-        let savedMural = JSON.parse(localStorage.getItem('cine_diario_mural_posts') || '[]');
-        let post = savedMural.find(p => p.id === postId);
-        if (post) {
-            if (!post.comments) post.comments = [];
-            post.comments.push(newComment);
-            localStorage.setItem('cine_diario_mural_posts', JSON.stringify(savedMural));
-        }
-    }
-
-    clearReplyTarget(postId);
-    input.value = '';
-    openMuralPostModal(postId);
-    renderMuralFeed();
-}
-
 function showDeleteConfirmationModal(onConfirm, customTitle = "Eliminar apunte", customText = "¿Estás seguro de que deseas eliminar este comentario? Esta acción no se puede deshacer.") {
     let confirmModal = document.getElementById('customConfirmModal');
     if (!confirmModal) {
@@ -2038,14 +2577,14 @@ function showDeleteConfirmationModal(onConfirm, customTitle = "Eliminar apunte",
                 <i class="fa-solid fa-triangle-exclamation"></i>
             </div>
             <div class="space-y-1">
-                <h4 class="font-heading font-bold text-sm text-stone-900 dark:text-stone-100 uppercase tracking-wider">${customTitle}</h4>
-                <p class="font-serif text-xs text-stone-600 dark:text-stone-400">${customText}</p>
+                <h4 class="font-heading font-bold text-sm text-stone-900 dark:text-stone-100 uppercase tracking-wider">${_pmEsc(customTitle)}</h4>
+                <p class="font-serif text-xs text-stone-600 dark:text-stone-400">${_pmEsc(customText)}</p>
             </div>
             <div class="grid grid-cols-2 gap-2 pt-2 border-t border-stone-200 dark:border-stone-800 font-mono text-xs">
-                <button id="cancelConfirmBtn" class="py-2 bg-stone-200 dark:bg-stone-800 hover:bg-stone-300 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 journal-border transition uppercase tracking-wider">
+                <button id="cancelConfirmBtn" class="py-2 bg-stone-200 dark:bg-stone-800 hover:bg-stone-300 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 journal-border transition uppercase tracking-wider cursor-pointer">
                     Cancelar
                 </button>
-                <button id="acceptConfirmBtn" class="py-2 bg-rose-900 hover:bg-rose-800 text-stone-100 journal-border transition uppercase tracking-wider font-bold">
+                <button id="acceptConfirmBtn" class="py-2 bg-rose-900 hover:bg-rose-800 text-stone-100 journal-border transition uppercase tracking-wider font-bold cursor-pointer">
                     Eliminar
                 </button>
             </div>
@@ -2071,6 +2610,7 @@ function confirmDeleteCustomList(listIndex) {
     showDeleteConfirmationModal(() => {
         customLists.splice(listIndex, 1);
         saveAndRenderCustomLists();
+        updateProfileDrawerStats();
     }, "Eliminar cuaderno", `¿Estás seguro de que deseas eliminar el cuaderno "${listName}"? Se perderán todas las obras guardadas en él.`);
 }
 
@@ -2082,382 +2622,16 @@ function confirmRemoveMovieFromList(listIndex, movieId) {
     }, "Quitar obra", "¿Estás seguro de que deseas quitar esta película del cuaderno?");
 }
 
-function deleteMuralComment(postId, commentId) {
-    showDeleteConfirmationModal(() => {
-        let savedMural = JSON.parse(localStorage.getItem('cine_diario_mural_posts') || '[]');
-        let post = savedMural.find(p => p.id === postId);
-
-        if (!post) {
-            const allPosts = getCommunityAndUserPosts();
-            const basePost = allPosts.find(p => p.id === postId);
-            if (basePost) {
-                post = JSON.parse(JSON.stringify(basePost));
-                savedMural.push(post);
-            }
-        }
-
-        if (post && post.comments) {
-            post.comments = post.comments.filter(c => c.id !== commentId && c.parentId !== commentId);
-            localStorage.setItem('cine_diario_mural_posts', JSON.stringify(savedMural));
-            openMuralPostModal(postId);
-            renderMuralFeed();
-        }
-    });
-}
-
-function enableEditMuralPost(postId) {
-    let savedMural = JSON.parse(localStorage.getItem('cine_diario_mural_posts') || '[]');
-    let post = savedMural.find(p => p.id === postId);
-
-    if (!post) {
-        const allPosts = getCommunityAndUserPosts();
-        const basePost = allPosts.find(p => p.id === postId);
-        if (basePost) {
-            post = JSON.parse(JSON.stringify(basePost));
-            savedMural.push(post);
-        }
-    }
-
-    if (!post) return;
-
-    const modalContentArea = document.querySelector('#muralPostModal .space-y-3');
-    if (!modalContentArea) return;
-
-    const currentText = post.content || '';
-    const currentReviewTitle = post.reviewTitle || '';
-
-    modalContentArea.innerHTML = `
-        <div class="space-y-3 bg-stone-100 dark:bg-stone-950 p-3 journal-border">
-            <span class="text-[10px] font-mono uppercase tracking-wider text-rose-800 dark:text-rose-400 font-bold">Editando apunte / reseña</span>
-            
-            <div class="space-y-1">
-                <label class="text-[10px] font-mono text-stone-500 uppercase">Título del apunte</label>
-                <input type="text" id="editPostTitleInput_${postId}" value="${currentReviewTitle}" class="w-full bg-stone-50 dark:bg-stone-900 journal-border px-2 py-1.5 text-xs font-heading font-bold focus:outline-none focus:border-rose-800">
-            </div>
-
-            <div class="space-y-1 relative">
-                <label class="text-[10px] font-mono text-stone-500 uppercase">Contenido</label>
-                <textarea id="editPostContentInput_${postId}" rows="3" class="w-full bg-stone-50 dark:bg-stone-900 journal-border p-2 text-xs font-serif focus:outline-none focus:border-rose-800">${currentText}</textarea>
-            </div>
-
-            <div class="flex items-center justify-end space-x-2 pt-1 font-mono text-xs">
-                <button onclick="openMuralPostModal('${postId}')" class="px-3 py-1 bg-stone-300 dark:bg-stone-800 text-stone-700 dark:text-stone-300 journal-border transition">Cancelar</button>
-                <button onclick="saveEditedMuralPost('${postId}')" class="px-3 py-1 bg-rose-900 hover:bg-rose-800 text-stone-100 journal-border transition font-bold">Guardar cambios</button>
-            </div>
-        </div>
-    `;
-}
-
-function saveEditedMuralPost(postId) {
-    const titleInput = document.getElementById(`editPostTitleInput_${postId}`);
-    const contentInput = document.getElementById(`editPostContentInput_${postId}`);
-    if (!contentInput) return;
-
-    const newContent = contentInput.value.trim();
-    const newTitle = titleInput ? titleInput.value.trim() : '';
-
-    let savedMural = JSON.parse(localStorage.getItem('cine_diario_mural_posts') || '[]');
-    let post = savedMural.find(p => p.id === postId);
-
-    if (!post) {
-        const allPosts = getCommunityAndUserPosts();
-        const basePost = allPosts.find(p => p.id === postId);
-        if (basePost) {
-            post = JSON.parse(JSON.stringify(basePost));
-            savedMural.push(post);
-        }
-    }
-
-    if (post) {
-        post.content = newContent;
-        post.reviewTitle = newTitle;
-        post.date = "Editado recientemente";
-
-        localStorage.setItem('cine_diario_mural_posts', JSON.stringify(savedMural));
-
-        openMuralPostModal(postId);
-        renderMuralFeed();
-    }
-}
-
-function enableEditComment(postId, commentId) {
-    const textEl = document.getElementById(`commentText_${commentId}`);
-    if (!textEl) return;
-    const currentText = textEl.innerText;
-
-    textEl.innerHTML = `
-        <div class="flex items-center space-x-2 pt-1 relative">
-            <input type="text" id="editCommentInput_${commentId}" value="${currentText}" class="flex-grow bg-stone-50 dark:bg-stone-950 journal-border px-2 py-1 text-xs font-serif focus:outline-none focus:border-rose-800" onkeydown="if(event.key==='Enter') saveEditedComment('${postId}', '${commentId}')">
-            <button type="button" id="emojiBtn_editCommentInput_${commentId}" onclick="toggleEmojiPicker('editCommentInput_${commentId}')" class="px-2 py-1 bg-stone-200 dark:bg-stone-800 text-xs journal-border">🎬</button>
-            <button onclick="saveEditedComment('${postId}', '${commentId}')" class="px-2.5 py-1 bg-stone-800 text-stone-100 text-[10px] font-mono journal-border">Guardar</button>
-        </div>
-    `;
-}
-
-function saveEditedComment(postId, commentId) {
-    const input = document.getElementById(`editCommentInput_${commentId}`);
-    if (!input || !input.value.trim()) return;
-    const newText = input.value.trim();
-
-    let savedMural = JSON.parse(localStorage.getItem('cine_diario_mural_posts') || '[]');
-    let post = savedMural.find(p => p.id === postId);
-
-    if (!post) {
-        const allPosts = getCommunityAndUserPosts();
-        post = allPosts.find(p => p.id === postId);
-        if (post) {
-            savedMural.push(JSON.parse(JSON.stringify(post)));
-            post = savedMural[savedMural.length - 1];
-        }
-    }
-
-    if (post && post.comments) {
-        const comment = post.comments.find(c => c.id === commentId);
-        if (comment) {
-            comment.text = newText;
-            comment.date = "Editado recientemente";
-            localStorage.setItem('cine_diario_mural_posts', JSON.stringify(savedMural));
-            openMuralPostModal(postId);
-            renderMuralFeed();
-        }
-    }
-}
-
-function deleteMuralPost(postId) {
-    showDeleteConfirmationModal(async () => {
-        // Si es un post de Firestore
-        if (window.currentUser && !String(postId).startsWith('comm_') && !String(postId).startsWith('user_')) {
-            if (window.fbDeletePostFirestore) {
-                await window.fbDeletePostFirestore(postId);
-            }
-        } else {
-            // Si es un post local (fallback)
-            let savedMural = JSON.parse(localStorage.getItem('cine_diario_mural_posts') || '[]');
-            savedMural = savedMural.filter(p => p.id !== postId);
-            localStorage.setItem('cine_diario_mural_posts', JSON.stringify(savedMural));
-        }
-
-        // Cerrar el modal y recargar el muro
-        document.getElementById('muralPostModal').classList.add('hidden');
-        renderMuralFeed();
-    }, "Eliminar publicación", "¿Estás seguro de que deseas eliminar esta publicación permanentemente?");
-}
-
-async function reactToMuralPost(postId, type) {
-    const allPosts = [...(window.currentFirestorePosts || []), ...getCommunityAndUserPosts()];
-    let post = allPosts.find(p => String(p.id) === String(postId));
-    if (!post) return;
-
-    if (!post.reactions) post.reactions = { agree: 0, disagree: 0 };
-    if (!post.userVotes) post.userVotes = {};
-
-    const currentVote = post.userVotes[currentUsername];
-
-    if (currentVote === type) {
-        post.reactions[type] = Math.max(0, (post.reactions[type] || 0) - 1);
-        post.userVotes[currentUsername] = null;
-    } else {
-        if (currentVote) {
-            post.reactions[currentVote] = Math.max(0, (post.reactions[currentVote] || 0) - 1);
-        }
-        post.reactions[type] = (post.reactions[type] || 0) + 1;
-        post.userVotes[currentUsername] = type;
-    }
-
-    // Si es un post de Firestore, actualizamos en la nube
-    if (window.currentUser && !String(postId).startsWith('comm_') && !String(postId).startsWith('user_') && window.fbUpdatePostFirestore) {
-        await window.fbUpdatePostFirestore(postId, {
-            reactions: post.reactions,
-            userVotes: post.userVotes
-        });
-    } else {
-        // Fallback local
-        let savedMural = JSON.parse(localStorage.getItem('cine_diario_mural_posts') || '[]');
-        let localPost = savedMural.find(p => p.id === postId);
-        if (localPost) {
-            localPost.reactions = post.reactions;
-            localPost.userVotes = post.userVotes;
-            localStorage.setItem('cine_diario_mural_posts', JSON.stringify(savedMural));
-        }
-    }
-
-    const modal = document.getElementById('muralPostModal');
-    if (modal && !modal.classList.contains('hidden')) {
-        openMuralPostModal(postId);
-    }
-    renderMuralFeed();
-}
-
-function reactToComment(postId, commentId, type) {
-    let savedMural = JSON.parse(localStorage.getItem('cine_diario_mural_posts') || '[]');
-    let post = savedMural.find(p => p.id === postId);
-
-    if (!post) {
-        const allPosts = getCommunityAndUserPosts();
-        post = allPosts.find(p => p.id === postId);
-        if (post) {
-            savedMural.push(JSON.parse(JSON.stringify(post)));
-            post = savedMural[savedMural.length - 1];
-        }
-    }
-
-    if (post && post.comments) {
-        const comment = post.comments.find(c => c.id === commentId);
-        if (comment) {
-            if (!comment.reactions) comment.reactions = { agree: 0, disagree: 0 };
-            if (!comment.userVotes) comment.userVotes = {};
-
-            const currentVote = comment.userVotes[currentUsername];
-
-            if (currentVote === type) {
-                comment.reactions[type] = Math.max(0, (comment.reactions[type] || 0) - 1);
-                comment.userVotes[currentUsername] = null;
-            } else {
-                if (currentVote) {
-                    comment.reactions[currentVote] = Math.max(0, (comment.reactions[currentVote] || 0) - 1);
-                }
-                comment.reactions[type] = (comment.reactions[type] || 0) + 1;
-                comment.userVotes[currentUsername] = type;
-            }
-
-            localStorage.setItem('cine_diario_mural_posts', JSON.stringify(savedMural));
-            openMuralPostModal(postId);
-        }
-    }
-}
-
-function getCommunityAndUserPosts() {
-    // Si ya tenemos posts en tiempo real desde Firestore, los usamos como base principal
-    if (window.currentFirestorePosts && window.currentFirestorePosts.length > 0) {
-        return window.currentFirestorePosts;
-    }
-
-    let userPublicPosts = [];
-    const savedPersonal = JSON.parse(localStorage.getItem('cine_personal_reviews') || '{}');
-    Object.keys(savedPersonal).forEach(movieId => {
-        const item = savedPersonal[movieId];
-        if (item && item.isPublic && item.review) {
-            userPublicPosts.push({
-                id: 'user_' + movieId,
-                author: currentUsername,
-                avatarSeed: currentAvatarSeed,
-                role: "Crítico Principal / Editor",
-                type: "review",
-                tmdbMovieId: parseInt(movieId),
-                movieObj: item.movie,
-                rating: item.rating,
-                reviewTitle: item.reviewTitle || '',
-                title: '',
-                content: item.review,
-                date: "Reciente",
-                reactions: { agree: 0, disagree: 0 },
-                userVotes: {},
-                comments: []
-            });
-        }
-    });
-
-    const communityPosts = [
-        {
-            id: 'comm_2',
-            author: "Martín_Cine",
-            avatarSeed: "Martin",
-            role: "Crítico Invitado/a",
-            type: "discussion",
-            tmdbMovieId: null,
-            title: "¿El cine de autor está perdiendo espacio en cartelera?",
-            content: "Abro debate: cada vez cuesta más encontrar películas independientes en salas tradicionales. ¿Qué opinan? 🍿",
-            date: "Oct 2026",
-            reactions: { agree: 8, disagree: 1 },
-            userVotes: {},
-            comments: [
-                { id: 'comm_c1', parentId: null, author: "Sofía_Film", avatarSeed: "Sofia", text: "Es totalmente cierto, las salas grandes priorizan franquicias. 🎬", date: "Ayer", reactions: { agree: 3, disagree: 0 }, userVotes: {} }
-            ]
-        }
-    ];
-
-    const customSaved = JSON.parse(localStorage.getItem('cine_diario_mural_posts') || '[]');
-    const map = new Map();
-
-    [...communityPosts, ...userPublicPosts].forEach(p => map.set(p.id, p));
-    customSaved.forEach(p => map.set(p.id, p));
-
-    return Array.from(map.values());
-}
-
 function getAvatarUrl() {
-    if (currentAvatarCustomUrl) return currentAvatarCustomUrl;
+    if (currentAvatarCustomUrl && /^https:\/\//i.test(currentAvatarCustomUrl)) return currentAvatarCustomUrl;
     return `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(currentAvatarSeed)}`;
 }
 
 function saveUserBioFromDrawer(val) {
     currentUserBio = val.trim();
+    window.currentUserBio = currentUserBio;
     localStorage.setItem('cine_user_bio', currentUserBio);
     if (window.fbSaveProfile) window.fbSaveProfile({ bio: currentUserBio });
-}
-
-function updateProfileDrawerStats() {
-    const hUsername = document.getElementById('headerUsername');
-    const dUsername = document.getElementById('drawerUsername');
-    const dBioInput = document.getElementById('drawerUserBioInput');
-
-    if (hUsername) hUsername.innerText = currentUsername;
-    if (dUsername) dUsername.innerText = currentUsername;
-    if (dBioInput) dBioInput.value = currentUserBio;
-
-    const avatarUrl = getAvatarUrl();
-    const hAvatar = document.getElementById('headerProfileAvatar');
-    const dAvatar = document.getElementById('drawerProfileAvatar');
-
-    if (hAvatar) hAvatar.src = avatarUrl;
-    if (dAvatar) dAvatar.src = avatarUrl;
-
-    const sWatched = document.getElementById('statWatchedCount');
-    const sBitacora = document.getElementById('statBitacoraCount');
-    const sLists = document.getElementById('statListsCount');
-    if (sWatched) sWatched.innerText = watchedMovies.length;
-    if (sBitacora) sBitacora.innerText = Object.keys(personalReviews).length;
-    if (sLists) sLists.innerText = customLists.length;
-
-    // --- INTEGRACIÓN DEL BOTÓN DE AUTH EN EL PANEL LATERAL ---
-    let authSection = document.getElementById('drawerAuthSection');
-    const drawerContent = document.getElementById('profileDrawer') ? document.getElementById('profileDrawer').querySelector('.space-y-4, .p-6, div') : null;
-
-    if (!authSection && drawerContent) {
-        authSection = document.createElement('div');
-        authSection.id = 'drawerAuthSection';
-        authSection.className = 'pt-4 border-t border-stone-800 mt-4';
-        drawerContent.appendChild(authSection);
-    }
-
-    if (authSection) {
-        if (window.currentUser) {
-            authSection.innerHTML = `
-                <button onclick="window.fbSignOut(); toggleProfileDrawer();" class="w-full py-2 bg-rose-900 hover:bg-rose-800 text-stone-100 font-mono text-xs journal-border transition uppercase tracking-wider font-bold">
-                    <i class="fa-solid fa-right-from-bracket mr-2"></i>Cerrar Sesión
-                </button>
-            `;
-        } else {
-            authSection.innerHTML = `
-                <button onclick="toggleProfileDrawer(); document.getElementById('authModal').classList.remove('hidden');" class="w-full py-2 bg-rose-900 hover:bg-rose-800 text-stone-100 font-mono text-xs journal-border transition uppercase tracking-wider font-bold">
-                    <i class="fa-solid fa-right-to-bracket mr-2"></i>Iniciar Sesión / Registrarse
-                </button>
-            `;
-        }
-    }
-
-    if (window.currentUser) {
-        authSection.innerHTML = `
-        <div class="space-y-2">
-            <button onclick="window.fbSignOut(); toggleProfileDrawer();" class="w-full py-2 bg-stone-800 hover:bg-stone-700 text-stone-100 font-mono text-xs journal-border transition uppercase tracking-wider">
-                <i class="fa-solid fa-right-from-bracket mr-2"></i>Cerrar Sesión
-            </button>
-            <button onclick="window.fbDeleteAccount()" class="w-full py-2 bg-rose-950 hover:bg-rose-900 text-rose-400 font-mono text-xs journal-border transition uppercase tracking-wider">
-                <i class="fa-solid fa-trash-can mr-2"></i>Eliminar cuenta
-            </button>
-        </div>
-    `;
-    }
 }
 
 function toggleProfileDrawer() {
@@ -2499,6 +2673,7 @@ function confirmAvatarWordPrompt() {
     currentAvatarCustomUrl = null;
     localStorage.removeItem('cine_avatar_custom_url');
     currentAvatarSeed = newWord;
+    window.currentAvatarSeed = currentAvatarSeed;
     localStorage.setItem('cine_avatar_seed', currentAvatarSeed);
     if (window.fbSaveProfile) window.fbSaveProfile({ avatarSeed: currentAvatarSeed });
     updateProfileDrawerStats();
@@ -2506,21 +2681,22 @@ function confirmAvatarWordPrompt() {
 }
 
 window.onload = async () => {
-    const initialIds = [872585, 98];
-    moviesList = [];
-    for (const id of initialIds) {
-        const movie = await fetchDualLanguageMovie(`/movie/${id}`);
-        if (movie) moviesList.push(movie);
-    }
-
-    resetAndFetchFilteredMovies();
-    loadOscarMovies();
     refreshRoulette();
     renderCustomLists();
     updateProfileDrawerStats();
 
     switchMainTab(defaultMainTab);
     renderMuralFeed('all');
+
+    const oscarDetails = document.getElementById('oscarDetails');
+    if (oscarDetails) {
+        oscarDetails.addEventListener('toggle', () => {
+            if (oscarDetails.open && !_oscarsInitialized) {
+                _oscarsInitialized = true;
+                loadOscarMovies();
+            }
+        });
+    }
 
     makeModalDraggable('detailModal', 'detailModalHeader');
     makeModalDraggable('smartPublishModal', 'smartPublishHeader');
@@ -2538,13 +2714,50 @@ window.onload = async () => {
     }
 };
 
+// ===== CONSULTAS TMDb (CON PROXY VERCEL, DEDUPLICACIÓN Y CACHÉ) =====
+const _tmdbCache = new Map();
+const _tmdbInFlight = new Map();
+let _catalogReq = 0;
+
+async function fetchFromTMDb(endpoint) {
+    const hit = _tmdbCache.get(endpoint);
+    if (hit && Date.now() - hit.t < 15 * 60 * 1000) return hit.v;
+    if (_tmdbInFlight.has(endpoint)) return _tmdbInFlight.get(endpoint);
+
+    const task = (async () => {
+        try {
+            const isLocalEnv = location.protocol === 'file:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+            const useLocalToken = isLocalEnv && !!window.LOCAL_TMDB_TOKEN;
+            const url = useLocalToken
+                ? `https://api.themoviedb.org/3${endpoint}`
+                : `${TMDB_PROXY_URL}?endpoint=${encodeURIComponent(endpoint)}`;
+            const headers = useLocalToken
+                ? { 'Authorization': `Bearer ${window.LOCAL_TMDB_TOKEN}`, 'Content-Type': 'application/json;charset=utf-8' }
+                : { 'Accept': 'application/json' };
+
+            const response = await fetch(url, { method: 'GET', headers });
+            if (!response.ok) throw new Error("Error en TMDb API");
+            const json = await response.json();
+            _tmdbCache.set(endpoint, { t: Date.now(), v: json });
+            return json;
+        } catch (err) {
+            return null;
+        } finally {
+            _tmdbInFlight.delete(endpoint);
+        }
+    })();
+
+    _tmdbInFlight.set(endpoint, task);
+    return task;
+}
+
 async function fetchDualLanguageMovie(endpoint) {
     try {
         const sep = endpoint.includes('?') ? '&' : '?';
-        const [dataOverview, dataTitle] = await Promise.all([
-            fetchFromTMDb(`${endpoint}${sep}language=${currentLang}`),
-            fetchFromTMDb(`${endpoint}${sep}language=${currentTitleLang}`)
-        ]);
+        const sameLang = currentLang === currentTitleLang;
+        const dataOverviewP = fetchFromTMDb(`${endpoint}${sep}language=${currentLang}`);
+        const dataTitleP = sameLang ? dataOverviewP : fetchFromTMDb(`${endpoint}${sep}language=${currentTitleLang}`);
+        const [dataOverview, dataTitle] = await Promise.all([dataOverviewP, dataTitleP]);
 
         if (!dataOverview) return null;
 
@@ -2561,7 +2774,7 @@ async function fetchDualLanguageMovie(endpoint) {
             subtitle: subTitle !== mainTitle ? subTitle : '',
             rating: dataOverview.vote_average ? dataOverview.vote_average.toFixed(1) : '8.0',
             votes: dataOverview.vote_count > 1000 ? (dataOverview.vote_count / 1000).toFixed(0) + 'k' : dataOverview.vote_count,
-            poster: posterPath ? `https://image.tmdb.org/t/p/w500${posterPath}` : 'https://via.placeholder.com/150',
+            poster: posterPath ? `https://image.tmdb.org/t/p/w500${posterPath}` : POSTER_FALLBACK,
             overview: dataOverview.overview || 'Sin descripción disponible.',
             year: dataOverview.release_date ? dataOverview.release_date.split('-')[0] : 'N/A'
         };
@@ -2570,19 +2783,40 @@ async function fetchDualLanguageMovie(endpoint) {
     }
 }
 
-async function fetchFromTMDb(endpoint) {
-    try {
-        const response = await fetch(`https://api.themoviedb.org/3${endpoint}`, {
-            method: 'GET',
-            headers: { 'Authorization': `Bearer ${TMDB_BEARER_TOKEN}`, 'Content-Type': 'application/json;charset=utf-8' }
-        });
-        if (!response.ok) throw new Error("Error en TMDb API");
-        return await response.json();
-    } catch (err) { return null; }
+async function fetchSearchMovieDual(query) {
+    const encoded = encodeURIComponent(query.trim());
+    const sameLang = currentLang === currentTitleLang;
+    const dataInterfaceP = fetchFromTMDb(`/search/movie?query=${encoded}&language=${currentLang}`);
+    const dataTitleP = sameLang ? dataInterfaceP : fetchFromTMDb(`/search/movie?query=${encoded}&language=${currentTitleLang}`);
+    const [dataInterface, dataTitle] = await Promise.all([dataInterfaceP, dataTitleP]);
+
+    if (!dataInterface || !dataInterface.results) return [];
+
+    return dataInterface.results.map(m => {
+        const titleMatch = dataTitle && dataTitle.results ? dataTitle.results.find(t => t.id === m.id) : null;
+        const titleMain = titleMatch ? (titleMatch.title || titleMatch.original_title) : (m.title || m.original_title);
+        const titleSub = (m.title || m.original_title);
+        const posterPath = (titleMatch && titleMatch.poster_path) ? titleMatch.poster_path : m.poster_path;
+
+        return {
+            id: m.id,
+            title: titleMain,
+            subtitle: titleSub !== titleMain ? titleSub : '',
+            rating: m.vote_average ? m.vote_average.toFixed(1) : 'N/A',
+            votes: m.vote_count > 1000 ? (m.vote_count / 1000).toFixed(0) + 'k' : (m.vote_count || 0),
+            poster: posterPath ? `https://image.tmdb.org/t/p/w500${posterPath}` : POSTER_FALLBACK,
+            overview: m.overview || 'Sin descripción disponible.',
+            year: m.release_date ? m.release_date.split('-')[0] : 'N/A'
+        };
+    });
 }
 
-function resetAndFetchFilteredMovies() { currentFilterPage = 10; // la carga inicial ya trae las páginas 1-10
-    fetchedResults = []; fetchMultipleFilteredPages(); }
+function resetAndFetchFilteredMovies() {
+    _catalogInitialized = true;
+    currentFilterPage = 3;
+    fetchedResults = [];
+    fetchMultipleFilteredPages();
+}
 
 async function fetchMultipleFilteredPages() {
     const genre = document.getElementById('genreSelect').value;
@@ -2596,9 +2830,13 @@ async function fetchMultipleFilteredPages() {
     let baseTitle = `/discover/movie?language=${currentTitleLang}&sort_by=${sortBy}&vote_average.gte=${minRating}&vote_average.lte=${maxRating}&vote_count.gte=${minVotes}`;
     if (genre) { baseEs += `&with_genres=${genre}`; baseTitle += `&with_genres=${genre}`; }
 
-    const pages = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-    const responsesEs = await Promise.all(pages.map(p => fetchFromTMDb(`${baseEs}&page=${p}`)));
-    const responsesTitle = await Promise.all(pages.map(p => fetchFromTMDb(`${baseTitle}&page=${p}`)));
+    const pages = [1, 2, 3];
+    const myReq = ++_catalogReq;
+    const sameLang = currentLang === currentTitleLang;
+    const pEs = Promise.all(pages.map(p => fetchFromTMDb(`${baseEs}&page=${p}`)));
+    const pTitle = sameLang ? pEs : Promise.all(pages.map(p => fetchFromTMDb(`${baseTitle}&page=${p}`)));
+    const [responsesEs, responsesTitle] = await Promise.all([pEs, pTitle]);
+    if (myReq !== _catalogReq) return;
 
     fetchedResults = [];
     responsesEs.forEach((dataEs, index) => {
@@ -2616,7 +2854,7 @@ async function fetchMultipleFilteredPages() {
                     subtitle: subTitle !== mainTitle ? subTitle : '',
                     rating: mEs.vote_average ? mEs.vote_average.toFixed(1) : 'N/A',
                     votes: mEs.vote_count > 1000 ? (mEs.vote_count / 1000).toFixed(0) + 'k' : (mEs.vote_count || 0),
-                    poster: posterPath ? `https://image.tmdb.org/t/p/w500${posterPath}` : 'https://via.placeholder.com/150',
+                    poster: posterPath ? `https://image.tmdb.org/t/p/w500${posterPath}` : POSTER_FALLBACK,
                     overview: mEs.overview || 'Sin descripción disponible.',
                     year: mEs.release_date ? mEs.release_date.split('-')[0] : 'N/A'
                 };
@@ -2626,11 +2864,7 @@ async function fetchMultipleFilteredPages() {
     });
 
     renderResultsGrid();
-
-    const countIndicator = document.getElementById('catalogCountIndicator');
-    if (countIndicator) {
-        updateCatalogCount();
-    }
+    updateCatalogCount();
 }
 
 async function loadNextFilteredPageAutomatically() {
@@ -2660,8 +2894,10 @@ async function fetchMultipleFilteredPagesForScroll(pagesArray) {
     let baseTitle = `/discover/movie?language=${currentTitleLang}&sort_by=${sortBy}&vote_average.gte=${minRating}&vote_average.lte=${maxRating}&vote_count.gte=${minVotes}`;
     if (genre) { baseEs += `&with_genres=${genre}`; baseTitle += `&with_genres=${genre}`; }
 
-    const responsesEs = await Promise.all(pagesArray.map(p => fetchFromTMDb(`${baseEs}&page=${p}`)));
-    const responsesTitle = await Promise.all(pagesArray.map(p => fetchFromTMDb(`${baseTitle}&page=${p}`)));
+    const sameLang = currentLang === currentTitleLang;
+    const pEs = Promise.all(pagesArray.map(p => fetchFromTMDb(`${baseEs}&page=${p}`)));
+    const pTitle = sameLang ? pEs : Promise.all(pagesArray.map(p => fetchFromTMDb(`${baseTitle}&page=${p}`)));
+    const [responsesEs, responsesTitle] = await Promise.all([pEs, pTitle]);
 
     responsesEs.forEach((dataEs, index) => {
         if (dataEs && dataEs.results) {
@@ -2677,7 +2913,7 @@ async function fetchMultipleFilteredPagesForScroll(pagesArray) {
                     subtitle: subTitle !== mainTitle ? subTitle : '',
                     rating: mEs.vote_average ? mEs.vote_average.toFixed(1) : 'N/A',
                     votes: mEs.vote_count > 1000 ? (mEs.vote_count / 1000).toFixed(0) + 'k' : (mEs.vote_count || 0),
-                    poster: posterPath ? `https://image.tmdb.org/t/p/w500${posterPath}` : 'https://via.placeholder.com/150',
+                    poster: posterPath ? `https://image.tmdb.org/t/p/w500${posterPath}` : POSTER_FALLBACK,
                     overview: mEs.overview || 'Sin descripción disponible.',
                     year: mEs.release_date ? mEs.release_date.split('-')[0] : 'N/A'
                 };
@@ -2687,11 +2923,7 @@ async function fetchMultipleFilteredPagesForScroll(pagesArray) {
     });
 
     renderResultsGrid();
-
-    const countIndicator = document.getElementById('catalogCountIndicator');
-    if (countIndicator) {
-        updateCatalogCount();
-    }
+    updateCatalogCount();
 }
 
 function renderResultsGrid() {
@@ -2706,11 +2938,11 @@ function renderResultsGrid() {
 
         const tmdbBadgeHtml = `<span class="bg-stone-900/85 backdrop-blur-md text-stone-100 px-1.5 py-0.5 text-[10px] font-mono journal-border shadow-md flex items-center space-x-1"><i class="fa-solid fa-star text-amber-500"></i><span>${movie.rating}</span></span>`;
         const personalBadgeHtml = personalRating !== null
-            ? `<span class="bg-rose-900/90 backdrop-blur-md text-stone-100 px-1.5 py-0.5 text-[10px] font-mono journal-border shadow-md flex items-center space-x-1" title="Tu nota personal"><i class="fa-solid fa-feather text-amber-300"></i><span>${personalRating.toFixed(1)} (Tú)</span></span>`
+            ? `<span class="bg-rose-900/90 backdrop-blur-md text-stone-100 px-1.5 py-0.5 text-[10px] font-mono journal-border shadow-md flex items-center space-x-1" title="Tu nota personal"><i class="fa-solid fa-feather text-amber-300"></i><span>${Number(personalRating).toFixed(1)} (Tú)</span></span>`
             : '';
 
         const subTitleHtml = (movie.subtitle && movie.subtitle.trim() !== '')
-            ? `<span class="block text-[10px] font-mono text-stone-500 truncate">${movie.subtitle}</span>`
+            ? `<span class="block text-[10px] font-mono text-stone-500 truncate">${_pmEsc(movie.subtitle)}</span>`
             : '';
 
         const card = document.createElement('div');
@@ -2719,16 +2951,9 @@ function renderResultsGrid() {
 
         card.innerHTML = `
             <div class="relative aspect-[2/3] w-full overflow-hidden journal-border bg-stone-200 dark:bg-stone-950 mb-2">
-                <img src="${movie.poster}" onerror="this.src='https://via.placeholder.com/150'" class="w-full h-full object-cover group-hover:scale-105 transition duration-300">
-                
-                <div class="absolute top-2 left-2 z-10">
-                    ${tmdbBadgeHtml}
-                </div>
-
-                <div class="absolute bottom-2 left-2 z-10">
-                    ${personalBadgeHtml}
-                </div>
-
+                <img src="${_pmEsc(thumbPoster(movie.poster, 'w342'))}" loading="lazy" decoding="async" onerror="this.src='${POSTER_FALLBACK}'" class="w-full h-full object-cover group-hover:scale-105 transition duration-300">
+                <div class="absolute top-2 left-2 z-10">${tmdbBadgeHtml}</div>
+                <div class="absolute bottom-2 left-2 z-10">${personalBadgeHtml}</div>
                 <button onclick="event.stopPropagation(); toggleWatchedStatus(${movie.id}); renderResultsGrid();" 
                     class="absolute top-2 right-2 z-10 p-1.5 bg-stone-900/80 hover:bg-rose-900 text-stone-100 journal-border text-xs transition shadow-md cursor-pointer ${isWatched ? '!bg-emerald-800' : ''}" 
                     title="${isWatched ? 'Marcar como no vista' : 'Marcar como vista'}">
@@ -2736,7 +2961,7 @@ function renderResultsGrid() {
                 </button>
             </div>
             <div class="space-y-1">
-                <h5 class="text-xs font-serif font-semibold truncate group-hover:text-rose-800 dark:group-hover:text-rose-400 transition">${movie.title}</h5>
+                <h5 class="text-xs font-serif font-semibold truncate group-hover:text-rose-800 dark:group-hover:text-rose-400 transition">${_pmEsc(movie.title)}</h5>
                 ${subTitleHtml}
                 <div class="flex items-center justify-between pt-1 border-t border-stone-200 dark:border-stone-800 text-[10px] font-mono text-stone-400">
                     <span>${movie.year || 'N/A'}</span>
@@ -2778,6 +3003,7 @@ function debounceFetchFilteredMovies() {
 }
 
 async function loadOscarMovies() {
+    _oscarsInitialized = true;
     let filteredDB = OSCAR_DATABASE.filter(m => oscarMode === 'WINNERS' ? m.isWinner : true);
     const results = await Promise.all(filteredDB.slice(0, 10).map(async (item) => {
         const movie = await fetchDualLanguageMovie(`/movie/${item.tmdbId}`);
@@ -2803,24 +3029,20 @@ function handleAutocompleteInput(query) {
     if (spinner) spinner.classList.remove('hidden');
 
     autocompleteDebounceTimer = setTimeout(async () => {
-        // Usamos la nueva función
         const results = await fetchSearchMovieDual(query);
-
         if (spinner) spinner.classList.add('hidden');
 
         if (results && results.length > 0) {
             if (dropdown) {
                 dropdown.innerHTML = '';
                 results.slice(0, 5).forEach(m => {
-                    const poster = m.poster; // Ya viene formateado
-
                     const item = document.createElement('div');
                     item.className = "flex items-center space-x-3 p-2 hover:bg-stone-200 dark:hover:bg-stone-800 cursor-pointer transition border-b border-stone-200 dark:border-stone-800 last:border-b-0";
                     item.innerHTML = `
-                        <img src="${poster}" class="w-8 h-12 object-cover journal-border flex-shrink-0">
+                        <img src="${_pmEsc(thumbPoster(m.poster, 'w185'))}" loading="lazy" decoding="async" onerror="this.src='${POSTER_FALLBACK}'" class="w-8 h-12 object-cover journal-border flex-shrink-0">
                         <div class="overflow-hidden">
-                            <h5 class="text-xs font-serif font-bold truncate">${m.title} (${m.year})</h5>
-                            ${m.subtitle ? `<span class="block text-[10px] font-serif text-stone-500 truncate">${m.subtitle}</span>` : ''}
+                            <h5 class="text-xs font-serif font-bold truncate">${_pmEsc(m.title)} (${m.year})</h5>
+                            ${m.subtitle ? `<span class="block text-[10px] font-serif text-stone-500 truncate">${_pmEsc(m.subtitle)}</span>` : ''}
                             <span class="text-[10px] font-mono text-stone-500"><i class="fa-solid fa-star text-amber-500"></i> ${m.rating}</span>
                         </div>
                     `;
@@ -2842,6 +3064,7 @@ function handleAutocompleteInput(query) {
     }, 400);
 }
 
+// ===== MODAL DE PUBLICACIÓN INTELIGENTE =====
 let currentPublishMode = 'review';
 let modalAutocompleteTimer = null;
 let cachedSelectedMovieObj = null;
@@ -2861,6 +3084,18 @@ window.addEventListener('click', () => {
     }
 });
 
+function clearModalMovieSelection() {
+    const searchInput = document.getElementById('modalMovieSearchInput');
+    if (searchInput) searchInput.value = '';
+    const selectedIdInput = document.getElementById('selectedTmdbMovieId');
+    if (selectedIdInput) selectedIdInput.value = '';
+    const previewBox = document.getElementById('selectedMoviePreview');
+    if (previewBox) previewBox.classList.add('hidden');
+    const dropdown = document.getElementById('modalMovieDropdown');
+    if (dropdown) dropdown.classList.add('hidden');
+    cachedSelectedMovieObj = null;
+}
+
 function openRedactionChoice(mode) {
     resetModalPosition('smartPublishModal');
     currentPublishMode = mode;
@@ -2870,24 +3105,34 @@ function openRedactionChoice(mode) {
     const ratingContainer = document.getElementById('ratingContainer');
     const titleLabel = document.getElementById('titleFieldLabel');
     const titleInput = document.getElementById('smartPostTitle');
+    const wallCheckWrap = document.getElementById('wallPublishCheckWrap');
+    const wallCheck = document.getElementById('wallPublishCheck');
 
     const form = document.getElementById('smartPublishForm');
     if (form) form.reset();
 
-    const selectedIdInput = document.getElementById('selectedTmdbMovieId');
-    if (selectedIdInput) selectedIdInput.value = '';
-    cachedSelectedMovieObj = null;
+    // Limpieza garantizada de cualquier selección previa (evita que quede pegada una película anterior)
+    clearModalMovieSelection();
+    window._smartSet = mountStars('smartStarContainer', 'smartStarText', 0, v => {
+        const h = document.getElementById('smartPostRating');
+        if (h) h.value = v || '';
+    });
+    const hRating = document.getElementById('smartPostRating');
+    if (hRating) hRating.value = '';
+    if (wallCheck) wallCheck.checked = true;
 
     if (mode === 'review') {
         if (titleEl) titleEl.innerText = "✍️ Redactar reseña cinematográfica";
         if (movieContainer) movieContainer.classList.remove('hidden');
         if (ratingContainer) ratingContainer.classList.remove('hidden');
+        if (wallCheckWrap) wallCheckWrap.classList.remove('hidden');
         if (titleLabel) titleLabel.innerText = "Titular de la reseña (Opcional)";
         if (titleInput) titleInput.removeAttribute('required');
     } else {
         if (titleEl) titleEl.innerText = "💬 Abrir debate en el muro";
         if (movieContainer) movieContainer.classList.add('hidden');
         if (ratingContainer) ratingContainer.classList.add('hidden');
+        if (wallCheckWrap) wallCheckWrap.classList.add('hidden');
         if (titleLabel) titleLabel.innerText = "Pregunta o tema del debate";
         if (titleInput) titleInput.setAttribute('required', 'true');
     }
@@ -2896,6 +3141,7 @@ function openRedactionChoice(mode) {
 }
 
 function closeSmartPublishModal() {
+    clearModalMovieSelection();
     const modal = document.getElementById('smartPublishModal');
     if (modal) modal.classList.add('hidden');
 }
@@ -2910,7 +3156,6 @@ function handleModalMovieAutocomplete(query) {
     }
 
     modalAutocompleteTimer = setTimeout(async () => {
-        // Usamos la nueva función
         const results = await fetchSearchMovieDual(query);
 
         if (results && results.length > 0) {
@@ -2920,35 +3165,33 @@ function handleModalMovieAutocomplete(query) {
                     const item = document.createElement('div');
                     item.className = "flex items-center space-x-2 p-2 hover:bg-stone-200 dark:hover:bg-stone-800 cursor-pointer transition border-b border-stone-200 dark:border-stone-800 last:border-b-0 text-xs";
                     item.innerHTML = `
-                        <img src="${m.poster}" class="w-7 h-10 object-cover journal-border flex-shrink-0">
+                        <img src="${_pmEsc(thumbPoster(m.poster, 'w185'))}" loading="lazy" decoding="async" onerror="this.src='${POSTER_FALLBACK}'" class="w-7 h-10 object-cover journal-border flex-shrink-0">
                         <div class="overflow-hidden">
-                            <span class="block font-serif font-bold truncate">${m.title} (${m.year})</span>
-                            ${m.subtitle ? `<span class="block text-[10px] font-serif text-stone-500 truncate">${m.subtitle}</span>` : ''}
+                            <span class="block font-serif font-bold truncate">${_pmEsc(m.title)} (${m.year})</span>
+                            ${m.subtitle ? `<span class="block text-[10px] font-serif text-stone-500 truncate">${_pmEsc(m.subtitle)}</span>` : ''}
                         </div>
                     `;
                     item.onclick = () => {
                         document.getElementById('modalMovieSearchInput').value = `${m.title} (${m.year})`;
                         document.getElementById('selectedTmdbMovieId').value = m.id;
-
                         cachedSelectedMovieObj = {
                             id: m.id,
                             title: m.title,
-                            subtitle: m.subtitle,
+                            subtitle: m.subtitle || '',
                             poster: m.poster,
                             rating: m.rating,
-                            overview: m.overview
+                            overview: m.overview,
+                            year: m.year
                         };
 
-                        // Rellenar la tarjeta de vista previa
                         const previewBox = document.getElementById('selectedMoviePreview');
                         const posterImg = document.getElementById('previewMoviePoster');
                         const titleTxt = document.getElementById('previewMovieTitle');
                         const overviewTxt = document.getElementById('previewMovieOverview');
 
                         if (previewBox && posterImg && titleTxt && overviewTxt) {
-                            posterImg.src = m.poster;
-                            // Mostramos el título principal, y si hay subtítulo, lo añadimos en pequeño
-                            titleTxt.innerHTML = `${m.title} (${m.year}) ${m.subtitle ? `<span class="block text-[10px] text-stone-500 font-normal mt-0.5">${m.subtitle}</span>` : ''}`;
+                            posterImg.src = safePoster(m.poster);
+                            titleTxt.innerHTML = `${_pmEsc(m.title)} (${m.year}) ${m.subtitle ? `<span class="block text-[10px] text-stone-500 font-normal italic mt-0.5">${_pmEsc(m.subtitle)}</span>` : ''}`;
                             overviewTxt.innerText = m.overview;
                             previewBox.classList.remove('hidden');
                         }
@@ -2968,13 +3211,6 @@ function handleModalMovieAutocomplete(query) {
     }, 400);
 }
 
-function clearModalMovieSelection() {
-    document.getElementById('modalMovieSearchInput').value = '';
-    document.getElementById('selectedTmdbMovieId').value = '';
-    document.getElementById('selectedMoviePreview').classList.add('hidden');
-    cachedSelectedMovieObj = null;
-}
-
 // Cerrar cualquier modal al hacer clic en su fondo oscuro exterior
 document.addEventListener('click', (e) => {
     const modalIds = [
@@ -2985,24 +3221,25 @@ document.addEventListener('click', (e) => {
         'avatarWordModal',
         'muralPostModal',
         'userProfileModal',
-        'userStatsDetailModal',
-        'userListContentModal',
         'customConfirmModal'
     ];
 
     if (modalIds.includes(e.target.id)) {
-        e.target.classList.add('hidden');
+        if (e.target.id === 'smartPublishModal') closeSmartPublishModal();
+        else if (e.target.id === 'muralPostModal') closeMuralPostModal();
+        else e.target.classList.add('hidden');
     }
 });
 
+// ===== MENÚ RÁPIDO DE CUADERNOS DESDE DETALLE =====
 function openQuickListMenuFromDetail(e) {
     e.stopPropagation();
     const dropdown = document.getElementById('quickListDropdown');
     if (!dropdown || !currentDetailMovie) return;
 
     const rect = e.currentTarget.getBoundingClientRect();
-    dropdown.style.top = `${window.scrollY + rect.top - dropdown.offsetHeight - 10}px`;
-    dropdown.style.left = `${window.scrollX + rect.left}px`;
+    dropdown.style.top = `${Math.max(10, rect.top - 180)}px`;
+    dropdown.style.left = `${Math.max(10, Math.min(window.innerWidth - 220, rect.left))}px`;
 
     renderQuickListDropdownItems();
     dropdown.classList.remove('hidden');
@@ -3025,31 +3262,24 @@ function renderQuickListDropdownItems() {
             </div>
         `;
     } else {
-        customLists.forEach((list, index) => {
+        customLists.forEach((list) => {
             if (!list.movies) list.movies = [];
             const alreadyInList = list.movies.some(m => m.id === currentDetailMovie.id);
 
             const btn = document.createElement('button');
             btn.type = 'button';
-            btn.className = `w-full text-left px-2.5 py-2 hover:bg-stone-200 dark:hover:bg-stone-800 transition flex items-center justify-between text-xs font-serif`;
+            btn.className = `w-full text-left px-2.5 py-2 hover:bg-stone-200 dark:hover:bg-stone-800 transition flex items-center justify-between text-xs font-serif cursor-pointer`;
 
             btn.innerHTML = `
-                <span class="truncate">📓 ${list.name}</span>
-                <span class="text-[10px] font-mono ${alreadyInList ? 'text-rose-800 dark:text-rose-400 font-bold' : 'text-stone-400'}">${alreadyInList ? '✓ Guardada (Quitar)' : '+ Añadir'}</span>
+                <span class="truncate">📓 ${_pmEsc(list.name)}</span>
+                <span class="text-[10px] font-mono ${alreadyInList ? 'text-rose-800 dark:text-rose-400 font-bold' : 'text-stone-400'}">${alreadyInList ? '✓ Guardada' : '+ Añadir'}</span>
             `;
 
             btn.onclick = () => {
                 if (alreadyInList) {
                     list.movies = list.movies.filter(m => m.id !== currentDetailMovie.id);
                 } else {
-                    list.movies.push({
-                        id: currentDetailMovie.id,
-                        title: currentDetailMovie.title,
-                        poster: currentDetailMovie.poster,
-                        rating: currentDetailMovie.rating,
-                        overview: currentDetailMovie.overview,
-                        year: currentDetailMovie.year
-                    });
+                    list.movies.push(slimMovie(currentDetailMovie));
                 }
                 saveAndRenderCustomLists();
                 renderQuickListDropdownItems();
@@ -3074,14 +3304,14 @@ function createNewListOnlyFromDetail() {
     if (!input || !input.value.trim()) return;
     const name = input.value.trim();
 
-    const newList = {
+    customLists.push({
         id: Date.now(),
         name: name,
+        isPublic: true,
         movies: []
-    };
-
-    customLists.push(newList);
+    });
     saveAndRenderCustomLists();
+    updateProfileDrawerStats();
     renderQuickListDropdownItems();
 }
 
@@ -3090,109 +3320,95 @@ function closeQuickListDropdown() {
     if (dropdown) dropdown.classList.add('hidden');
 }
 
-async function handleSmartPublishSubmit(e) {
-    if (e) e.preventDefault();
-
-    const titleVal = document.getElementById('smartPostTitle').value.trim();
-    const contentVal = document.getElementById('smartPostContent').value.trim();
-    const ratingVal = parseFloat(document.getElementById('smartPostRating').value);
-    const movieIdVal = document.getElementById('selectedTmdbMovieId').value;
-    const publishToWall = document.getElementById('wallPublishCheck')?.checked ?? true;
-
-    const options = { day: 'numeric', month: 'short', year: 'numeric' };
-    const dateFormatted = new Date().toLocaleDateString('es-ES', options);
-
-    if (currentPublishMode === 'review') {
-        if (!movieIdVal || !cachedSelectedMovieObj) {
-            alert("Por favor selecciona una película del buscador para tu reseña.");
-            return;
-        }
-
-        // GUARDAMOS EN LA BITÁCORA PERSONAL (Aunque no sea público en el muro)
-        personalReviews[cachedSelectedMovieObj.id] = {
-            movie: cachedSelectedMovieObj,
-            rating: isNaN(ratingVal) ? null : ratingVal,
-            review: contentVal,
-            reviewTitle: titleVal,
-            isPublic: publishToWall
-        };
-        localStorage.setItem('cine_personal_reviews', JSON.stringify(personalReviews));
-        window.fbSyncPublicStats(); // Actualizamos las stats públicas
-
-        if (publishToWall) {
-            let newPost = {
-                id: 'post_' + Date.now(),
-                author: currentUsername,
-                avatarSeed: currentAvatarSeed,
-                role: "Crítico principal / Editor",
-                type: 'review',
-                tmdbMovieId: parseInt(movieIdVal),
-                movieObj: cachedSelectedMovieObj,
-                reviewTitle: titleVal,
-                rating: isNaN(ratingVal) ? null : ratingVal,
-                content: contentVal,
-                title: '',
-                date: dateFormatted,
-                reactions: { agree: 0, disagree: 0 },
-                userVotes: {},
-                comments: []
-            };
-            if (window.currentUser && window.fbCreatePost) {
-                await window.fbCreatePost(newPost);
-            } else {
-                let savedMural = JSON.parse(localStorage.getItem('cine_diario_mural_posts') || '[]');
-                savedMural.unshift(newPost);
-                localStorage.setItem('cine_diario_mural_posts', JSON.stringify(savedMural));
-            }
-        }
-    } else {
-        // Es un debate, siempre va al muro
-        let newPost = {
-            id: 'post_' + Date.now(),
-            author: currentUsername,
-            avatarSeed: currentAvatarSeed,
-            role: "Crítico principal / Editor",
-            type: 'discussion',
-            title: titleVal,
-            content: contentVal,
-            tmdbMovieId: null,
-            date: dateFormatted,
-            reactions: { agree: 0, disagree: 0 },
-            userVotes: {},
-            comments: []
-        };
-        if (window.currentUser && window.fbCreatePost) {
-            await window.fbCreatePost(newPost);
-        } else {
-            let savedMural = JSON.parse(localStorage.getItem('cine_diario_mural_posts') || '[]');
-            savedMural.unshift(newPost);
-            localStorage.setItem('cine_diario_mural_posts', JSON.stringify(savedMural));
-        }
-    }
-
-    clearModalMovieSelection();
-    closeSmartPublishModal();
-    renderMuralFeed('all');
-}
-
-// Cerrar el menú flotante de "Fichar en cuaderno" al hacer clic fuera de él
 window.addEventListener('click', (e) => {
     const dropdown = document.getElementById('quickListDropdown');
     const btn = document.querySelector('button[onclick*="openQuickListMenuFromDetail"]');
 
     if (dropdown && !dropdown.classList.contains('hidden')) {
-        // Si el clic no fue dentro del menú ni en el botón que lo abre, lo cerramos
         if (!dropdown.contains(e.target) && (!btn || !btn.contains(e.target))) {
             dropdown.classList.add('hidden');
         }
     }
 });
 
-// Manejo de eventos del Modal de Autenticación y Registro Completo
+// ===== AUTENTICACIÓN, VERIFICACIÓN DE CORREO Y REGISTRO COMPLETO =====
+let _verifyPollTimer = null;
+let _resendCooldownTimer = null;
+
+function _setVerifyFeedback(msg, isOk) {
+    const box = document.getElementById('authVerifyMsg');
+    if (!box) return;
+    if (!msg) {
+        box.classList.add('hidden');
+        box.textContent = '';
+        return;
+    }
+    box.className = isOk
+        ? 'text-emerald-700 dark:text-emerald-400 text-xs font-mono text-center bg-emerald-900/10 p-2 journal-border'
+        : 'text-rose-700 dark:text-rose-400 text-xs font-mono text-center bg-rose-900/10 p-2 journal-border';
+    box.textContent = msg;
+}
+
+window.stopAuthVerifyWatcher = function () {
+    if (_verifyPollTimer) {
+        clearInterval(_verifyPollTimer);
+        _verifyPollTimer = null;
+    }
+    window.removeEventListener('focus', _silentCheckEmailVerified);
+};
+
+async function _silentCheckEmailVerified() {
+    const step3 = document.getElementById('authStep3');
+    const modal = document.getElementById('authModal');
+    if (!step3 || step3.classList.contains('hidden') || !modal || modal.classList.contains('hidden')) return;
+    if (!window.fbRefreshUser) return;
+    try {
+        const u = await window.fbRefreshUser();
+        if (u && u.emailVerified) {
+            window.stopAuthVerifyWatcher();
+            if (window.fbCompleteVerifiedSession) await window.fbCompleteVerifiedSession(u);
+            showToast('¡Correo verificado con éxito! Bienvenido/a a CineZine ✓', 'ok');
+        }
+    } catch (e) { }
+}
+
+window.showAuthLoginStep = function () {
+    window.stopAuthVerifyWatcher();
+    const s1 = document.getElementById('authStep1');
+    const s2 = document.getElementById('authStep2');
+    const s3 = document.getElementById('authStep3');
+    if (s1) s1.classList.remove('hidden');
+    if (s2) s2.classList.add('hidden');
+    if (s3) s3.classList.add('hidden');
+};
+
+window.showAuthVerifyStep = function (email, msg, isOk) {
+    const modal = document.getElementById('authModal');
+    const s1 = document.getElementById('authStep1');
+    const s2 = document.getElementById('authStep2');
+    const s3 = document.getElementById('authStep3');
+    const targetEmail = document.getElementById('verifyTargetEmail');
+
+    if (s1) s1.classList.add('hidden');
+    if (s2) s2.classList.add('hidden');
+    if (s3) s3.classList.remove('hidden');
+    if (targetEmail) targetEmail.textContent = email || (window.currentUser && window.currentUser.email) || 'tu correo';
+    _setVerifyFeedback(msg || '', !!isOk);
+
+    if (modal) modal.classList.remove('hidden');
+
+    window.stopAuthVerifyWatcher();
+    window.addEventListener('focus', _silentCheckEmailVerified);
+    _verifyPollTimer = setInterval(() => {
+        if (!document.hidden) _silentCheckEmailVerified();
+    }, 5000);
+};
+
 document.addEventListener('DOMContentLoaded', () => {
     const authModal = document.getElementById('authModal');
     const step1 = document.getElementById('authStep1');
     const step2 = document.getElementById('authStep2');
+    const step3 = document.getElementById('authStep3');
     const btnShowRegisterStep = document.getElementById('btnShowRegisterStep');
     const btnBackToStep1 = document.getElementById('btnBackToStep1');
     const loginForm = document.getElementById('loginForm');
@@ -3202,8 +3418,91 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnFinalRegister = document.getElementById('btnFinalRegister');
     const regAvatarSeedInput = document.getElementById('regAvatarSeed');
     const regAvatarPreview = document.getElementById('regAvatarPreview');
+    const btnCheckVerified = document.getElementById('btnCheckVerified');
+    const btnResendVerify = document.getElementById('btnResendVerify');
+    const btnBackFromVerify = document.getElementById('btnBackFromVerify');
+    const btnGuestFromVerify = document.getElementById('btnGuestFromVerify');
 
-    // Actualización en tiempo real de la vista previa del avatar
+    function startResendCooldown(seconds = 60) {
+        if (!btnResendVerify) return;
+        clearInterval(_resendCooldownTimer);
+        let left = seconds;
+        btnResendVerify.disabled = true;
+        btnResendVerify.innerHTML = `<i class="fa-solid fa-clock mr-1.5"></i>Reenviar disponible en ${left}s`;
+        _resendCooldownTimer = setInterval(() => {
+            left--;
+            if (left <= 0) {
+                clearInterval(_resendCooldownTimer);
+                btnResendVerify.disabled = false;
+                btnResendVerify.innerHTML = `<i class="fa-solid fa-paper-plane mr-1.5"></i>Reenviar enlace de verificación`;
+            } else {
+                btnResendVerify.innerHTML = `<i class="fa-solid fa-clock mr-1.5"></i>Reenviar disponible en ${left}s`;
+            }
+        }, 1000);
+    }
+
+    if (btnCheckVerified) {
+        btnCheckVerified.addEventListener('click', async () => {
+            btnCheckVerified.disabled = true;
+            const prevHtml = btnCheckVerified.innerHTML;
+            btnCheckVerified.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-1.5"></i>Comprobando verificación...`;
+            _setVerifyFeedback('', false);
+            try {
+                const u = window.fbRefreshUser ? await window.fbRefreshUser() : null;
+                if (u && u.emailVerified) {
+                    window.stopAuthVerifyWatcher();
+                    if (window.fbCompleteVerifiedSession) await window.fbCompleteVerifiedSession(u);
+                    showToast('¡Correo verificado! Bienvenido/a a CineZine ✓', 'ok');
+                } else {
+                    _setVerifyFeedback('Todavía no figura como verificado. Abre el enlace del correo (revisa Spam) y vuelve a pulsar aquí.', false);
+                }
+            } catch (err) {
+                _setVerifyFeedback('No pudimos comprobar el estado ahora mismo. Inténtalo de nuevo en unos segundos.', false);
+            } finally {
+                btnCheckVerified.disabled = false;
+                btnCheckVerified.innerHTML = prevHtml;
+            }
+        });
+    }
+
+    if (btnResendVerify) {
+        btnResendVerify.addEventListener('click', async () => {
+            _setVerifyFeedback('', false);
+            try {
+                if (window.fbResendVerification) await window.fbResendVerification();
+                _setVerifyFeedback('¡Listo! Enviamos un nuevo enlace a tu correo. Revisa tu bandeja de entrada y Spam.', true);
+                startResendCooldown(60);
+            } catch (err) {
+                const msg = err && err.code === 'auth/too-many-requests'
+                    ? 'Ya se envió un correo recientemente. Espera un minuto antes de pedir otro.'
+                    : 'No se pudo reenviar el correo. Inténtalo más tarde.';
+                _setVerifyFeedback(msg, false);
+            }
+        });
+    }
+
+    if (btnBackFromVerify) {
+        btnBackFromVerify.addEventListener('click', async () => {
+            window.stopAuthVerifyWatcher();
+            try { if (window.fbSignOutQuiet) await window.fbSignOutQuiet(); } catch (e) { }
+            window.showAuthLoginStep();
+        });
+    }
+
+    if (btnGuestFromVerify) {
+        btnGuestFromVerify.addEventListener('click', async () => {
+            window.stopAuthVerifyWatcher();
+            sessionStorage.setItem('cineGuestChosen', '1');
+            sessionStorage.setItem('guestMode', 'true');
+            try { if (window.fbSignOutQuiet) await window.fbSignOutQuiet(); } catch (e) { }
+            if (authModal) authModal.classList.add('hidden');
+            currentUsername = 'Invitado/a'; window.currentUsername = 'Invitado/a';
+            currentAvatarSeed = 'Invitado/a'; window.currentAvatarSeed = 'Invitado/a';
+            updateProfileDrawerStats();
+            renderMuralFeed();
+        });
+    }
+
     if (regAvatarSeedInput && regAvatarPreview) {
         regAvatarSeedInput.addEventListener('input', (e) => {
             const seedVal = e.target.value.trim() || 'default';
@@ -3211,7 +3510,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Validación interactiva de contraseña en tiempo real
     if (regPasswordInput) {
         regPasswordInput.addEventListener('input', (e) => {
             const val = e.target.value;
@@ -3245,16 +3543,15 @@ document.addEventListener('DOMContentLoaded', () => {
             el.className = "text-emerald-400 flex items-center gap-1.5 transition-colors";
             el.innerHTML = el.innerHTML.replace('❌', '✔');
         } else {
-            el.className = "text-gray-500 flex items-center gap-1.5 transition-colors";
+            el.className = "text-stone-500 flex items-center gap-1.5 transition-colors";
             el.innerHTML = el.innerHTML.replace('✔', '❌');
         }
     }
 
-    // Iniciar Sesión con Correo
     if (loginForm) {
         loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            const email = document.getElementById('authEmail').value;
+            const email = document.getElementById('authEmail').value.trim();
             const password = document.getElementById('authPassword').value;
             const errorDiv = document.getElementById('authErrorMsg');
 
@@ -3262,13 +3559,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
             try {
                 await window.setAuthPersistence(rememberCheckbox.checked);
-                await window.fbSignIn(email, password);
-                sessionStorage.removeItem('guestMode');
+                const cred = await window.fbSignIn(email, password);
+                const u = window.fbRefreshUser ? await window.fbRefreshUser() : (cred && cred.user);
 
-                // El nombre/avatar/bio se cargan desde la nube en onAuthStateChanged (index.html)
+                if (u && _isUserUnverified(u)) {
+                    window.showAuthVerifyStep(u.email || email, 'Tu correo aún no ha sido verificado. Confirma el enlace en tu bandeja o pide uno nuevo.', false);
+                    return;
+                }
+
+                sessionStorage.removeItem('guestMode');
                 updateProfileDrawerStats();
                 if (authModal) authModal.classList.add('hidden');
-
             } catch (err) {
                 let friendlyMessage = "Correo electrónico o contraseña incorrectos.";
                 if (err.code === 'auth/too-many-requests') {
@@ -3287,40 +3588,39 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Cambiar al Paso 2 (Formulario de Registro Completo)
     if (btnShowRegisterStep) {
         btnShowRegisterStep.addEventListener('click', () => {
             if (step1) step1.classList.add('hidden');
+            if (step3) step3.classList.add('hidden');
             if (step2) step2.classList.remove('hidden');
         });
     }
 
-    // Volver del Paso 2 al Paso 1
     if (btnBackToStep1) {
         btnBackToStep1.addEventListener('click', () => {
             if (step2) step2.classList.add('hidden');
+            if (step3) step3.classList.add('hidden');
             if (step1) step1.classList.remove('hidden');
         });
     }
 
-    // Finalizar el registro con perfil completo y credenciales propias en Firebase
     if (registerForm) {
         registerForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            const email = document.getElementById('regEmail').value;
+            const email = document.getElementById('regEmail').value.trim();
             const password = document.getElementById('regPassword').value;
             const usernameVal = document.getElementById('regUsername').value.trim();
-            const avatarSeedVal = document.getElementById('regAvatarSeed').value.trim();
-            const bioVal = document.getElementById('regUserBio').value.trim();
+            const avatarSeedVal = document.getElementById('regAvatarSeed') ? document.getElementById('regAvatarSeed').value.trim() : '';
+            const bioVal = document.getElementById('regUserBio') ? document.getElementById('regUserBio').value.trim() : '';
             const errorDiv = document.getElementById('authRegisterErrorMsg');
 
             if (errorDiv) { errorDiv.classList.add('hidden'); errorDiv.innerText = ''; }
+            if (btnFinalRegister) btnFinalRegister.disabled = true;
 
             try {
-                window._signingUp = true; // evita que onAuthStateChanged pise el perfil mientras se crea
+                window._signingUp = true;
                 await window.setAuthPersistence(rememberCheckbox.checked);
-                await window.fbSignUp(email, password);
-                sessionStorage.removeItem('guestMode');
+                const cred = await window.fbSignUp(email, password);
 
                 const username = usernameVal || 'Cinéfilo/a';
                 const avatarSeed = avatarSeedVal || username;
@@ -3334,11 +3634,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 localStorage.setItem('cine_user_bio', bio);
 
                 await window.fbSaveProfile({ username, avatarSeed, bio });
-                await window.fbInitLibrary(); // sube a la nube lo que ya hubiera en este navegador
 
+                let mailSent = false;
+                try {
+                    await window.fbResendVerification();
+                    mailSent = true;
+                } catch (e) { console.warn('No se pudo enviar la verificación:', e); }
+
+                if (cred && cred.user && _isUserUnverified(cred.user)) {
+                    window.showAuthVerifyStep(
+                        email,
+                        mailSent ? '¡Cuenta creada! Revisa tu bandeja de entrada para confirmar tu correo.' : 'Cuenta creada. Pulsa "Reenviar enlace" para recibir tu correo de activación.',
+                        mailSent
+                    );
+                    if (mailSent) startResendCooldown(60);
+                    updateProfileDrawerStats();
+                    return;
+                }
+
+                sessionStorage.removeItem('guestMode');
+                await window.fbInitLibrary();
                 updateProfileDrawerStats();
                 if (authModal) authModal.classList.add('hidden');
-
             } catch (err) {
                 let friendlyMessage = "Error al crear la cuenta. Inténtalo de nuevo.";
                 if (err.code === 'auth/email-already-in-use') {
@@ -3355,11 +3672,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             } finally {
                 window._signingUp = false;
+                if (btnFinalRegister && regPasswordInput) {
+                    regPasswordInput.dispatchEvent(new Event('input'));
+                }
             }
         });
     }
 
-    // Google Login
     const btnGoogle = document.getElementById('btnGoogleAuth');
     if (btnGoogle) {
         btnGoogle.addEventListener('click', async () => {
@@ -3368,12 +3687,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 await window.fbLoginGoogle();
                 sessionStorage.removeItem('guestMode');
             } catch (err) {
-                alert("Error con Google: " + err.message);
+                showToast("Error con Google: " + err.message, 'error');
             }
         });
     }
 
-    // Ingresar como Invitado
     const btnGuest = document.getElementById('btnGuestAuth');
     if (btnGuest) {
         btnGuest.addEventListener('click', () => {
@@ -3387,6 +3705,7 @@ document.addEventListener('DOMContentLoaded', () => {
             personalReviews = {};
             customLists = [];
             currentUsername = 'Invitado/a';
+            window.currentUsername = 'Invitado/a';
 
             if (authModal) authModal.classList.add('hidden');
 
@@ -3400,8 +3719,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Función para actualizar la UI del panel de perfil y estado de sesión
 window.updateProfileDrawerStats = function () {
-    // Si no hay usuario activo de Firebase ni estamos en modo invitado estricto, 
-    // aseguramos que los textos reflejen al invitado.
     if (!window.currentUser && sessionStorage.getItem('guestMode') === 'true') {
         currentUsername = 'Invitado/a';
         currentAvatarSeed = 'Invitado/a';
@@ -3435,25 +3752,36 @@ window.updateProfileDrawerStats = function () {
     if (!authSection && drawerContent) {
         authSection = document.createElement('div');
         authSection.id = 'drawerAuthSection';
-        authSection.className = 'pt-4 border-t border-stone-800 mt-4';
+        authSection.className = 'p-4 border-t border-stone-200 dark:border-stone-800 mt-2';
         drawerContent.appendChild(authSection);
     }
 
     if (authSection) {
-        if (window.currentUser) {
+        if (window.currentUser && _isUserUnverified(window.currentUser)) {
             authSection.innerHTML = `
                 <div class="space-y-2">
-                    <button onclick="window.fbSignOut();" class="w-full py-2 bg-stone-800 hover:bg-stone-700 text-stone-100 font-mono text-xs journal-border transition uppercase tracking-wider">
+                    <button onclick="toggleProfileDrawer(); window.showAuthVerifyStep(window.currentUser.email);" class="w-full py-2 bg-amber-700 hover:bg-amber-600 text-stone-100 font-mono text-xs journal-border transition uppercase tracking-wider font-bold cursor-pointer">
+                        <i class="fa-solid fa-envelope-circle-check mr-2"></i>Verificar correo pendiente
+                    </button>
+                    <button onclick="window.fbSignOut();" class="w-full py-2 bg-stone-800 hover:bg-stone-700 text-stone-100 font-mono text-xs journal-border transition uppercase tracking-wider cursor-pointer">
                         <i class="fa-solid fa-right-from-bracket mr-2"></i>Cerrar Sesión
                     </button>
-                    <button onclick="window.fbDeleteAccount()" class="w-full py-2 bg-rose-950 hover:bg-rose-900 text-rose-400 font-mono text-xs journal-border transition uppercase tracking-wider">
+                </div>
+            `;
+        } else if (window.currentUser) {
+            authSection.innerHTML = `
+                <div class="space-y-2">
+                    <button onclick="window.fbSignOut();" class="w-full py-2 bg-stone-800 hover:bg-stone-700 text-stone-100 font-mono text-xs journal-border transition uppercase tracking-wider cursor-pointer">
+                        <i class="fa-solid fa-right-from-bracket mr-2"></i>Cerrar Sesión
+                    </button>
+                    <button onclick="window.fbDeleteAccount()" class="w-full py-2 bg-rose-950 hover:bg-rose-900 text-rose-400 font-mono text-xs journal-border transition uppercase tracking-wider cursor-pointer">
                         <i class="fa-solid fa-trash-can mr-2"></i>Eliminar cuenta
                     </button>
                 </div>
             `;
         } else {
             authSection.innerHTML = `
-                <button onclick="toggleProfileDrawer(); document.getElementById('authModal').classList.remove('hidden');" class="w-full py-2 bg-rose-900 hover:bg-rose-800 text-stone-100 font-mono text-xs journal-border transition uppercase tracking-wider font-bold">
+                <button onclick="toggleProfileDrawer(); window.showAuthLoginStep && window.showAuthLoginStep(); document.getElementById('authModal').classList.remove('hidden');" class="w-full py-2 bg-rose-900 hover:bg-rose-800 text-stone-100 font-mono text-xs journal-border transition uppercase tracking-wider font-bold cursor-pointer">
                     <i class="fa-solid fa-right-to-bracket mr-2"></i>Iniciar Sesión / Registrarse
                 </button>
             `;
@@ -3467,76 +3795,3 @@ window.updateProfileUI = function (user) {
         window.updateProfileDrawerStats();
     }
 };
-
-// ===== CONEXIÓN DEL SISTEMA DE ESTRELLAS AL MURO =====
-
-// Al abrir el modal de crear reseña, dibujamos las estrellas en el muro
-const originalOpenRedactionChoice = window.openRedactionChoice;
-window.openRedactionChoice = function (mode) {
-    originalOpenRedactionChoice(mode);
-    if (mode === 'review') {
-        renderStarSelector(0, 'smartStarContainer', 'smartStarRatingText');
-    }
-};
-
-// Al guardar, capturamos la nota y la enviamos al formulario
-const originalHandleSubmit = window.handleSmartPublishSubmit;
-window.handleSmartPublishSubmit = async function (e) {
-    if (e) e.preventDefault();
-
-    // El valor de las estrellas ya está en selectedStarRating
-    const ratingVal = selectedStarRating > 0 ? selectedStarRating : null;
-
-    if (typeof originalHandleSubmit === 'function') {
-        let hiddenInput = document.getElementById('smartPostRating');
-        if (!hiddenInput) {
-            hiddenInput = document.createElement('input');
-            hiddenInput.type = 'hidden';
-            hiddenInput.id = 'smartPostRating';
-            document.getElementById('smartPublishForm').appendChild(hiddenInput);
-        }
-        hiddenInput.value = ratingVal;
-
-        await originalHandleSubmit(e);
-    }
-
-    // Limpiamos las estrellas para la próxima vez
-    renderStarSelector(0, 'smartStarContainer', 'smartStarRatingText');
-};
-
-// ===== BUSCADOR MULTILINGÜE INTELIGENTE =====
-
-async function fetchSearchMovieDual(query) {
-    const encoded = encodeURIComponent(query.trim());
-
-    // Hacemos dos búsquedas en paralelo:
-    // 1. En el idioma de la interfaz (para que encuentre "Scarface" si buscas en inglés)
-    // 2. En el idioma de los títulos (para mostrar el título correcto)
-    const [dataInterface, dataTitle] = await Promise.all([
-        fetchFromTMDb(`/search/movie?query=${encoded}&language=${currentLang}`),
-        fetchFromTMDb(`/search/movie?query=${encoded}&language=${currentTitleLang}`)
-    ]);
-
-    if (!dataInterface || !dataInterface.results) return [];
-
-    return dataInterface.results.map(m => {
-        // Buscamos si esta misma película está en los resultados del otro idioma
-        const titleMatch = dataTitle && dataTitle.results ? dataTitle.results.find(t => t.id === m.id) : null;
-
-        const titleMain = titleMatch ? (titleMatch.title || titleMatch.original_title) : (m.title || m.original_title);
-        const titleSub = (m.title || m.original_title);
-
-        const posterPath = (titleMatch && titleMatch.poster_path) ? titleMatch.poster_path : m.poster_path;
-
-        return {
-            id: m.id,
-            title: titleMain,
-            subtitle: titleSub !== titleMain ? titleSub : '',
-            rating: m.vote_average ? m.vote_average.toFixed(1) : 'N/A',
-            votes: m.vote_count > 1000 ? (m.vote_count / 1000).toFixed(0) + 'k' : (m.vote_count || 0),
-            poster: posterPath ? `https://image.tmdb.org/t/p/w500${posterPath}` : 'https://via.placeholder.com/150',
-            overview: m.overview || 'Sin descripción disponible.',
-            year: m.release_date ? m.release_date.split('-')[0] : 'N/A'
-        };
-    });
-}

@@ -37,13 +37,15 @@
             }
         }
     </script>
+    <link rel="preconnect" href="https://image.tmdb.org" crossorigin>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,900;1,400;1,700&family=Inter:wght@300;400;500;600&display=swap">
     <!-- FontAwesome Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" referrerpolicy="no-referrer">
     <!-- Canvas Confetti -->
-    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,900;1,400;1,700&family=Inter:wght@300;400;500;600&display=swap');
-
         body {
             background-color: #fcfaf2;
             color: #1c1917;
@@ -59,7 +61,7 @@
         }
 
         .custom-scrollbar::-webkit-scrollbar {
-            width: 4px;
+            width: 6px;
         }
 
         .custom-scrollbar::-webkit-scrollbar-track {
@@ -159,44 +161,129 @@
             user-select: none;
         }
 
-        /* --- MEJORAS ESTÉTICAS --- */
-        /* Sombra sutil y transición a las tarjetas del muro */
-        article.bg-stone-100 {
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        /* ===== Capa de pulido visual CineZine (Claude + Deepseek) ===== */
+        :root {
+            --cz-rose: #9f1239;
+            --cz-card: #ffffff;
+            --cz-line: #e7e5e4;
+            --cz-soft: rgba(120, 113, 108, .08);
+            --cz-shadow: 0 1px 2px rgba(28, 25, 23, .06), 0 8px 20px -10px rgba(28, 25, 23, .22);
+            --cz-shadow-hover: 0 2px 4px rgba(28, 25, 23, .08), 0 14px 28px -14px rgba(28, 25, 23, .35);
+            --cz-accent: #9f1239;
         }
-        article.bg-stone-100:hover {
+
+        .dark {
+            --cz-card: #1a1816;
+            --cz-line: #2e2a27;
+            --cz-soft: rgba(168, 162, 158, .07);
+            --cz-shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 10px 24px -12px rgba(0, 0, 0, .8);
+            --cz-shadow-hover: 0 2px 4px rgba(0, 0, 0, .5), 0 16px 30px -14px rgba(0, 0, 0, .9);
+            --cz-accent: #7f2a42;
+        }
+
+        html { scroll-behavior: smooth; }
+        body { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+        ::selection { background: #9f1239; color: #fff; }
+        :focus-visible { outline: 2px solid #be123c; outline-offset: 2px; }
+        button, input, textarea, select { transition: background-color .15s, border-color .15s, color .15s, box-shadow .15s, transform .12s; }
+        button:not(:disabled):active { transform: translateY(1px); }
+        button:disabled { opacity: .5; cursor: not-allowed; }
+        .dark .journal-border { border-color: var(--cz-line); }
+        .dark .font-mono.text-stone-500, .dark .font-mono.text-stone-400 { color: #a8a29e; }
+        header { box-shadow: 0 8px 24px -18px rgba(0, 0, 0, .35); }
+        #apiStatus { display: none !important; }
+        #mainViewMural > div:first-child { box-shadow: var(--cz-shadow); }
+
+        /* Tarjetas del muro */
+        .cz-card {
+            position: relative;
+            background: var(--cz-card);
+            border: 1px solid var(--cz-line);
+            box-shadow: var(--cz-shadow);
+            transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+        }
+        .cz-card::before {
+            content: "";
+            position: absolute;
+            left: -1px;
+            top: -1px;
+            bottom: -1px;
+            width: 2px;
+            background: var(--cz-accent);
+            opacity: 0;
+            transition: opacity .18s;
+        }
+        .cz-card:hover {
             transform: translateY(-2px);
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            box-shadow: var(--cz-shadow-hover);
+            border-color: rgba(120, 113, 108, .55);
         }
-        .dark article.bg-stone-950 {
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
-        }
-        .dark article.bg-stone-950:hover {
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
-        }
+        .cz-card:hover::before { opacity: 1; }
 
-        /* Pósters con un poco más de vida */
-        img.journal-border {
-            box-shadow: 2px 2px 8px rgba(0,0,0,0.15);
-            transition: transform 0.3s ease;
+        .cz-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: .35rem;
+            padding: .18rem .5rem;
+            flex-shrink: 0;
+            border: 1px solid;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 9px;
+            font-weight: 700;
+            line-height: 1.2;
+            text-transform: uppercase;
+            letter-spacing: .08em;
         }
-
-        /* Avatares con un anillo sutil */
-        img.rounded-full.journal-border {
+        .cz-moviebox { background: var(--cz-soft); border: 1px solid var(--cz-line); transition: border-color .15s, background .15s; }
+        .cz-moviebox:hover { border-color: var(--cz-rose); background: rgba(159, 18, 57, .07); }
+        .cz-quote { border-left: 2px solid rgba(159, 18, 57, .45); padding-left: .75rem; }
+        .cz-preview { background: var(--cz-soft); border: 1px dashed var(--cz-line); }
+        .cz-avatar {
+            background: #d6d3d1;
+            border: 1px solid var(--cz-line);
+            object-fit: cover;
             box-shadow: 0 0 0 2px #fcfaf2, 0 0 0 3px #d6d3d1;
         }
-        .dark img.rounded-full.journal-border {
+        .dark .cz-avatar {
+            background: #292524;
             box-shadow: 0 0 0 2px #121110, 0 0 0 3px #292524;
         }
-
-        /* Botones con un poco más de profundidad */
-        button.bg-rose-900 {
-            box-shadow: 0 2px 4px rgba(136, 19, 55, 0.2);
+        img.journal-border {
+            box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.15);
+            transition: transform 0.3s ease;
         }
-        button.bg-rose-900:active {
-            transform: translateY(1px);
-            box-shadow: none;
+        .cz-vote, .cz-vote-lg, .cz-vote-sm { display: inline-flex; align-items: center; gap: .3rem; border: 1px solid var(--cz-line); background: var(--cz-soft); cursor: pointer; }
+        .cz-vote { padding: .22rem .55rem; }
+        .cz-vote-lg { padding: .3rem .7rem; }
+        .cz-vote-sm { padding: .12rem .4rem; }
+        .cz-vote:hover, .cz-vote-lg:hover, .cz-vote-sm:hover { background: rgba(120, 113, 108, .2); }
+        .cz-vote-on-agree { background: rgba(5, 150, 105, .18) !important; color: #059669; font-weight: 700; border-color: rgba(5, 150, 105, .5); }
+        .cz-vote-on-disagree { background: rgba(190, 18, 60, .16) !important; color: #e11d48; font-weight: 700; border-color: rgba(190, 18, 60, .5); }
+        .cz-comment { background: var(--cz-soft); border: 1px solid var(--cz-line); }
+        .cz-input { background: #fafaf9; border: 1px solid var(--cz-line); color: inherit; }
+        .dark .cz-input { background: #0c0a09; }
+        select.cz-input { color-scheme: light; cursor: pointer; }
+        .dark select.cz-input { color-scheme: dark; }
+        .cz-input:focus { outline: none; border-color: var(--cz-rose); box-shadow: 0 0 0 3px rgba(159, 18, 57, .16); }
+        .cz-tile { display: block; background: var(--cz-soft); border: 1px solid var(--cz-line); }
+        button.cz-tile:hover { border-color: var(--cz-rose); }
+        .cz-btn-ghost { border: 1px solid var(--cz-line); }
+        .cz-btn-ghost:hover { background: var(--cz-soft); border-color: var(--cz-rose); }
+        .cz-skeleton { background: linear-gradient(90deg, rgba(120, 113, 108, .12) 25%, rgba(120, 113, 108, .26) 37%, rgba(120, 113, 108, .12) 63%); background-size: 400% 100%; animation: cz-shimmer 1.4s ease infinite; }
+
+        /* Pestañas del muro */
+        .mural-filter-btn { padding: .45rem .95rem; color: #78716c; border-bottom: 2px solid transparent; text-transform: uppercase; letter-spacing: .08em; }
+        .mural-filter-btn:hover { color: #1c1917; }
+        .dark .mural-filter-btn:hover { color: #f4f0ea; }
+        .mural-filter-btn.active { color: #9f1239; border-bottom-color: #9f1239; font-weight: 700; }
+        .dark .mural-filter-btn.active { color: #fb7185; border-bottom-color: #fb7185; }
+
+        @keyframes cz-shimmer { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+        @keyframes cz-pop { from { opacity: 0; transform: translateY(8px) scale(.985); } to { opacity: 1; transform: none; } }
+        .fixed.inset-0:not(.hidden) > div:first-child { animation: cz-pop .18s ease-out; }
+        .cz-toast { animation: cz-pop .2s ease-out; }
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
         }
     </style>
 </head>
@@ -234,7 +321,7 @@
                         <span class="hidden sm:inline">Ajustes</span>
                     </button>
                     <button onclick="toggleProfileDrawer()" class="flex items-center space-x-2 bg-stone-200 dark:bg-stone-900 hover:bg-stone-300 dark:hover:bg-stone-800 px-2.5 py-1.5 rounded-none journal-border transition font-serif">
-                        <img id="headerProfileAvatar" src="https://api.dicebear.com/7.x/bottts/svg?seed=Invitado/a" alt="Avatar" class="w-5 h-5 rounded-full journal-border bg-stone-300 dark:bg-stone-800">
+                        <img id="headerProfileAvatar" src="https://api.dicebear.com/7.x/bottts/svg?seed=Invitado/a" alt="Avatar" class="w-5 h-5 rounded-full cz-avatar bg-stone-300 dark:bg-stone-800">
                         <span id="headerUsername" class="hidden sm:inline text-xs font-mono font-bold">Invitado/a</span>
                     </button>
                     <div id="apiStatus" class="hidden sm:flex items-center space-x-1.5 text-[10px] font-mono tracking-wider uppercase bg-emerald-700/10 text-emerald-700 dark:text-emerald-400 journal-border px-2 py-1.5">
@@ -294,32 +381,29 @@
                     </div>
                 </div>
 
-                <!-- Filtros -->
-                <div class="flex items-center space-x-2 font-mono text-xs">
-                    <button onclick="filterMural('all')" class="mural-filter-btn active bg-stone-200 dark:bg-stone-800 px-3 py-1.5 journal-border">Todos</button>
-                    <button onclick="filterMural('reviews')" class="mural-filter-btn text-stone-500 hover:text-stone-900 dark:hover:text-white px-3 py-1.5 transition">Reseñas</button>
-                    <button onclick="filterMural('discussions')" class="mural-filter-btn text-stone-500 hover:text-stone-900 dark:hover:text-white px-3 py-1.5 transition">Debates</button>
-                </div>
-
-                <!-- NUEVO: Selector de orden -->
-                <div class="flex items-center space-x-2 font-mono text-xs">
-                    <span class="text-stone-500">Ordenar por:</span>
-                    <div class="flex gap-1">
-                        <select id="muralSortSelect" onchange="renderMuralFeed()"
-                            class="bg-stone-100 dark:bg-stone-950 journal-border rounded-none px-2 py-1 focus:border-rose-800">
-                            <option value="date" selected>Fecha</option>
-                            <option value="popular">Reacciones</option>
+                <!-- Filtros y orden -->
+                <div class="flex items-end justify-between flex-wrap gap-x-4 gap-y-2 font-mono text-xs border-b border-stone-200 dark:border-stone-800">
+                    <div class="flex items-center gap-1">
+                        <button onclick="filterMural('all', this)" class="mural-filter-btn active">Todos</button>
+                        <button onclick="filterMural('reviews', this)" class="mural-filter-btn">Reseñas</button>
+                        <button onclick="filterMural('discussions', this)" class="mural-filter-btn">Debates</button>
+                    </div>
+                    <div class="flex items-center gap-2 pb-1.5">
+                        <label for="muralSortSelect" class="text-stone-500 hidden sm:inline">Ordenar por</label>
+                        <select id="muralSortSelect" onchange="setMuralSort(this.value)" class="cz-input px-2 py-1 text-xs font-mono">
+                            <option value="date">Fecha</option>
+                            <option value="reactions">Reacciones</option>
+                            <option value="comments">Comentarios</option>
                         </select>
-                        <button type="button" onclick="toggleMuralSortDirection()" id="muralSortDirectionBtn"
-                            class="px-2.5 bg-stone-200 dark:bg-stone-800 hover:bg-stone-300 dark:hover:bg-stone-700 journal-border text-xs transition"
-                            title="Invertir orden">
+                        <button type="button" id="muralSortDirectionBtn" onclick="toggleMuralSortDirection()" class="cz-btn-ghost px-2 py-1" aria-label="Invertir orden" title="Invertir orden">
                             <i id="muralSortDirectionIcon" class="fa-solid fa-arrow-down-wide-short"></i>
                         </button>
                     </div>
                 </div>
+
                 <div id="muralPostsFeed" class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2"></div>
-                </div>
-                </section>
+            </div>
+        </section>
 
         <!-- Vista 2: Cartelera y catálogo -->
         <section id="mainViewCatalog" class="space-y-6 hidden">
@@ -331,7 +415,7 @@
                         </label>
                         <div class="relative">
                             <div class="relative flex items-center">
-                                <input type="text" id="manualMovieInput" oninput="handleAutocompleteInput(this.value)" placeholder="Buscar película por título..." class="w-full bg-stone-100 dark:bg-stone-950 journal-border rounded-none pl-3 pr-8 py-2.5 text-xs font-serif placeholder-stone-400 focus:outline-none focus:border-rose-800 transition">
+                                <input type="text" id="manualMovieInput" oninput="handleAutocompleteInput(this.value)" placeholder="Buscar película por título (inglés o español)..." class="w-full bg-stone-100 dark:bg-stone-950 journal-border rounded-none pl-3 pr-8 py-2.5 text-xs font-serif placeholder-stone-400 focus:outline-none focus:border-rose-800 transition">
                                 <i id="autocompleteSpinner" class="fa-solid fa-circle-notch fa-spin absolute right-3 text-stone-400 text-xs hidden"></i>
                             </div>
                             <div id="autocompleteDropdown" class="absolute left-0 right-0 top-full mt-1 bg-stone-50 dark:bg-stone-900 journal-border shadow-2xl z-50 max-h-64 overflow-y-auto custom-scrollbar hidden"></div>
@@ -425,7 +509,7 @@
                         </div>
                     </div>
 
-                    <details class="group bg-stone-50 dark:bg-stone-900 journal-border overflow-hidden transition-all">
+                    <details id="oscarDetails" class="group bg-stone-50 dark:bg-stone-900 journal-border overflow-hidden transition-all">
                         <summary class="flex items-center justify-between p-3.5 cursor-pointer select-none bg-stone-100 dark:bg-stone-950 hover:bg-stone-200/50 transition">
                             <div class="flex items-center space-x-2 font-heading font-bold text-xs uppercase tracking-widest text-amber-700 dark:text-amber-500">
                                 <i class="fa-solid fa-trophy text-xs"></i>
@@ -501,9 +585,7 @@
     </main>
 
     <!-- Menú flotante de listas rápidas -->
-    <!-- Menú flotante de listas rápidas -->
-    <div id="quickListDropdown"
-        class="fixed bg-stone-50 dark:bg-stone-900 journal-border p-2 shadow-2xl z-[350] hidden w-52 space-y-1">
+    <div id="quickListDropdown" class="fixed bg-stone-50 dark:bg-stone-900 journal-border p-2 shadow-2xl z-[350] hidden w-52 space-y-1">
         <div class="text-[10px] font-mono font-bold text-rose-800 dark:text-rose-400 uppercase px-2 pb-1 border-b border-stone-300 dark:border-stone-700 flex items-center justify-between">
             <span>Fichar en cuaderno:</span>
             <button onclick="closeQuickListDropdown()" class="text-stone-400 hover:text-stone-200 text-xs"><i class="fa-solid fa-xmark"></i></button>
@@ -511,154 +593,110 @@
         <div id="quickListItemsContainer" class="max-h-40 overflow-y-auto custom-scrollbar space-y-1 pt-1"></div>
     </div>
 
-    <!-- Modales -->
-
-        <!-- Modal de detalle -->
-        <div id="detailModal"
-            class="fixed inset-0 bg-stone-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-            <div
-                class="bg-stone-50 dark:bg-stone-900 journal-border rounded-none w-full max-w-4xl p-5 text-left relative shadow-2xl draggable-modal-content flex flex-col">
-                <div id="detailModalHeader"
-                    class="modal-header-drag flex items-center justify-between border-b border-stone-300 dark:border-stone-800 pb-2 mb-3 flex-shrink-0">
-                    <span class="text-xs font-mono text-stone-500 uppercase tracking-widest flex items-center gap-2">
-                        <i class="fa-solid fa-grip-lines text-stone-400"></i> Ventana de detalle
-                    </span>
-                    <button onclick="closeDetailModal()"
-                        class="text-stone-400 hover:text-stone-800 dark:hover:text-white text-lg p-1 transition">
-                        <i class="fa-solid fa-xmark"></i>
-                    </button>
-                </div>
-        
-                <div class="modal-body-scrollable custom-scrollbar pr-1 space-y-4 flex-grow min-h-0 overflow-y-auto">
-                    <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-                        <div class="lg:col-span-5 space-y-4">
-                            <div class="flex items-start space-x-3 bg-stone-100 dark:bg-stone-950 p-2.5 journal-border">
-                                <div class="relative flex-shrink-0">
-                                    <img id="detailPoster" src="" alt="Póster"
-                                        class="w-28 h-40 object-cover journal-border shadow-md">
-                                    <button id="detailWatchedBtn" onclick=""
-                                        class="absolute top-1.5 right-1.5 p-1 rounded-none text-xs backdrop-blur-md transition journal-border shadow-md">
-                                        <i id="detailWatchedIcon" class="fa-solid fa-eye"></i>
-                                    </button>
-                                </div>
-        
-                                <div class="space-y-1 flex-grow min-w-0 pt-0.5">
-                                    <div id="detailTag"
-                                        class="inline-block bg-stone-200 dark:bg-stone-800 text-stone-800 dark:text-stone-300 journal-border px-2 py-0.5 text-[9px] font-mono font-bold uppercase tracking-widest">
-                                        Reseña crítica</div>
-                                    <h2 id="detailTitle"
-                                        class="text-base font-extrabold font-heading leading-tight text-stone-900 dark:text-stone-100 break-words">
-                                    </h2>
-                                    <p id="detailSubtitle"
-                                        class="text-[11px] font-serif text-stone-500 dark:text-stone-400 mt-0.5 hidden"></p>
-        
-                                    <div
-                                        class="flex flex-wrap items-center gap-2 text-xs font-mono text-stone-600 dark:text-stone-400 pt-0.5">
-                                        <span id="detailRating" class="text-amber-700 dark:text-amber-500 font-bold"><i
-                                                class="fa-solid fa-star mr-1"></i>8.5</span>
-                                        <span id="detailVotes"><i class="fa-solid fa-users mr-1"></i>120k votos</span>
-                                    </div>
-                                    <p class="text-xs font-mono text-stone-500 pt-0.5" id="detailYear">Año: 2024</p>
-                                </div>
+    <!-- Modal de detalle -->
+    <div id="detailModal" class="fixed inset-0 bg-stone-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-stone-50 dark:bg-stone-900 journal-border rounded-none w-full max-w-4xl p-5 text-left relative shadow-2xl draggable-modal-content flex flex-col">
+            <div id="detailModalHeader" class="modal-header-drag flex items-center justify-between border-b border-stone-300 dark:border-stone-800 pb-2 mb-3 flex-shrink-0">
+                <span class="text-xs font-mono text-stone-500 uppercase tracking-widest flex items-center gap-2">
+                    <i class="fa-solid fa-grip-lines text-stone-400"></i> Ventana de detalle
+                </span>
+                <button onclick="closeDetailModal()" class="text-stone-400 hover:text-stone-800 dark:hover:text-white text-lg p-1 transition">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+    
+            <div class="modal-body-scrollable custom-scrollbar pr-1 space-y-4 flex-grow min-h-0 overflow-y-auto">
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+                    <div class="lg:col-span-5 space-y-4">
+                        <div class="flex items-start space-x-3 bg-stone-100 dark:bg-stone-950 p-2.5 journal-border">
+                            <div class="relative flex-shrink-0">
+                                <img id="detailPoster" src="" alt="Póster" class="w-28 h-40 object-cover journal-border shadow-md">
+                                <button id="detailWatchedBtn" onclick="" class="absolute top-1.5 right-1.5 p-1 rounded-none text-xs backdrop-blur-md transition journal-border shadow-md">
+                                    <i id="detailWatchedIcon" class="fa-solid fa-eye"></i>
+                                </button>
                             </div>
-        
-                            <div class="space-y-1">
-                                <label class="block text-xs font-heading font-bold uppercase tracking-wider">Sinopsis
-                                    editorial</label>
-                                <div id="detailOverview"
-                                    class="text-xs font-serif text-stone-700 dark:text-stone-300 bg-stone-100 dark:bg-stone-950 p-3 journal-border h-auto max-h-60 overflow-y-auto custom-scrollbar leading-relaxed">
-                                    Sinopsis no disponible.</div>
-                            </div>
-        
-                            <div class="space-y-2 border-t border-stone-200 dark:border-stone-800 pt-2">
-                                <h4
-                                    class="text-xs font-heading font-bold uppercase tracking-wider flex items-center space-x-1.5 text-amber-700 dark:text-amber-500">
-                                    <i class="fa-solid fa-newspaper text-xs"></i><span>Comentarios del diario mural</span>
-                                </h4>
-                                <div id="detailPublicReviewsContainer"
-                                    class="space-y-2 max-h-36 overflow-y-auto custom-scrollbar pr-1"></div>
+    
+                            <div class="space-y-1 flex-grow min-w-0 pt-0.5">
+                                <div id="detailTag" class="inline-block bg-stone-200 dark:bg-stone-800 text-stone-800 dark:text-stone-300 journal-border px-2 py-0.5 text-[9px] font-mono font-bold uppercase tracking-widest">
+                                    Reseña crítica</div>
+                                <h2 id="detailTitle" class="text-base font-extrabold font-heading leading-tight text-stone-900 dark:text-stone-100 break-words"></h2>
+                                <p id="detailSubtitle" class="text-[11px] font-serif text-stone-500 dark:text-stone-400 italic mt-0.5 hidden"></p>
+    
+                                <div class="flex flex-wrap items-center gap-2 text-xs font-mono text-stone-600 dark:text-stone-400 pt-0.5">
+                                    <span id="detailRating" class="text-amber-700 dark:text-amber-500 font-bold"><i class="fa-solid fa-star mr-1"></i>8.5</span>
+                                    <span id="detailVotes"><i class="fa-solid fa-users mr-1"></i>120k votos</span>
+                                </div>
+                                <p class="text-xs font-mono text-stone-500 pt-0.5" id="detailYear">Año: 2024</p>
                             </div>
                         </div>
-        
-                        <div class="lg:col-span-7 flex flex-col h-full">
-                            <div
-                                class="bg-stone-100 dark:bg-stone-950 journal-border p-3.5 space-y-3 flex flex-col flex-grow justify-between h-full">
-                                <div class="space-y-2">
-                                    <div
-                                        class="flex items-center justify-between border-b border-stone-200 dark:border-stone-800 pb-1.5">
-                                        <h4
-                                            class="text-xs font-heading font-bold text-rose-900 dark:text-rose-400 flex items-center space-x-1.5">
-                                            <i class="fa-solid fa-star text-amber-500"></i><span>Bitácora y calificación
-                                                personal</span>
-                                        </h4>
-                                        <button onclick="clearPersonalRating()"
-                                            class="text-[10px] font-mono text-stone-500 hover:text-rose-800 transition">Borrar
-                                            nota</button>
-                                    </div>
-        
-                                    <div class="space-y-1">
-                                        <div class="flex items-center justify-between text-xs font-mono">
-                                            <span class="text-stone-500">Nota del crítico: <strong id="starRatingText"
-                                                    class="text-amber-600">0.0</strong> / 10</span>
-                                        </div>
-                                        <div id="starContainer"
-                                            class="flex flex-wrap gap-1 items-center bg-stone-50 dark:bg-stone-900 p-1.5 journal-border">
-                                        </div>
-                                    </div>
-        
-                                    <div class="space-y-1">
-                                        <label class="block text-[10px] font-mono uppercase text-stone-500">Titular de la reseña
-                                            (opcional):</label>
-                                        <input type="text" id="userReviewTitleInput"
-                                            placeholder="Ej: una obra maestra visual..."
-                                            class="w-full bg-stone-50 dark:bg-stone-900 journal-border rounded-none px-2.5 py-1 text-xs font-serif font-bold placeholder-stone-400 focus:outline-none focus:border-rose-800 transition">
-                                    </div>
+    
+                        <div class="space-y-1">
+                            <label class="block text-xs font-heading font-bold uppercase tracking-wider">Sinopsis editorial</label>
+                            <div id="detailOverview" class="text-xs font-serif text-stone-700 dark:text-stone-300 bg-stone-100 dark:bg-stone-950 p-3 journal-border h-auto max-h-60 overflow-y-auto custom-scrollbar leading-relaxed">
+                                Sinopsis no disponible.</div>
+                        </div>
+    
+                        <div class="space-y-2 border-t border-stone-200 dark:border-stone-800 pt-2">
+                            <h4 class="text-xs font-heading font-bold uppercase tracking-wider flex items-center space-x-1.5 text-amber-700 dark:text-amber-500">
+                                <i class="fa-solid fa-newspaper text-xs"></i><span>Comentarios del diario mural</span>
+                            </h4>
+                            <div id="detailPublicReviewsContainer" class="space-y-2 max-h-36 overflow-y-auto custom-scrollbar pr-1"></div>
+                        </div>
+                    </div>
+    
+                    <div class="lg:col-span-7 flex flex-col h-full">
+                        <div class="bg-stone-100 dark:bg-stone-950 journal-border p-3.5 space-y-3 flex flex-col flex-grow justify-between h-full">
+                            <div class="space-y-2">
+                                <div class="flex items-center justify-between border-b border-stone-200 dark:border-stone-800 pb-1.5">
+                                    <h4 class="text-xs font-heading font-bold text-rose-900 dark:text-rose-400 flex items-center space-x-1.5">
+                                        <i class="fa-solid fa-star text-amber-500"></i><span>Bitácora y calificación personal</span>
+                                    </h4>
+                                    <button onclick="clearPersonalRating()" class="text-[10px] font-mono text-stone-500 hover:text-rose-800 transition">Borrar nota</button>
                                 </div>
-        
-                                <div class="space-y-1 flex-grow flex flex-col min-h-0 my-1">
-                                    <label class="block text-[10px] font-mono uppercase text-stone-500">Notas al margen / apunte
-                                        crítico:</label>
-                                    <textarea id="userPersonalReview" oninput="autoResizeTextarea(this)"
-                                        placeholder="Escribe tus notas al margen, impresiones críticas o fecha de función..."
-                                        class="w-full min-h-[120px] max-h-[220px] bg-stone-50 dark:bg-stone-900 journal-border rounded-none p-2.5 text-xs font-serif placeholder-stone-400 focus:outline-none focus:border-rose-800 custom-scrollbar transition resize-none leading-relaxed overflow-y-auto"></textarea>
-                                </div>
-        
-                                <div
-                                    class="flex flex-col sm:flex-row items-start sm:items-center justify-between pt-2 border-t border-stone-200 dark:border-stone-800 gap-2 flex-shrink-0">
-                                    <label
-                                        class="flex items-center space-x-2 text-xs font-serif text-stone-600 dark:text-stone-400 cursor-pointer select-none">
-                                        <input type="checkbox" id="userPublicReviewCheck" checked
-                                            class="rounded-none accent-rose-800">
-                                        <span>Publicar en diario mural</span>
-                                    </label>
-                                    <div class="flex items-center space-x-2 w-full sm:w-auto justify-end">
-                                        <span id="saveStatusIndicator"
-                                            class="text-[11px] font-mono text-emerald-600 dark:text-emerald-400 hidden"><i
-                                                class="fa-solid fa-check mr-1"></i>Guardado</span>
-                                        <button onclick="savePersonalReview()"
-                                            class="py-1.5 px-3 bg-stone-800 hover:bg-stone-700 dark:bg-stone-800 text-stone-100 journal-border text-xs font-mono font-semibold transition uppercase tracking-wider">Guardar
-                                            apunte</button>
+                    
+                                <div class="space-y-1">
+                                    <div class="flex items-center justify-between text-xs font-mono">
+                                        <span class="text-stone-500">Nota del crítico: <strong id="starRatingText" class="text-amber-600">0.0</strong> / 10</span>
                                     </div>
+                                    <div id="starContainer" class="flex flex-wrap gap-1 items-center bg-stone-50 dark:bg-stone-900 p-1.5 journal-border"></div>
+                                </div>
+                    
+                                <div class="space-y-1">
+                                    <label class="block text-[10px] font-mono uppercase text-stone-500">Titular de la reseña (opcional):</label>
+                                    <input type="text" id="userReviewTitleInput" placeholder="Ej: una obra maestra visual..." class="w-full bg-stone-50 dark:bg-stone-900 journal-border rounded-none px-2.5 py-1 text-xs font-serif font-bold placeholder-stone-400 focus:outline-none focus:border-rose-800 transition">
+                                </div>
+                            </div>
+                    
+                            <div class="space-y-1 flex-grow flex flex-col min-h-0 my-1">
+                                <label class="block text-[10px] font-mono uppercase text-stone-500">Notas al margen / apunte crítico:</label>
+                                <textarea id="userPersonalReview" oninput="autoResizeTextarea(this)" placeholder="Escribe tus notas al margen, impresiones críticas o fecha de función..." class="w-full min-h-[120px] max-h-[220px] bg-stone-50 dark:bg-stone-900 journal-border rounded-none p-2.5 text-xs font-serif placeholder-stone-400 focus:outline-none focus:border-rose-800 custom-scrollbar transition resize-none leading-relaxed overflow-y-auto"></textarea>
+                            </div>
+                    
+                            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between pt-2 border-t border-stone-200 dark:border-stone-800 gap-2 flex-shrink-0">
+                                <label class="flex items-center space-x-2 text-xs font-serif text-stone-600 dark:text-stone-400 cursor-pointer select-none">
+                                    <input type="checkbox" id="userPublicReviewCheck" checked class="rounded-none accent-rose-800">
+                                    <span>Publicar en diario mural</span>
+                                </label>
+                                <div class="flex items-center space-x-2 w-full sm:w-auto justify-end">
+                                    <span id="saveStatusIndicator" class="text-[11px] font-mono text-emerald-600 dark:text-emerald-400 hidden"><i class="fa-solid fa-check mr-1"></i>Guardado</span>
+                                    <button onclick="savePersonalReview()" class="py-1.5 px-3 bg-stone-800 hover:bg-stone-700 dark:bg-stone-800 text-stone-100 journal-border text-xs font-mono font-semibold transition uppercase tracking-wider">Guardar apunte</button>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
-        
-                <!-- BOTONES INFERIORES -->
-                <div
-                    class="grid grid-cols-2 gap-3 pt-3 border-t border-stone-200 dark:border-stone-800 flex-shrink-0 font-serif text-xs mt-2">
-                    <button onclick='openQuickListMenuFromDetail(event)'
-                        class="py-2 bg-stone-200 dark:bg-stone-800 hover:bg-stone-300 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 font-semibold rounded-none journal-border transition flex items-center justify-center space-x-1.5 uppercase tracking-wider">
-                        <i class="fa-solid fa-folder-plus"></i><span>Fichar en cuaderno</span>
-                    </button>
-                    <button id="detailAddBtn" onclick=""
-                        class="py-2 bg-rose-900 hover:bg-rose-800 text-white font-semibold rounded-none journal-border transition flex items-center justify-center space-x-1.5 uppercase tracking-wider">
-                        <i class="fa-solid fa-plus"></i><span>Añadir a sorteo</span>
-                    </button>
-                </div>
+            </div>
+    
+            <div class="grid grid-cols-2 gap-3 pt-3 border-t border-stone-200 dark:border-stone-800 flex-shrink-0 font-serif text-xs mt-2">
+                <button onclick="openQuickListMenuFromDetail(event)" class="py-2 bg-stone-200 dark:bg-stone-800 hover:bg-stone-300 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 font-semibold rounded-none journal-border transition flex items-center justify-center space-x-1.5 uppercase tracking-wider">
+                    <i class="fa-solid fa-folder-plus"></i><span>Fichar en cuaderno</span>
+                </button>
+                <button id="detailAddBtn" onclick="" class="py-2 bg-rose-900 hover:bg-rose-800 text-white font-semibold rounded-none journal-border transition flex items-center justify-center space-x-1.5 uppercase tracking-wider">
+                    <i class="fa-solid fa-plus"></i><span>Añadir a sorteo</span>
+                </button>
             </div>
         </div>
+    </div>
     
     <!-- Modal de ganador -->
     <div id="winnerModal" class="fixed inset-0 bg-stone-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
@@ -735,100 +773,75 @@
         </div>
     </div>
     
-        <!-- Modal de publicación -->
-        <div id="smartPublishModal"
-            class="fixed inset-0 bg-stone-950/80 backdrop-blur-sm z-[150] hidden flex items-center justify-center p-4">
-            <div
-                class="bg-stone-50 dark:bg-stone-900 journal-border w-full max-w-xl p-6 relative shadow-2xl space-y-4 draggable-modal-content">
-                <div id="smartPublishHeader"
-                    class="modal-header-drag flex items-center justify-between border-b border-stone-300 dark:border-stone-800 pb-2 mb-2">
-                    <h3 id="smartModalTitle"
-                        class="font-heading font-bold text-sm uppercase tracking-wider text-rose-900 dark:text-rose-400">
-                        Redactar apunte
-                    </h3>
-                    <button onclick="closeSmartPublishModal()"
-                        class="text-stone-400 hover:text-stone-800 dark:hover:text-white transition">
-                        <i class="fa-solid fa-xmark text-lg"></i>
+    <!-- Modal de publicación inteligente -->
+    <div id="smartPublishModal" class="fixed inset-0 bg-stone-950/80 backdrop-blur-sm z-[150] hidden flex items-center justify-center p-4">
+        <div class="bg-stone-50 dark:bg-stone-900 journal-border w-full max-w-xl p-6 relative shadow-2xl space-y-4 draggable-modal-content">
+            <div id="smartPublishHeader" class="modal-header-drag flex items-center justify-between border-b border-stone-300 dark:border-stone-800 pb-2 mb-2">
+                <h3 id="smartModalTitle" class="font-heading font-bold text-sm uppercase tracking-wider text-rose-900 dark:text-rose-400">
+                    Redactar apunte
+                </h3>
+                <button onclick="closeSmartPublishModal()" class="text-stone-400 hover:text-stone-800 dark:hover:text-white transition">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+    
+            <form id="smartPublishForm" onsubmit="handleSmartPublishSubmit(event)" class="space-y-3 font-serif text-xs">
+                <div id="movieSelectContainer" class="space-y-1 relative hidden">
+                    <label class="block font-mono text-[10px] text-stone-500 uppercase">Buscar película a reseñar</label>
+                    <div class="relative flex items-center">
+                        <input type="text" id="modalMovieSearchInput" oninput="handleModalMovieAutocomplete(this.value)" placeholder="Escribe el título de la obra..." class="w-full bg-stone-100 dark:bg-stone-950 journal-border p-2 text-xs focus:outline-none focus:border-rose-900">
+                        <input type="hidden" id="selectedTmdbMovieId" value="">
+                    </div>
+                    <div id="modalMovieDropdown" class="absolute left-0 right-0 top-full mt-1 bg-stone-50 dark:bg-stone-900 journal-border shadow-xl z-50 max-h-48 overflow-y-auto custom-scrollbar hidden"></div>
+                    
+                    <!-- Tarjeta de vista previa de la película seleccionada -->
+                    <div id="selectedMoviePreview" class="hidden flex items-start space-x-3 bg-stone-100 dark:bg-stone-950 p-2.5 journal-border mt-2 relative">
+                        <button type="button" onclick="clearModalMovieSelection()" class="absolute top-1 right-1 text-stone-400 hover:text-rose-600 transition p-1" title="Quitar selección">
+                            <i class="fa-solid fa-circle-xmark"></i>
+                        </button>
+                        <img id="previewMoviePoster" src="" alt="Póster" class="w-16 h-24 object-cover journal-border flex-shrink-0 shadow-sm">
+                        <div class="flex-grow min-w-0 pr-4">
+                            <h5 id="previewMovieTitle" class="font-heading font-bold text-xs text-rose-900 dark:text-rose-400 leading-tight"></h5>
+                            <p id="previewMovieOverview" class="text-[10px] font-serif text-stone-600 dark:text-stone-400 mt-1 line-clamp-3 italic"></p>
+                        </div>
+                    </div>
+                </div>
+    
+                <div class="space-y-1">
+                    <label id="titleFieldLabel" class="block font-mono text-[10px] text-stone-500 uppercase">Título / titular</label>
+                    <input type="text" id="smartPostTitle" required placeholder="Titular llamativo..." class="w-full bg-stone-100 dark:bg-stone-950 journal-border p-2 text-xs focus:outline-none focus:border-rose-900 font-heading font-bold">
+                </div>
+    
+                <div id="ratingContainer" class="hidden space-y-1">
+                    <label class="block font-mono text-[10px] text-stone-500 uppercase">Calificación (admite medias estrellas)</label>
+                    <div class="flex items-center gap-3 flex-wrap">
+                        <div id="smartStarContainer" class="flex items-center"></div>
+                        <span id="smartStarText" class="font-mono text-xs text-amber-600 w-16">Sin nota</span>
+                        <button type="button" onclick="setSmartStars(0)" class="text-[10px] font-mono text-stone-400 hover:text-rose-700 underline">Quitar</button>
+                    </div>
+                    <input type="hidden" id="smartPostRating" value="">
+                </div>
+
+                <div class="space-y-1">
+                    <label class="block font-mono text-[10px] text-stone-500 uppercase">Cuerpo del apunte / texto fanzine</label>
+                    <textarea id="smartPostContent" rows="4" required placeholder="Escribe tus impresiones críticas..." class="w-full bg-stone-100 dark:bg-stone-950 journal-border p-2 text-xs focus:outline-none focus:border-rose-900 resize-none"></textarea>
+                </div>
+                
+                <!-- Opción de publicar en el diario mural -->
+                <div id="wallPublishCheckWrap" class="flex items-center space-x-2 pt-1 pb-1">
+                    <input type="checkbox" id="wallPublishCheck" checked class="rounded-none accent-rose-800">
+                    <label for="wallPublishCheck" class="text-xs font-serif text-stone-600 dark:text-stone-400 cursor-pointer">Publicar en el diario mural público</label>
+                </div>
+    
+                <div class="flex justify-end space-x-2 pt-2 border-t border-stone-200 dark:border-stone-800 font-mono text-xs">
+                    <button type="button" onclick="closeSmartPublishModal()" class="px-3 py-1.5 journal-border text-stone-600 hover:text-stone-900 dark:hover:text-stone-100">Cancelar</button>
+                    <button type="submit" class="px-4 py-1.5 bg-rose-900 text-stone-100 journal-border hover:bg-rose-800 transition font-bold uppercase">
+                        Guardar publicación
                     </button>
                 </div>
-        
-                <form id="smartPublishForm" onsubmit="handleSmartPublishSubmit(event)" class="space-y-3 font-serif text-xs">
-                    <div id="movieSelectContainer" class="space-y-2 relative hidden">
-                        <label class="block font-mono text-[10px] text-stone-500 uppercase">Buscar película a reseñar</label>
-                        <div class="relative flex items-center">
-                            <input type="text" id="modalMovieSearchInput" oninput="handleModalMovieAutocomplete(this.value)"
-                                placeholder="Escribe el título de la obra..."
-                                class="w-full bg-stone-100 dark:bg-stone-950 journal-border p-2 text-xs focus:outline-none focus:border-rose-900">
-                            <input type="hidden" id="selectedTmdbMovieId" value="">
-                        </div>
-                        <div id="modalMovieDropdown"
-                            class="absolute left-0 right-0 top-full mt-1 bg-stone-50 dark:bg-stone-900 journal-border shadow-xl z-50 max-h-48 overflow-y-auto custom-scrollbar hidden">
-                        </div>
-        
-                        <!-- Tarjeta de vista previa de la película seleccionada -->
-                        <div id="selectedMoviePreview"
-                            class="hidden flex items-start space-x-3 bg-stone-100 dark:bg-stone-950 p-2.5 journal-border mt-2 animate-fade-in relative">
-                            <button type="button" onclick="clearModalMovieSelection()"
-                                class="absolute top-1 right-1 text-stone-400 hover:text-rose-600 transition p-1"
-                                title="Quitar selección">
-                                <i class="fa-solid fa-circle-xmark"></i>
-                            </button>
-                            <img id="previewMoviePoster" src="" alt="Póster"
-                                class="w-16 h-24 object-cover journal-border flex-shrink-0 shadow-sm">
-                            <div class="flex-grow min-w-0 pr-4">
-                                <h5 id="previewMovieTitle"
-                                    class="font-heading font-bold text-xs text-rose-900 dark:text-rose-400 leading-tight"></h5>
-                                <p id="previewMovieOverview"
-                                    class="text-[10px] font-serif text-stone-600 dark:text-stone-400 mt-1 line-clamp-3 italic">
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-        
-                    <div class="space-y-1">
-                        <label id="titleFieldLabel" class="block font-mono text-[10px] text-stone-500 uppercase">Título /
-                            titular</label>
-                        <input type="text" id="smartPostTitle" required placeholder="Titular llamativo..."
-                            class="w-full bg-stone-100 dark:bg-stone-950 journal-border p-2 text-xs focus:outline-none focus:border-rose-900 font-heading font-bold">
-                    </div>
-        
-                    <div id="ratingContainer" class="hidden space-y-1 pt-1">
-                        <label class="block font-mono text-[10px] text-stone-500 uppercase">Calificación (Estrellas)</label>
-                        <div class="flex items-center space-x-3">
-                            <div id="smartStarContainer"
-                                class="flex flex-wrap gap-1 items-center bg-stone-100 dark:bg-stone-950 p-1.5 journal-border">
-                            </div>
-                            <span id="smartStarRatingText" class="font-mono text-xs font-bold text-amber-600">0.0</span>
-                        </div>
-                    </div>
-        
-                    <div class="space-y-1">
-                        <label class="block font-mono text-[10px] text-stone-500 uppercase">Cuerpo del apunte / texto
-                            fanzine</label>
-                        <textarea id="smartPostContent" rows="4" required placeholder="Escribe tus impresiones críticas..."
-                            class="w-full bg-stone-100 dark:bg-stone-950 journal-border p-2 text-xs focus:outline-none focus:border-rose-900 resize-none"></textarea>
-                    </div>
-        
-                    <!-- CHECKBOX DE PUBLICAR EN MURO -->
-                    <div class="flex items-center space-x-2 pt-2 pb-1">
-                        <input type="checkbox" id="wallPublishCheck" checked class="rounded-none accent-rose-800">
-                        <label for="wallPublishCheck"
-                            class="text-xs font-serif text-stone-600 dark:text-stone-400 cursor-pointer">Publicar en el diario
-                            mural</label>
-                    </div>
-        
-                    <div
-                        class="flex justify-end space-x-2 pt-2 border-t border-stone-200 dark:border-stone-800 font-mono text-xs">
-                        <button type="button" onclick="closeSmartPublishModal()"
-                            class="px-3 py-1.5 journal-border text-stone-600 hover:text-stone-900 dark:hover:text-stone-100">Cancelar</button>
-                        <button type="submit"
-                            class="px-4 py-1.5 bg-rose-900 text-stone-100 journal-border hover:bg-rose-800 transition font-bold uppercase">
-                            Publicar en muro
-                        </button>
-                    </div>
-                </form>
-            </div>
+            </form>
         </div>
+    </div>
 
     <!-- Panel lateral de perfil -->
     <div id="profileDrawerBackdrop" onclick="toggleProfileDrawer()" class="fixed inset-0 bg-stone-950/60 backdrop-blur-sm z-50 hidden transition-opacity duration-300"></div>
@@ -847,7 +860,7 @@
 
             <div class="p-5 border-b border-stone-200 dark:border-stone-800 space-y-3 text-center bg-stone-50 dark:bg-stone-950">
                 <div class="relative w-24 h-24 mx-auto group">
-                    <img id="drawerProfileAvatar" src="https://api.dicebear.com/7.x/bottts/svg?seed=Invitado/a" alt="Foto de perfil" onclick="openAvatarPreviewModal()" class="w-24 h-24 rounded-full journal-border shadow-md object-cover bg-stone-200 dark:bg-stone-900 cursor-pointer hover:opacity-90 hover:scale-105 transition duration-200" title="Ver foto en grande">
+                    <img id="drawerProfileAvatar" src="https://api.dicebear.com/7.x/bottts/svg?seed=Invitado/a" alt="Foto de perfil" onclick="openAvatarPreviewModal()" class="w-24 h-24 rounded-full cz-avatar shadow-md object-cover bg-stone-200 dark:bg-stone-900 cursor-pointer hover:opacity-90 hover:scale-105 transition duration-200" title="Ver foto en grande">
                     <button onclick="setAvatarByWordPrompt()" title="Opciones de avatar" class="absolute bottom-0 right-0 w-7 h-7 bg-rose-900 text-stone-100 rounded-full journal-border flex items-center justify-center text-xs hover:scale-110 transition shadow-lg">
                         <i class="fa-solid fa-camera"></i>
                     </button>
@@ -911,7 +924,6 @@
         </div>
     </aside>
 
-
     <!-- Modales del perfil: vistas, apuntes y cuadernos -->
     <div id="watchedModal" class="fixed inset-0 bg-stone-950/75 backdrop-blur-sm z-[110] hidden flex items-center justify-center p-4" onclick="if(event.target===this) closeProfileModal('watchedModal')">
         <div class="bg-stone-50 dark:bg-stone-900 journal-border rounded-none w-full max-w-2xl max-h-[88vh] p-5 text-left relative shadow-2xl flex flex-col font-serif">
@@ -945,7 +957,6 @@
                 <div class="flex items-center space-x-2 font-heading font-bold text-sm"><i class="fa-solid fa-book text-rose-800"></i><span>Mis cuadernos</span><span id="listsModalCount" class="text-[10px] font-mono bg-stone-200 dark:bg-stone-800 journal-border px-2 py-0.5">0</span></div>
                 <button onclick="closeProfileModal('listsModal')" class="text-stone-400 hover:text-stone-800 dark:hover:text-white text-lg p-1 transition"><i class="fa-solid fa-xmark"></i></button>
             </div>
-            
             <div id="listsModalBody" class="flex-grow overflow-y-auto custom-scrollbar pr-1"></div>
             <button onclick="closeProfileModal('listsModal'); switchMainTab('catalog'); setTimeout(()=>{const c=document.getElementById('customListsContainer'); if(c) c.scrollIntoView({behavior:'smooth', block:'center'});}, 150);" class="mt-3 flex-shrink-0 w-full bg-stone-200 dark:bg-stone-800 hover:bg-stone-300 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-200 font-mono text-xs uppercase tracking-wider py-2 journal-border transition"><i class="fa-solid fa-pen-to-square mr-1"></i> Gestionar cuadernos en el catálogo</button>
         </div>
@@ -977,341 +988,496 @@
         </div>
     </div>
 
-    <!-- Script principal -->
-    <script src="script.js?v=2"></script>
-
-<!-- SDKs de Firebase v10 y lógica de autenticación -->
-<!-- SDKs de Firebase v10 y lógica de autenticación -->
-<script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import {
-        getAuth,
-        createUserWithEmailAndPassword,
-        signInWithEmailAndPassword,
-        signInWithPopup,
-        GoogleAuthProvider,
-        signOut,
-        onAuthStateChanged,
-        updateProfile,
-        setPersistence,
-        browserLocalPersistence,
-        browserSessionPersistence,
-        deleteUser
-    } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-
-    import { getFirestore, doc, getDoc, setDoc, deleteDoc, collection, getDocs, addDoc, updateDoc, arrayUnion, arrayRemove, query, orderBy, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-
-    const app = initializeApp({
-        apiKey: "AIzaSyBlzILNkhjwTkBQcHf7jBwRecz38S5It6Q",
-        authDomain: "cinezine-5c4c5.firebaseapp.com",
-        projectId: "cinezine-5c4c5",
-        storageBucket: "cinezine-5c4c5.firebasestorage.app",
-        messagingSenderId: "176182440928",
-        appId: "1:176182440928:web:46493539c9d8898c5b7185"
-    });
-
-    const auth = getAuth(app);
-    const db = getFirestore(app);
-    const googleProvider = new GoogleAuthProvider();
-
-    window.setAuthPersistence = async (remember) => {
-        const mode = remember ? browserLocalPersistence : browserSessionPersistence;
-        await setPersistence(auth, mode);
-    };
-
-    window.fbAuth = auth;
-
-    window.fbSaveProfile = async (data) => {
-        const user = auth.currentUser;
-        if (!user) return;
-        try {
-            if (data.username) await updateProfile(user, { displayName: data.username });
-        } catch (e) { console.warn('No se pudo guardar displayName:', e); }
-        try {
-            await setDoc(doc(db, 'users', user.uid), data, { merge: true });
-        } catch (e) { console.warn('No se pudo guardar el perfil en Firestore:', e); }
-    };
-
-    window.fbSyncPublicStats = async function () {
-        const user = auth.currentUser;
-        if (!user) return;
-        try {
-            // Filtramos solo lo que es público
-            const publicLists = customLists.filter(l => l.isPublic !== false);
-
-            await setDoc(doc(db, 'users', user.uid), {
-                publicWatched: watchedMovies,
-                publicWatchedData: watchedMoviesData,
-                publicLists: publicLists,
-                publicPersonalReviews: personalReviews
-            }, { merge: true });
-        } catch (e) { console.warn('Error al sincronizar stats públicas:', e); }
-    };
-
-    window.fbGetPublicStats = async function (uid) {
-        try {
-            const snap = await getDoc(doc(db, 'users', uid));
-            return snap.exists() ? snap.data() : null;
-        } catch (e) { return null; }
-    };
-
-    // Actualizar o añadir comentarios en Firestore
-    window.fbAddCommentFirestore = async function (postId, commentObj) {
-        try {
-            const postRef = doc(db, "posts", postId);
-            await updateDoc(postRef, {
-                comments: arrayUnion(commentObj)
-            });
-        } catch (e) {
-            console.error("Error al guardar comentario en Firestore:", e);
+    <!-- Configuración solo local (si se abre en PC sin servidor Vercel) y script principal -->
+    <script>
+        if (location.protocol === 'file:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+            document.write('<script src="local-config.js"><\/script>');
         }
-    };
+    </script>
+    <script src="script.js"></script>
 
-    // Actualizar reacciones o votos en posts y comentarios
-    window.fbUpdatePostFirestore = async function (postId, updatedData) {
-        try {
-            const postRef = doc(db, "posts", postId);
-            await updateDoc(postRef, updatedData);
-        } catch (e) {
-            console.error("Error al actualizar post en Firestore:", e);
+    <!-- SDKs de Firebase v10 y lógica de autenticación -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import {
+            getAuth,
+            createUserWithEmailAndPassword,
+            signInWithEmailAndPassword,
+            signInWithPopup,
+            GoogleAuthProvider,
+            signOut,
+            onAuthStateChanged,
+            updateProfile,
+            sendPasswordResetEmail,
+            sendEmailVerification,
+            reload,
+            setPersistence,
+            browserLocalPersistence,
+            browserSessionPersistence,
+            deleteUser
+        } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
+        import { getFirestore, doc, getDoc, setDoc, deleteDoc, collection, getDocs, addDoc, updateDoc, query, orderBy, limit, where, onSnapshot, serverTimestamp, increment, deleteField } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { initializeAppCheck, ReCaptchaV3Provider } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app-check.js";
+
+        const app = initializeApp({
+            apiKey: "AIzaSyBlzILNkhjwTkBQcHf7jBwRecz38S5It6Q",
+            authDomain: "cinezine-5c4c5.firebaseapp.com",
+            projectId: "cinezine-5c4c5",
+            storageBucket: "cinezine-5c4c5.firebasestorage.app",
+            messagingSenderId: "176182440928",
+            appId: "1:176182440928:web:46493539c9d8898c5b7185"
+        });
+
+        const APP_CHECK_SITE_KEY = '';
+        if (APP_CHECK_SITE_KEY) {
+            if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+            initializeAppCheck(app, { provider: new ReCaptchaV3Provider(APP_CHECK_SITE_KEY), isTokenAutoRefreshEnabled: true });
         }
-    };
 
-    // Eliminar un post completo de Firestore
-    window.fbDeletePostFirestore = async function (postId) {
-        try {
-            await deleteDoc(doc(db, "posts", postId));
-        } catch (e) {
-            console.error("Error al eliminar post de Firestore:", e);
-        }
-    };
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const googleProvider = new GoogleAuthProvider();
 
-    window.fbLoadProfile = async (user) => {
-        try {
-            const snap = await getDoc(doc(db, 'users', user.uid));
-            return snap.exists() ? snap.data() : null;
-        } catch (e) {
-            console.warn('No se pudo leer el perfil de Firestore:', e);
-            return false;
-        }
-    };
-    window.fbSignUp = (email, password) => createUserWithEmailAndPassword(auth, email, password);
-    window.fbSignIn = (email, password) => signInWithEmailAndPassword(auth, email, password);
-    window.fbLoginGoogle = () => signInWithPopup(auth, googleProvider);
-
-    // ---------- Sincronización del Diario Mural en Firestore ----------
-    window.currentFirestorePosts = [];
-    window.initCommunityWallReal = function (callback) {
-            const q = query(collection(db, "posts"), orderBy("createdAt", "desc"));
-            return onSnapshot(q, (snapshot) => {
-                const posts = [];
-                snapshot.forEach((docSnap) => {
-                    posts.push({ id: docSnap.id, ...docSnap.data() });
-                });
-                window.currentFirestorePosts = posts; // <-- Actualizamos el global aquí
-                if (typeof callback === 'function') callback(posts);
-            });
+        window.setAuthPersistence = async (remember) => {
+            const mode = remember ? browserLocalPersistence : browserSessionPersistence;
+            await setPersistence(auth, mode);
         };
 
-    window.fbCreatePost = async function (postData) {
-        if (!auth.currentUser) {
-            console.warn("Usuario no autenticado para publicar en la nube.");
-            return;
-        }
-        try {
-            await addDoc(collection(db, "posts"), {
-                userId: auth.currentUser.uid,
-                author: window.currentUsername || auth.currentUser.displayName || 'Anónimo',
-                avatarSeed: window.currentAvatarSeed || auth.currentUser.email,
-                role: "Crítico principal / Editor",
-                type: postData.type || 'review',
-                tmdbMovieId: postData.tmdbMovieId || null,
-                movieObj: postData.movieObj || null,
-                reviewTitle: postData.reviewTitle || '',
-                title: postData.title || '',
-                content: postData.content,
-                rating: postData.rating || null,
-                createdAt: serverTimestamp(),
-                date: "Hace un momento",
-                reactions: { agree: 0, disagree: 0 },
-                userVotes: {},
-                comments: []
-            });
-            console.log("¡Post guardado con éxito en Firestore!");
-        } catch (e) {
-            console.error("Error al guardar el post en Firestore:", e);
-        }
-    };
+        window.fbAuth = auth;
 
-    // ---------- Sincronización de datos de usuario ----------
-    const pendingWrites = new Map();
+        const isUnverifiedEmailUser = (u) => {
+            if (!u || u.emailVerified) return false;
+            const provs = u.providerData || [];
+            return provs.length === 0 || provs.some(p => p.providerId === 'password');
+        };
+        window.isUnverifiedEmailUser = isUnverifiedEmailUser;
 
-    async function writeNow(uid, key, value) {
-        try {
-            await setDoc(doc(db, 'users', uid, 'data', key), { value, updatedAt: Date.now() });
-        } catch (e) { console.warn('No se pudo guardar', key, e); }
-    }
-
-    async function writePending(key) {
-        const entry = pendingWrites.get(key);
-        if (!entry) return;
-        clearTimeout(entry.timer);
-        pendingWrites.delete(key);
-        await writeNow(entry.uid, key, entry.value);
-    }
-
-    window.fbSaveData = (key, value) => {
-        const user = auth.currentUser;
-        if (!user) return;
-        const prev = pendingWrites.get(key);
-        if (prev) clearTimeout(prev.timer);
-        pendingWrites.set(key, { uid: user.uid, value, timer: setTimeout(() => writePending(key), 800) });
-    };
-
-    window.fbFlushData = () => Promise.all([...pendingWrites.keys()].map(writePending));
-
-    document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'hidden') window.fbFlushData();
-    });
-
-    function wipeLocalLibrary() {
-        window._suppressSync = true;
-        try {
-            window.CINE_SYNC_KEYS.forEach(k => window.cineRawStorage.remove(k));
-            window.cineRawStorage.remove('cine_data_owner');
-        } finally { window._suppressSync = false; }
-    }
-
-    window.fbUploadAllLocal = async () => {
-        const user = auth.currentUser;
-        if (!user) return;
-        await Promise.all(window.CINE_SYNC_KEYS
-            .filter(k => localStorage.getItem(k) !== null)
-            .map(k => writeNow(user.uid, k, localStorage.getItem(k))));
-    };
-
-    window.fbInitLibrary = async () => {
-        const user = auth.currentUser;
-        if (!user) return;
-        window._libraryReady = false;
-
-        let remote = null;
-        try {
-            const snap = await getDocs(collection(db, 'users', user.uid, 'data'));
-            remote = {};
-            snap.forEach(d => { remote[d.id] = d.data().value; });
-        } catch (e) {
-            console.warn('No se pudieron leer los datos de Firestore:', e);
-        }
-        if (auth.currentUser !== user) return;
-        if (remote === null) return;
-
-        const owner = localStorage.getItem('cine_data_owner');
-        if (owner && owner !== user.uid) wipeLocalLibrary();
-
-        const toUpload = [];
-        window._suppressSync = true;
-        try {
-            for (const key of window.CINE_SYNC_KEYS) {
-                if (key in remote) {
-                    if (remote[key] === null) window.cineRawStorage.remove(key);
-                    else window.cineRawStorage.set(key, remote[key]);
-                } else if (localStorage.getItem(key) !== null) {
-                    toUpload.push(key);
-                }
-                window.cineApplyKey(key, localStorage.getItem(key));
-            }
-            window.cineRawStorage.set('cine_data_owner', user.uid);
-        } finally { window._suppressSync = false; }
-
-        await Promise.all(toUpload.map(k => writeNow(user.uid, k, localStorage.getItem(k))));
-
-        window._libraryReady = true;
-        window.cineRefreshAfterSync();
-    };
-
-    window.fbSignOut = async () => {
-        try { await window.fbFlushData(); } catch (e) { }
-        window._libraryReady = false;
-        await signOut(auth);
-        wipeLocalLibrary();
-        localStorage.removeItem('cine_username');
-        localStorage.removeItem('cine_avatar_seed');
-        localStorage.removeItem('cine_user_bio');
-        window.currentUsername = 'Invitado/a';
-        window.currentAvatarSeed = 'Invitado/a';
-        window.currentUserBio = '';
-        sessionStorage.setItem('guestMode', 'true');
-        if (typeof window.updateProfileDrawerStats === 'function') {
-            window.updateProfileDrawerStats();
-        }
-        location.reload();
-    };
-
-    window.fbDeleteAccount = async () => {
-        const user = auth.currentUser;
-        if (!user) return;
-
-        if (confirm("¿Estás seguro de que deseas eliminar tu cuenta permanentemente?")) {
-            const uid = user.uid;
+        window.fbSaveProfile = async (data) => {
+            const user = auth.currentUser;
+            if (!user) return;
             try {
-                pendingWrites.forEach(e => clearTimeout(e.timer));
-                pendingWrites.clear();
-                window._libraryReady = false;
-                try {
-                    const snap = await getDocs(collection(db, 'users', uid, 'data'));
-                    await Promise.all(snap.docs.map(d => deleteDoc(d.ref)));
-                    await deleteDoc(doc(db, 'users', uid));
-                } catch (e) { console.warn('No se pudieron borrar los datos de Firestore:', e); }
+                if (data.username) await updateProfile(user, { displayName: data.username });
+            } catch (e) { console.warn('No se pudo guardar displayName:', e); }
+            try {
+                await setDoc(doc(db, 'users', user.uid), data, { merge: true });
+            } catch (e) { console.warn('No se pudo guardar el perfil en Firestore:', e); }
+            if (isUnverifiedEmailUser(user)) return;
+            try {
+                const pub = {};
+                if (data.username !== undefined) pub.username = String(data.username).slice(0, 40);
+                if (data.avatarSeed !== undefined) pub.avatarSeed = String(data.avatarSeed).slice(0, 60);
+                if (data.bio !== undefined) pub.bio = String(data.bio).slice(0, 300);
+                if (Object.keys(pub).length) await setDoc(doc(db, 'profiles', user.uid), { ...pub, updatedAt: serverTimestamp() }, { merge: true });
+            } catch (e) { console.warn('No se pudo publicar la ficha pública:', e); }
+        };
 
-                try {
-                    await deleteUser(user);
-                } catch (err) {
-                    await window.fbSaveProfile({
-                        username: window.currentUsername,
-                        avatarSeed: window.currentAvatarSeed,
-                        bio: window.currentUserBio
-                    });
-                    await window.fbUploadAllLocal();
-                    window._libraryReady = true;
-                    throw err;
-                }
+        window.fbSignOutQuiet = async () => {
+            window._libraryReady = false;
+            await signOut(auth);
+        };
 
-                wipeLocalLibrary();
-                localStorage.removeItem('cine_username');
-                localStorage.removeItem('cine_avatar_seed');
-                localStorage.removeItem('cine_user_bio');
-                window.currentUsername = 'Invitado/a';
-                window.currentAvatarSeed = 'Invitado/a';
-                window.currentUserBio = '';
-                sessionStorage.setItem('guestMode', 'true');
+        window.fbResetPassword = (email) => sendPasswordResetEmail(auth, email);
+        window.fbResendVerification = async () => { if (auth.currentUser) await sendEmailVerification(auth.currentUser); };
+        window.fbRefreshUser = async () => {
+            if (!auth.currentUser) return null;
+            await reload(auth.currentUser);
+            await auth.currentUser.getIdToken(true);
+            return auth.currentUser;
+        };
 
-                if (typeof window.updateProfileDrawerStats === 'function') {
-                    window.updateProfileDrawerStats();
-                }
-
-                alert("Cuenta eliminada con éxito.");
-                location.reload();
-            } catch (err) {
-                alert("Error al eliminar la cuenta. Es posible que debas volver a iniciar sesión por seguridad.");
+        window.fbLoadProfile = async (user) => {
+            try {
+                const snap = await getDoc(doc(db, 'users', user.uid));
+                return snap.exists() ? snap.data() : null;
+            } catch (e) {
+                console.warn('No se pudo leer el perfil de Firestore:', e);
+                return false;
             }
+        };
+        window.fbSignUp = (email, password) => createUserWithEmailAndPassword(auth, email, password);
+        window.fbSignIn = (email, password) => signInWithEmailAndPassword(auth, email, password);
+        window.fbLoginGoogle = () => signInWithPopup(auth, googleProvider);
+
+        // ---------- MURO COMPARTIDO (Firestore) ----------
+        const POSTS_PAGE = 30;
+        let postsLimit = POSTS_PAGE, unsubPosts = null, unsubComments = null;
+        window.muralPosts = [];
+        window.muralComments = [];
+        window.muralHasMore = false;
+        window.muralReady = false;
+        window.muralError = null;
+
+        const asDoc = (d) => ({ id: d.id, ...d.data({ serverTimestamps: 'estimate' }) });
+        const needUser = () => { if (!auth.currentUser) { const e = new Error('Sin sesión'); e.code = 'unauthenticated'; throw e; } return auth.currentUser; };
+
+        window.fbWatchPosts = (onChange) => {
+            if (unsubPosts) unsubPosts();
+            const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'), limit(postsLimit));
+            unsubPosts = onSnapshot(q, (snap) => {
+                window.muralPosts = snap.docs.map(asDoc);
+                window.muralHasMore = snap.size >= postsLimit;
+                window.muralReady = true; window.muralError = null;
+                onChange();
+            }, (err) => {
+                console.warn('No se pudo leer el muro:', err);
+                window.muralReady = true; window.muralError = err;
+                onChange();
+            });
+        };
+        window.fbLoadMorePosts = (onChange) => { postsLimit += POSTS_PAGE; window.fbWatchPosts(onChange); };
+
+        window.fbGetPost = async (id) => {
+            try { const s = await getDoc(doc(db, 'posts', id)); return s.exists() ? asDoc(s) : null; } catch (e) { return null; }
+        };
+
+        window.fbWatchComments = (postId, onChange) => {
+            if (unsubComments) unsubComments();
+            window.muralComments = [];
+            const q = query(collection(db, 'posts', postId, 'comments'), orderBy('createdAt', 'asc'));
+            unsubComments = onSnapshot(q, (snap) => { window.muralComments = snap.docs.map(asDoc); onChange(); },
+                (err) => { console.warn('No se pudieron leer los comentarios:', err); onChange(); });
+        };
+        window.fbStopComments = () => { if (unsubComments) { unsubComments(); unsubComments = null; } window.muralComments = []; };
+
+        const postBody = (u, p) => ({
+            authorUid: u.uid,
+            author: String(p.author || 'Anónimo').slice(0, 40),
+            avatarSeed: String(p.avatarSeed || '').slice(0, 60),
+            type: p.type === 'review' ? 'review' : 'discussion',
+            tmdbMovieId: p.tmdbMovieId ?? null,
+            movieObj: p.movieObj ?? null,
+            reviewTitle: String(p.reviewTitle || '').slice(0, 150),
+            title: String(p.title || '').slice(0, 150),
+            content: String(p.content || '').slice(0, 5000),
+            rating: p.rating ?? null,
+            votes: {},
+            commentCount: 0,
+            lastComment: null,
+            createdAt: serverTimestamp()
+        });
+
+        window.fbCreatePost = async (p) => { const u = needUser(); return (await addDoc(collection(db, 'posts'), postBody(u, p))).id; };
+
+        window.fbUpsertReviewPost = async (movieId, p) => {
+            const u = needUser();
+            const ref = doc(db, 'posts', `r_${u.uid}_${movieId}`);
+            const snap = await getDoc(ref);
+            if (snap.exists()) {
+                await updateDoc(ref, {
+                    author: String(p.author || 'Anónimo').slice(0, 40), avatarSeed: String(p.avatarSeed || '').slice(0, 60),
+                    reviewTitle: String(p.reviewTitle || '').slice(0, 150), content: String(p.content || '').slice(0, 5000),
+                    rating: p.rating ?? null, movieObj: p.movieObj ?? null, updatedAt: serverTimestamp()
+                });
+            } else {
+                await setDoc(ref, postBody(u, { ...p, type: 'review', tmdbMovieId: movieId }));
+            }
+        };
+        window.fbRemoveReviewPost = async (movieId) => {
+            const u = auth.currentUser;
+            if (!u) return;
+            const ref = doc(db, 'posts', `r_${u.uid}_${movieId}`);
+            const snap = await getDoc(ref);
+            if (snap.exists()) await window.fbDeletePost(ref.id);
+        };
+
+        window.fbUpdatePost = (postId, fields) => { needUser(); return updateDoc(doc(db, 'posts', postId), { ...fields, updatedAt: serverTimestamp() }); };
+        window.fbDeletePost = async (postId) => {
+            needUser();
+            const cs = await getDocs(collection(db, 'posts', postId, 'comments'));
+            await Promise.all(cs.docs.map(d => deleteDoc(d.ref)));
+            await deleteDoc(doc(db, 'posts', postId));
+        };
+        window.fbVotePost = (postId, type) => { const u = needUser(); return updateDoc(doc(db, 'posts', postId), { [`votes.${u.uid}`]: type || deleteField() }); };
+
+        window.fbAddComment = async (postId, c) => {
+            const u = needUser();
+            const author = String(c.author || 'Anónimo').slice(0, 40);
+            const avatarSeed = String(c.avatarSeed || '').slice(0, 60);
+            const text = String(c.text).slice(0, 1000);
+            const ref = await addDoc(collection(db, 'posts', postId, 'comments'), {
+                authorUid: u.uid, author, avatarSeed, text,
+                parentId: c.parentId || null, replyToAuthor: c.replyToAuthor || null,
+                votes: {}, createdAt: serverTimestamp()
+            });
+            await updateDoc(doc(db, 'posts', postId), { commentCount: increment(1), lastComment: { author, avatarSeed, text: text.slice(0, 160) } });
+            return ref.id;
+        };
+        window.fbEditComment = (postId, cid, text) => { needUser(); return updateDoc(doc(db, 'posts', postId, 'comments', cid), { text, updatedAt: serverTimestamp() }); };
+        window.fbDeleteComment = async (postId, cid, newLast) => {
+            needUser();
+            await deleteDoc(doc(db, 'posts', postId, 'comments', cid));
+            await updateDoc(doc(db, 'posts', postId), { commentCount: increment(-1), lastComment: newLast || null });
+        };
+        window.fbVoteComment = (postId, cid, type) => { const u = needUser(); return updateDoc(doc(db, 'posts', postId, 'comments', cid), { [`votes.${u.uid}`]: type || deleteField() }); };
+
+        window.fbGetProfile = async (uid) => {
+            const out = {};
+            try {
+                const s = await getDoc(doc(db, 'profiles', uid));
+                if (s.exists()) Object.assign(out, s.data());
+            } catch (e) { }
+            if (auth.currentUser && auth.currentUser.uid === uid) {
+                try {
+                    const u = await getDoc(doc(db, 'users', uid));
+                    if (u.exists()) Object.assign(out, u.data(), out);
+                } catch (e) { }
+                try {
+                    const ds = await getDocs(collection(db, 'users', uid, 'data'));
+                    const lib = out.library || {};
+                    ds.forEach(d => { lib[d.id] = d.data().value; });
+                    if (Object.keys(lib).length) out.library = lib;
+                } catch (e) { }
+            }
+            return Object.keys(out).length ? out : null;
+        };
+        window.fbGetUserPosts = async (uid) => {
+            try {
+                const s = await getDocs(query(collection(db, 'posts'), where('authorUid', '==', uid), limit(60)));
+                return s.docs.map(asDoc);
+            } catch (e) { console.warn(e); return []; }
+        };
+
+        window.fbWatchPosts(() => {
+            if (typeof window.renderMuralFeed === 'function') window.renderMuralFeed();
+            if (typeof window.refreshPostModal === 'function') window.refreshPostModal();
+        });
+
+        // ---------- Sincronización de datos de usuario ----------
+        const pendingWrites = new Map();
+        const PUBLIC_LIB_KEYS = ['cine_watched_movies', 'cine_watched_movies_data', 'cine_personal_reviews', 'cine_custom_lists'];
+
+        function sanitizePublicLibValue(key, raw) {
+            if (raw === null || raw === undefined) return null;
+            try {
+                if (key === 'cine_personal_reviews') {
+                    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                    const pubOnly = {};
+                    Object.keys(parsed || {}).forEach(k => {
+                        const rv = parsed[k];
+                        if (rv && rv.isPublic !== false) pubOnly[k] = rv;
+                    });
+                    return JSON.stringify(pubOnly);
+                }
+                if (key === 'cine_custom_lists') {
+                    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                    const pubOnly = Array.isArray(parsed) ? parsed.filter(l => l && l.isPublic !== false) : [];
+                    return JSON.stringify(pubOnly);
+                }
+            } catch (e) { }
+            return typeof raw === 'string' ? raw : JSON.stringify(raw);
         }
-    };
 
-    onAuthStateChanged(auth, async (user) => {
-        window.currentUser = user;
-        const modal = document.getElementById('authModal');
+        let _pubLibBatch = {};
+        let _pubLibTimer = null;
 
-        if (user) {
+        async function flushPublicLib(uid) {
+            if (_pubLibTimer) { clearTimeout(_pubLibTimer); _pubLibTimer = null; }
+            const keys = Object.keys(_pubLibBatch);
+            if (!keys.length || !auth.currentUser || isUnverifiedEmailUser(auth.currentUser)) return;
+            const payload = { ..._pubLibBatch };
+            _pubLibBatch = {};
+            try {
+                await setDoc(doc(db, 'profiles', uid), { library: payload, updatedAt: serverTimestamp() }, { merge: true });
+            } catch (e) { }
+        }
+
+        function queuePublicLibSync(uid, key, value) {
+            if (!PUBLIC_LIB_KEYS.includes(key) || !auth.currentUser || isUnverifiedEmailUser(auth.currentUser)) return;
+            _pubLibBatch[key] = sanitizePublicLibValue(key, value);
+            if (_pubLibTimer) clearTimeout(_pubLibTimer);
+            _pubLibTimer = setTimeout(() => flushPublicLib(uid), 1200);
+        }
+
+        async function writeNow(uid, key, value) {
+            try {
+                await setDoc(doc(db, 'users', uid, 'data', key), { value, updatedAt: Date.now() });
+            } catch (e) { console.warn('No se pudo guardar', key, e); }
+            queuePublicLibSync(uid, key, value);
+        }
+
+        async function writePending(key) {
+            const entry = pendingWrites.get(key);
+            if (!entry) return;
+            clearTimeout(entry.timer);
+            pendingWrites.delete(key);
+            await writeNow(entry.uid, key, entry.value);
+        }
+
+        window.fbSaveData = (key, value) => {
+            const user = auth.currentUser;
+            if (!user) return;
+            const prev = pendingWrites.get(key);
+            if (prev) clearTimeout(prev.timer);
+            pendingWrites.set(key, { uid: user.uid, value, timer: setTimeout(() => writePending(key), 800) });
+        };
+
+        window.fbFlushData = async () => {
+            await Promise.all([...pendingWrites.keys()].map(writePending));
+            if (auth.currentUser) await flushPublicLib(auth.currentUser.uid);
+        };
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'hidden') window.fbFlushData();
+        });
+
+        function wipeLocalLibrary() {
+            window._suppressSync = true;
+            try {
+                window.CINE_SYNC_KEYS.forEach(k => window.cineRawStorage.remove(k));
+                window.cineRawStorage.remove('cine_data_owner');
+            } finally { window._suppressSync = false; }
+        }
+
+        window.fbUploadAllLocal = async () => {
+            const user = auth.currentUser;
+            if (!user) return;
+            await Promise.all(window.CINE_SYNC_KEYS
+                .filter(k => localStorage.getItem(k) !== null)
+                .map(k => writeNow(user.uid, k, localStorage.getItem(k))));
+        };
+
+        window.fbInitLibrary = async () => {
+            const user = auth.currentUser;
+            if (!user) return;
+            window._libraryReady = false;
+
+            let remote = null;
+            try {
+                const snap = await getDocs(collection(db, 'users', user.uid, 'data'));
+                remote = {};
+                snap.forEach(d => { remote[d.id] = d.data().value; });
+            } catch (e) {
+                console.warn('No se pudieron leer los datos de Firestore:', e);
+            }
+            if (auth.currentUser !== user) return;
+            if (remote === null) return;
+
+            const owner = localStorage.getItem('cine_data_owner');
+            if (owner && owner !== user.uid) wipeLocalLibrary();
+
+            const toUpload = [];
+            window._suppressSync = true;
+            try {
+                for (const key of window.CINE_SYNC_KEYS) {
+                    if (key in remote) {
+                        if (remote[key] === null) window.cineRawStorage.remove(key);
+                        else window.cineRawStorage.set(key, remote[key]);
+                    } else if (localStorage.getItem(key) !== null) {
+                        toUpload.push(key);
+                    }
+                    window.cineApplyKey(key, localStorage.getItem(key));
+                }
+                window.cineRawStorage.set('cine_data_owner', user.uid);
+            } finally { window._suppressSync = false; }
+
+            await Promise.all(toUpload.map(k => writeNow(user.uid, k, localStorage.getItem(k))));
+            if (!isUnverifiedEmailUser(user)) {
+                try {
+                    const pubLib = {};
+                    PUBLIC_LIB_KEYS.forEach(k => {
+                        const v = localStorage.getItem(k);
+                        if (v !== null) pubLib[k] = sanitizePublicLibValue(k, v);
+                    });
+                    if (Object.keys(pubLib).length) await setDoc(doc(db, 'profiles', user.uid), { library: pubLib, updatedAt: serverTimestamp() }, { merge: true });
+                } catch (e) { }
+            }
+
+            window._libraryReady = true;
+            window.cineRefreshAfterSync();
+        };
+
+        window.fbSignOut = async () => {
+            try { await window.fbFlushData(); } catch (e) { }
+            window._libraryReady = false;
+            await signOut(auth);
+            wipeLocalLibrary();
+            localStorage.removeItem('cine_username');
+            localStorage.removeItem('cine_avatar_seed');
+            localStorage.removeItem('cine_user_bio');
+            window.currentUsername = 'Invitado/a';
+            window.currentAvatarSeed = 'Invitado/a';
+            window.currentUserBio = '';
+            sessionStorage.setItem('guestMode', 'true');
+            if (typeof window.updateProfileDrawerStats === 'function') {
+                window.updateProfileDrawerStats();
+            }
+            location.reload();
+        };
+
+        window.fbDeleteAccount = async () => {
+            const user = auth.currentUser;
+            if (!user) return;
+
+            const sinceLogin = Date.now() - new Date(user.metadata.lastSignInTime).getTime();
+            if (sinceLogin > 4 * 60 * 1000) {
+                alert("Por seguridad, cierra sesión, vuelve a entrar y elimina la cuenta enseguida.");
+                return;
+            }
+
+            if (confirm("¿Estás seguro de que deseas eliminar tu cuenta permanentemente? También se borrarán tus publicaciones del muro.")) {
+                const uid = user.uid;
+                try {
+                    pendingWrites.forEach(e => clearTimeout(e.timer));
+                    pendingWrites.clear();
+                    window._libraryReady = false;
+                    try {
+                        const snap = await getDocs(collection(db, 'users', uid, 'data'));
+                        await Promise.all(snap.docs.map(d => deleteDoc(d.ref)));
+                        await deleteDoc(doc(db, 'users', uid));
+                    } catch (e) { console.warn('No se pudieron borrar los datos de Firestore:', e); }
+                    try {
+                        const mine = await getDocs(query(collection(db, 'posts'), where('authorUid', '==', uid)));
+                        for (const d of mine.docs) await window.fbDeletePost(d.id);
+                        await deleteDoc(doc(db, 'profiles', uid));
+                    } catch (e) { console.warn('No se pudieron borrar tus publicaciones del muro:', e); }
+
+                    try {
+                        await deleteUser(user);
+                    } catch (err) {
+                        await window.fbSaveProfile({
+                            username: window.currentUsername,
+                            avatarSeed: window.currentAvatarSeed,
+                            bio: window.currentUserBio
+                        });
+                        await window.fbUploadAllLocal();
+                        window._libraryReady = true;
+                        throw err;
+                    }
+
+                    wipeLocalLibrary();
+                    localStorage.removeItem('cine_username');
+                    localStorage.removeItem('cine_avatar_seed');
+                    localStorage.removeItem('cine_user_bio');
+                    window.currentUsername = 'Invitado/a';
+                    window.currentAvatarSeed = 'Invitado/a';
+                    window.currentUserBio = '';
+                    sessionStorage.setItem('guestMode', 'true');
+
+                    if (typeof window.updateProfileDrawerStats === 'function') {
+                        window.updateProfileDrawerStats();
+                    }
+
+                    alert("Cuenta eliminada con éxito.");
+                    location.reload();
+                } catch (err) {
+                    alert("Error al eliminar la cuenta. Es posible que debas volver a iniciar sesión por seguridad.");
+                }
+            }
+        };
+
+        window.fbCompleteVerifiedSession = async (user) => {
+            if (!user || isUnverifiedEmailUser(user)) return false;
+            window.currentUser = user;
+            const modal = document.getElementById('authModal');
             sessionStorage.removeItem('guestMode');
             sessionStorage.removeItem('cineGuestChosen');
             if (modal) modal.classList.add('hidden');
+            if (typeof window.stopAuthVerifyWatcher === 'function') window.stopAuthVerifyWatcher();
 
-            if (window._signingUp) return;
             window._libraryReady = false;
-
             const remote = await window.fbLoadProfile(user);
-            if (auth.currentUser !== user) return;
+            if (auth.currentUser !== user) return false;
 
             const localName = localStorage.getItem('cine_username');
             const hasLocalName = localName && localName !== 'Invitado/a' && localName !== 'Cinéfilo/a';
@@ -1328,152 +1494,216 @@
             localStorage.setItem('cine_avatar_seed', avatarSeed);
             localStorage.setItem('cine_user_bio', bio);
 
-            if (remote !== false && username !== 'Cinéfilo/a' && !(remote && remote.username)) {
-                window.fbSaveProfile({ username, avatarSeed, bio });
-            }
+            if (remote !== false) await window.fbSaveProfile({ username, avatarSeed, bio });
 
             await window.fbInitLibrary();
+            if (typeof migrateLegacyMural === 'function') await migrateLegacyMural();
 
-            // Iniciar escucha en tiempo real del muro comunitario
-            if (typeof window.initCommunityWallReal === 'function') {
-                window.initCommunityWallReal((postsFromCloud) => {
-                    window.currentFirestorePosts = postsFromCloud;
-                    if (typeof renderMuralFeed === 'function') {
-                        renderMuralFeed('all');
+            if (typeof window.updateProfileDrawerStats === 'function') window.updateProfileDrawerStats();
+            if (typeof window.renderMuralFeed === 'function') window.renderMuralFeed();
+            if (typeof window.refreshPostModal === 'function') window.refreshPostModal();
+            if (typeof window.maybeShowVerifyBanner === 'function') window.maybeShowVerifyBanner(user);
+            return true;
+        };
+
+        onAuthStateChanged(auth, async (user) => {
+            window.currentUser = user;
+            const modal = document.getElementById('authModal');
+
+            if (user) {
+                if (window._signingUp) return;
+
+                if (isUnverifiedEmailUser(user)) {
+                    try {
+                        await reload(user);
+                        if (user.emailVerified) await user.getIdToken(true);
+                    } catch (e) { }
+                }
+
+                if (isUnverifiedEmailUser(user)) {
+                    window._libraryReady = false;
+                    if (typeof window.showAuthVerifyStep === 'function') {
+                        window.showAuthVerifyStep(user.email);
+                    } else if (modal) {
+                        modal.classList.remove('hidden');
                     }
-                });
+                    if (typeof window.updateProfileDrawerStats === 'function') window.updateProfileDrawerStats();
+                    if (typeof window.renderMuralFeed === 'function') window.renderMuralFeed();
+                    return;
+                }
+
+                await window.fbCompleteVerifiedSession(user);
+                return;
+            } else {
+                window._libraryReady = false;
+                if (typeof window.stopAuthVerifyWatcher === 'function') window.stopAuthVerifyWatcher();
+                sessionStorage.setItem('guestMode', 'true');
+                if (modal && sessionStorage.getItem('cineGuestChosen') !== '1') {
+                    if (typeof window.showAuthLoginStep === 'function') window.showAuthLoginStep();
+                    modal.classList.remove('hidden');
+                }
+                currentUsername = 'Invitado/a'; window.currentUsername = 'Invitado/a';
+                currentAvatarSeed = 'Invitado/a'; window.currentAvatarSeed = 'Invitado/a';
+                localStorage.removeItem('cine_username');
+                localStorage.removeItem('cine_avatar_seed');
             }
-        } else {
-            window._libraryReady = false;
-            sessionStorage.setItem('guestMode', 'true');
-            if (modal && sessionStorage.getItem('cineGuestChosen') !== '1') modal.classList.remove('hidden');
-            currentUsername = 'Invitado/a'; window.currentUsername = 'Invitado/a';
-            currentAvatarSeed = 'Invitado/a'; window.currentAvatarSeed = 'Invitado/a';
-            localStorage.removeItem('cine_username');
-            localStorage.removeItem('cine_avatar_seed');
 
-            // Los invitados también pueden escuchar el muro en tiempo real según las reglas
-            if (typeof window.initCommunityWallReal === 'function') {
-                window.initCommunityWallReal((postsFromCloud) => {
-                    window.currentFirestorePosts = postsFromCloud;
-                    if (typeof renderMuralFeed === 'function') {
-                        renderMuralFeed('all');
-                    }
-                });
+            if (typeof window.updateProfileDrawerStats === 'function') {
+                window.updateProfileDrawerStats();
             }
-        }
 
-        if (typeof window.updateProfileDrawerStats === 'function') {
-            window.updateProfileDrawerStats();
-        }
-    });
-</script>
+            if (typeof window.renderMuralFeed === 'function') window.renderMuralFeed();
+            if (typeof window.refreshPostModal === 'function') window.refreshPostModal();
+            if (typeof window.maybeShowVerifyBanner === 'function') window.maybeShowVerifyBanner(user);
+        });
+    </script>
 
-<!-- MODAL DE AUTENTICACIÓN Y REGISTRO -->
-<div id="authModal" class="hidden fixed inset-0 bg-stone-950/80 backdrop-blur-sm z-[300] flex items-center justify-center p-4 overflow-y-auto">
-    <div class="bg-stone-50 dark:bg-stone-900 text-stone-900 dark:text-stone-100 journal-border rounded-none w-full max-w-md p-6 shadow-2xl relative my-auto font-serif">
+    <!-- MODAL DE AUTENTICACIÓN Y REGISTRO COMPLETO -->
+    <div id="authModal" class="hidden fixed inset-0 bg-stone-950/80 backdrop-blur-sm z-[300] flex items-center justify-center p-4 overflow-y-auto">
+        <div class="bg-stone-50 dark:bg-stone-900 text-stone-900 dark:text-stone-100 journal-border rounded-none w-full max-w-md p-6 shadow-2xl relative my-auto font-serif">
 
-        <!-- PASO 1: INICIO DE SESIÓN -->
-        <div id="authStep1">
-            <div class="text-center border-b border-stone-300 dark:border-stone-800 pb-3 mb-4">
-                <h2 class="text-2xl font-extrabold tracking-wider font-heading uppercase">CineZine</h2>
-                <span class="text-[10px] font-mono tracking-widest uppercase text-rose-700 dark:text-rose-500">Ficha de acceso</span>
-            </div>
-            <p class="text-xs text-stone-500 dark:text-stone-400 mb-4 text-center italic">Inicia sesión para guardar tus cuadernos, apuntes y películas vistas.</p>
-
-            <div id="authErrorMsg" class="hidden text-rose-700 dark:text-rose-400 text-xs font-mono text-center bg-rose-900/10 p-2 journal-border mb-4"></div>
-
-            <form id="loginForm" class="space-y-3">
-                <div>
-                    <label class="block text-[10px] font-mono uppercase tracking-widest text-stone-500 mb-1">Correo electrónico</label>
-                    <input type="email" id="authEmail" required placeholder="tu@correo.com" class="w-full bg-stone-100 dark:bg-stone-950 journal-border rounded-none px-3 py-2 text-xs font-serif placeholder-stone-400 focus:outline-none focus:border-rose-800 transition">
+            <!-- PASO 1: INICIO DE SESIÓN -->
+            <div id="authStep1">
+                <div class="text-center border-b border-stone-300 dark:border-stone-800 pb-3 mb-4">
+                    <h2 class="text-2xl font-extrabold tracking-wider font-heading uppercase">CineZine</h2>
+                    <span class="text-[10px] font-mono tracking-widest uppercase text-rose-700 dark:text-rose-500">Ficha de acceso</span>
                 </div>
-                <div>
-                    <label class="block text-[10px] font-mono uppercase tracking-widest text-stone-500 mb-1">Contraseña</label>
-                    <input type="password" id="authPassword" required placeholder="••••••••" class="w-full bg-stone-100 dark:bg-stone-950 journal-border rounded-none px-3 py-2 text-xs font-serif placeholder-stone-400 focus:outline-none focus:border-rose-800 transition">
-                </div>
-                <label class="flex items-center space-x-2 text-xs text-stone-600 dark:text-stone-300 cursor-pointer pt-1">
-                    <input type="checkbox" id="rememberMe" checked class="rounded-none accent-rose-900">
-                    <span>Mantener sesión iniciada</span>
-                </label>
-                <div class="flex gap-2 pt-2">
-                    <button type="submit" id="btnLogin" class="flex-1 bg-rose-900 hover:bg-rose-800 text-stone-100 font-mono text-xs font-bold uppercase tracking-wider py-2 journal-border transition">Iniciar sesión</button>
-                    <button type="button" id="btnShowRegisterStep" class="flex-1 bg-stone-200 dark:bg-stone-800 hover:bg-stone-300 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-200 font-mono text-xs uppercase tracking-wider py-2 journal-border transition">Crear cuenta</button>
-                </div>
-            </form>
+                <p class="text-xs text-stone-500 dark:text-stone-400 mb-4 text-center italic">Inicia sesión para guardar tus cuadernos, apuntes y películas vistas.</p>
 
-            <div class="relative my-5">
-                <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-stone-300 dark:border-stone-800"></div></div>
-                <div class="relative flex justify-center text-[10px] font-mono uppercase tracking-widest"><span class="bg-stone-50 dark:bg-stone-900 px-2 text-stone-400">O continúa con</span></div>
-            </div>
+                <div id="authErrorMsg" class="hidden text-rose-700 dark:text-rose-400 text-xs font-mono text-center bg-rose-900/10 p-2 journal-border mb-4"></div>
 
-            <button id="btnGoogleAuth" class="w-full bg-stone-100 dark:bg-stone-950 hover:bg-stone-200 dark:hover:bg-stone-800 journal-border text-stone-800 dark:text-stone-100 font-mono text-xs uppercase tracking-wider py-2 flex items-center justify-center gap-2 transition mb-3">
-                <svg class="w-4 h-4" viewBox="0 0 24 24">
-                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
-                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
-                </svg>
-                Google
-            </button>
-
-            <button id="btnGuestAuth" class="w-full text-center text-xs font-mono text-stone-500 hover:text-rose-800 dark:hover:text-rose-400 underline transition">Ingresar como invitado</button>
-        </div>
-
-        <!-- PASO 2: REGISTRO COMPLETO -->
-        <div id="authStep2" class="hidden">
-            <div class="text-center border-b border-stone-300 dark:border-stone-800 pb-3 mb-3">
-                <h2 class="text-xl font-extrabold tracking-wider font-heading uppercase">Crea tu cuenta</h2>
-                <span class="text-[10px] font-mono tracking-widest uppercase text-rose-700 dark:text-rose-500">Ficha de redacción</span>
-            </div>
-
-            <div id="authRegisterErrorMsg" class="hidden text-rose-700 dark:text-rose-400 text-xs font-mono text-center bg-rose-900/10 p-2 journal-border mb-3"></div>
-
-            <form id="registerProfileForm" class="space-y-3">
-                <div>
-                    <label class="block text-[10px] font-mono uppercase tracking-widest text-stone-500 mb-1">Correo electrónico</label>
-                    <input type="email" id="regEmail" required placeholder="tu@correo.com" class="w-full bg-stone-100 dark:bg-stone-950 journal-border rounded-none px-3 py-2 text-xs font-serif placeholder-stone-400 focus:outline-none focus:border-rose-800 transition">
-                </div>
-
-                <div>
-                    <label class="block text-[10px] font-mono uppercase tracking-widest text-stone-500 mb-1">Contraseña</label>
-                    <input type="password" id="regPassword" required placeholder="••••••••" class="w-full bg-stone-100 dark:bg-stone-950 journal-border rounded-none px-3 py-2 text-xs font-serif placeholder-stone-400 focus:outline-none focus:border-rose-800 transition">
-                    <div class="mt-2 p-2 bg-stone-100 dark:bg-stone-950 journal-border text-[11px] space-y-1 font-mono">
-                        <div id="req-length" class="text-stone-500 flex items-center gap-1.5">❌ Mínimo 8 caracteres</div>
-                        <div id="req-upper" class="text-stone-500 flex items-center gap-1.5">❌ Al menos una letra mayúscula</div>
-                        <div id="req-lower" class="text-stone-500 flex items-center gap-1.5">❌ Al menos una letra minúscula</div>
-                        <div id="req-number" class="text-stone-500 flex items-center gap-1.5">❌ Al menos un número</div>
-                        <div id="req-special" class="text-stone-500 flex items-center gap-1.5">❌ Al menos un carácter especial (!@#$%^&*)</div>
+                <form id="loginForm" class="space-y-3">
+                    <div>
+                        <label class="block text-[10px] font-mono uppercase tracking-widest text-stone-500 mb-1">Correo electrónico</label>
+                        <input type="email" id="authEmail" required placeholder="tu@correo.com" class="w-full bg-stone-100 dark:bg-stone-950 journal-border rounded-none px-3 py-2 text-xs font-serif placeholder-stone-400 focus:outline-none focus:border-rose-800 transition">
                     </div>
-                </div>
-
-                <div>
-                    <label class="block text-[10px] font-mono uppercase tracking-widest text-stone-500 mb-1">Nombre a mostrar</label>
-                    <input type="text" id="regUsername" required placeholder="Ej. CríticoFílmico" class="w-full bg-stone-100 dark:bg-stone-950 journal-border rounded-none px-3 py-2 text-xs font-serif placeholder-stone-400 focus:outline-none focus:border-rose-800 transition">
-                </div>
-
-                <div>
-                    <label class="block text-[10px] font-mono uppercase tracking-widest text-stone-500 mb-1">Semilla para avatar</label>
-                    <div class="flex items-center gap-3">
-                        <input type="text" id="regAvatarSeed" placeholder="Escribe para generar avatar..." class="w-full bg-stone-100 dark:bg-stone-950 journal-border rounded-none px-3 py-2 text-xs font-serif placeholder-stone-400 focus:outline-none focus:border-rose-800 transition">
-                        <img id="regAvatarPreview" src="https://api.dicebear.com/7.x/bottts/svg?seed=default" alt="Vista previa" class="w-10 h-10 rounded-full journal-border bg-stone-200 dark:bg-stone-800 object-cover flex-shrink-0">
+                    <div>
+                        <label class="block text-[10px] font-mono uppercase tracking-widest text-stone-500 mb-1">Contraseña</label>
+                        <input type="password" id="authPassword" required placeholder="••••••••" class="w-full bg-stone-100 dark:bg-stone-950 journal-border rounded-none px-3 py-2 text-xs font-serif placeholder-stone-400 focus:outline-none focus:border-rose-800 transition">
                     </div>
+                    <label class="flex items-center space-x-2 text-xs text-stone-600 dark:text-stone-300 cursor-pointer pt-1">
+                        <input type="checkbox" id="rememberMe" checked class="rounded-none accent-rose-900">
+                        <span>Mantener sesión iniciada</span>
+                    </label>
+                    <button type="button" id="btnForgotPassword" class="text-[11px] font-mono text-stone-500 hover:text-rose-800 dark:hover:text-rose-400 underline transition">¿Olvidaste tu contraseña?</button>
+                    <div class="flex gap-2 pt-2">
+                        <button type="submit" id="btnLogin" class="flex-1 bg-rose-900 hover:bg-rose-800 text-stone-100 font-mono text-xs font-bold uppercase tracking-wider py-2 journal-border transition">Iniciar sesión</button>
+                        <button type="button" id="btnShowRegisterStep" class="flex-1 bg-stone-200 dark:bg-stone-800 hover:bg-stone-300 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-200 font-mono text-xs uppercase tracking-wider py-2 journal-border transition">Crear cuenta</button>
+                    </div>
+                </form>
+
+                <div class="relative my-5">
+                    <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-stone-300 dark:border-stone-800"></div></div>
+                    <div class="relative flex justify-center text-[10px] font-mono uppercase tracking-widest"><span class="bg-stone-50 dark:bg-stone-900 px-2 text-stone-400">O continúa con</span></div>
                 </div>
 
-                <div>
-                    <label class="block text-[10px] font-mono uppercase tracking-widest text-stone-500 mb-1">Biografía</label>
-                    <textarea id="regUserBio" rows="2" placeholder="Apasionado del cine..." class="w-full bg-stone-100 dark:bg-stone-950 journal-border rounded-none px-3 py-2 text-xs font-serif placeholder-stone-400 focus:outline-none focus:border-rose-800 transition italic resize-none"></textarea>
+                <button id="btnGoogleAuth" class="w-full bg-stone-100 dark:bg-stone-950 hover:bg-stone-200 dark:hover:bg-stone-800 journal-border text-stone-800 dark:text-stone-100 font-mono text-xs uppercase tracking-wider py-2 flex items-center justify-center gap-2 transition mb-3">
+                    <svg class="w-4 h-4" viewBox="0 0 24 24">
+                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                    </svg>
+                    Google
+                </button>
+
+                <button id="btnGuestAuth" class="w-full text-center text-xs font-mono text-stone-500 hover:text-rose-800 dark:hover:text-rose-400 underline transition">Ingresar como invitado</button>
+            </div>
+
+            <!-- PASO 2: REGISTRO COMPLETO -->
+            <div id="authStep2" class="hidden">
+                <div class="text-center border-b border-stone-300 dark:border-stone-800 pb-3 mb-3">
+                    <h2 class="text-xl font-extrabold tracking-wider font-heading uppercase">Crea tu cuenta</h2>
+                    <span class="text-[10px] font-mono tracking-widest uppercase text-rose-700 dark:text-rose-500">Ficha de redacción</span>
                 </div>
 
-                <div class="flex gap-2 pt-2">
-                    <button type="button" id="btnBackToStep1" class="w-1/3 bg-stone-200 dark:bg-stone-800 hover:bg-stone-300 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-200 font-mono text-xs uppercase tracking-wider py-2 journal-border transition">Volver</button>
-                    <button type="submit" id="btnFinalRegister" class="w-2/3 bg-rose-900 hover:bg-rose-800 text-stone-100 font-mono text-xs font-bold uppercase tracking-wider py-2 journal-border transition opacity-50 cursor-not-allowed" disabled>Finalizar registro</button>
+                <div id="authRegisterErrorMsg" class="hidden text-rose-700 dark:text-rose-400 text-xs font-mono text-center bg-rose-900/10 p-2 journal-border mb-3"></div>
+
+                <form id="registerProfileForm" class="space-y-3">
+                    <div>
+                        <label class="block text-[10px] font-mono uppercase tracking-widest text-stone-500 mb-1">Correo electrónico</label>
+                        <input type="email" id="regEmail" required placeholder="tu@correo.com" class="w-full bg-stone-100 dark:bg-stone-950 journal-border rounded-none px-3 py-2 text-xs font-serif placeholder-stone-400 focus:outline-none focus:border-rose-800 transition">
+                    </div>
+
+                    <div>
+                        <label class="block text-[10px] font-mono uppercase tracking-widest text-stone-500 mb-1">Contraseña</label>
+                        <input type="password" id="regPassword" required placeholder="••••••••" class="w-full bg-stone-100 dark:bg-stone-950 journal-border rounded-none px-3 py-2 text-xs font-serif placeholder-stone-400 focus:outline-none focus:border-rose-800 transition">
+                        <div class="mt-2 p-2 bg-stone-100 dark:bg-stone-950 journal-border text-[11px] space-y-1 font-mono">
+                            <div id="req-length" class="text-stone-500 flex items-center gap-1.5">❌ Mínimo 8 caracteres</div>
+                            <div id="req-upper" class="text-stone-500 flex items-center gap-1.5">❌ Al menos una letra mayúscula</div>
+                            <div id="req-lower" class="text-stone-500 flex items-center gap-1.5">❌ Al menos una letra minúscula</div>
+                            <div id="req-number" class="text-stone-500 flex items-center gap-1.5">❌ Al menos un número</div>
+                            <div id="req-special" class="text-stone-500 flex items-center gap-1.5">❌ Al menos un carácter especial (!@#$%^&*)</div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-[10px] font-mono uppercase tracking-widest text-stone-500 mb-1">Nombre a mostrar</label>
+                        <input type="text" id="regUsername" required placeholder="Ej. CríticoFílmico" class="w-full bg-stone-100 dark:bg-stone-950 journal-border rounded-none px-3 py-2 text-xs font-serif placeholder-stone-400 focus:outline-none focus:border-rose-800 transition">
+                    </div>
+
+                    <div>
+                        <label class="block text-[10px] font-mono uppercase tracking-widest text-stone-500 mb-1">Semilla para avatar</label>
+                        <div class="flex items-center gap-3">
+                            <input type="text" id="regAvatarSeed" placeholder="Escribe para generar avatar..." class="w-full bg-stone-100 dark:bg-stone-950 journal-border rounded-none px-3 py-2 text-xs font-serif placeholder-stone-400 focus:outline-none focus:border-rose-800 transition">
+                            <img id="regAvatarPreview" src="https://api.dicebear.com/7.x/bottts/svg?seed=default" alt="Vista previa" class="w-10 h-10 rounded-full journal-border bg-stone-200 dark:bg-stone-800 object-cover flex-shrink-0">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-[10px] font-mono uppercase tracking-widest text-stone-500 mb-1">Biografía</label>
+                        <textarea id="regUserBio" rows="2" placeholder="Apasionado del cine..." class="w-full bg-stone-100 dark:bg-stone-950 journal-border rounded-none px-3 py-2 text-xs font-serif placeholder-stone-400 focus:outline-none focus:border-rose-800 transition italic resize-none"></textarea>
+                    </div>
+
+                    <div class="flex gap-2 pt-2">
+                        <button type="button" id="btnBackToStep1" class="w-1/3 bg-stone-200 dark:bg-stone-800 hover:bg-stone-300 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-200 font-mono text-xs uppercase tracking-wider py-2 journal-border transition">Volver</button>
+                        <button type="submit" id="btnFinalRegister" class="w-2/3 bg-rose-900 hover:bg-rose-800 text-stone-100 font-mono text-xs font-bold uppercase tracking-wider py-2 journal-border transition opacity-50 cursor-not-allowed" disabled>Finalizar registro</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- PASO 3: VERIFICACIÓN DE CORREO OBLIGATORIA -->
+            <div id="authStep3" class="hidden space-y-4 text-center">
+                <div class="border-b border-stone-300 dark:border-stone-800 pb-3">
+                    <div class="w-12 h-12 mx-auto mb-2 bg-rose-900/10 text-rose-800 dark:text-rose-400 journal-border flex items-center justify-center text-xl">
+                        <i class="fa-solid fa-envelope-circle-check"></i>
+                    </div>
+                    <h2 class="text-xl font-extrabold tracking-wider font-heading uppercase">Verifica tu correo</h2>
+                    <span class="text-[10px] font-mono tracking-widest uppercase text-rose-700 dark:text-rose-500">Confirmación de identidad</span>
                 </div>
-            </form>
+
+                <div class="bg-stone-100 dark:bg-stone-950 p-3.5 journal-border text-xs space-y-2 text-left">
+                    <p class="text-stone-700 dark:text-stone-300 leading-relaxed">
+                        Enviamos un enlace de activación a <strong id="verifyTargetEmail" class="font-mono text-rose-800 dark:text-rose-400 break-all">tu correo</strong>.
+                    </p>
+                    <p class="text-[11px] text-stone-500 dark:text-stone-400 italic">
+                        Haz clic en el enlace del correo para activar tu cuenta y poder participar en CineZine. Revisa también tu carpeta de <strong>Spam</strong> o <strong>Promociones</strong>.
+                    </p>
+                </div>
+
+                <div id="authVerifyMsg" class="hidden text-xs font-mono text-center p-2 journal-border"></div>
+
+                <div class="space-y-2 pt-1">
+                    <button type="button" id="btnCheckVerified" class="w-full bg-rose-900 hover:bg-rose-800 text-stone-100 font-mono text-xs font-bold uppercase tracking-wider py-2.5 journal-border transition cursor-pointer">
+                        <i class="fa-solid fa-circle-check mr-1.5"></i>Ya verifiqué mi correo — Entrar
+                    </button>
+                    <button type="button" id="btnResendVerify" class="w-full bg-stone-200 dark:bg-stone-800 hover:bg-stone-300 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-200 font-mono text-xs uppercase tracking-wider py-2 journal-border transition cursor-pointer">
+                        <i class="fa-solid fa-paper-plane mr-1.5"></i>Reenviar enlace de verificación
+                    </button>
+                </div>
+
+                <div class="pt-2 border-t border-stone-200 dark:border-stone-800 flex flex-col gap-1.5 text-[11px] font-mono">
+                    <button type="button" id="btnBackFromVerify" class="text-stone-600 dark:text-stone-400 hover:text-rose-800 dark:hover:text-rose-400 underline transition cursor-pointer">
+                        Usar otro correo electrónico
+                    </button>
+                    <button type="button" id="btnGuestFromVerify" class="text-stone-500 hover:text-stone-800 dark:hover:text-stone-200 underline transition cursor-pointer">
+                        Explorar como invitado por ahora
+                    </button>
+                </div>
+            </div>
+
         </div>
-
     </div>
-</div>
 
 </body>
 
