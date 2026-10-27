@@ -1092,7 +1092,11 @@
                 if (data.username) await updateProfile(user, { displayName: data.username });
             } catch (e) { console.warn('No se pudo guardar displayName:', e); }
             try {
-                await setDoc(doc(db, 'users', user.uid), data, { merge: true });
+                await setDoc(doc(db, 'users', user.uid), {
+                    ...data,
+                    publicLists: deleteField(),
+                    stats: deleteField()
+                }, { merge: true });
             } catch (e) { console.warn('No se pudo guardar el perfil en Firestore:', e); }
             if (isUnverifiedEmailUser(user)) return;
             try {
@@ -1412,7 +1416,7 @@
             }
         };
 
-        window.fbGetProfile = async (uid) => {
+        window.fbGetProfile = async (uid, publicOnly = false) => {
             const out = {};
             try {
                 const s = await getDoc(doc(db, 'profiles', uid));
@@ -1428,7 +1432,7 @@
             } catch (e) {
                 /* subcolección public/library opcional si aún no está activa en reglas */
             }
-            if (auth.currentUser && auth.currentUser.uid === uid) {
+            if (!publicOnly && auth.currentUser && auth.currentUser.uid === uid) {
                 try {
                     const u = await getDoc(doc(db, 'users', uid));
                     if (u.exists()) Object.assign(out, u.data(), out);
@@ -1444,6 +1448,8 @@
                     console.warn('No se pudo leer biblioteca privada de users/' + uid + ':', e);
                 }
             }
+            delete out.publicLists;
+            delete out.stats;
             return Object.keys(out).length ? out : null;
         };
         window.fbGetUserPosts = async (uid) => {
