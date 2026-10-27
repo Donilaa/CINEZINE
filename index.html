@@ -437,7 +437,7 @@
                         </label>
                         <div class="relative">
                             <div class="relative flex items-center">
-                                <input type="text" id="manualMovieInput" oninput="handleAutocompleteInput(this.value)" placeholder="Buscar película por título (inglés o español)..." class="w-full bg-stone-100 dark:bg-stone-950 journal-border rounded-none pl-3 pr-8 py-2.5 text-xs font-serif placeholder-stone-400 focus:outline-none focus:border-rose-800 transition">
+                                <input type="text" id="manualMovieInput" oninput="handleAutocompleteInput(this.value)" placeholder="Buscar película o serie por título (inglés o español)..." class="w-full bg-stone-100 dark:bg-stone-950 journal-border rounded-none pl-3 pr-8 py-2.5 text-xs font-serif placeholder-stone-400 focus:outline-none focus:border-rose-800 transition">
                                 <i id="autocompleteSpinner" class="fa-solid fa-circle-notch fa-spin absolute right-3 text-stone-400 text-xs hidden"></i>
                             </div>
                             <div id="autocompleteDropdown" class="absolute left-0 right-0 top-full mt-1 bg-stone-50 dark:bg-stone-900 journal-border shadow-2xl z-50 max-h-64 overflow-y-auto custom-scrollbar hidden"></div>
@@ -445,14 +445,24 @@
                     </div>
 
                     <div class="bg-stone-50 dark:bg-stone-900 journal-border p-5 space-y-4">
-                        <div class="flex items-center justify-between border-b-2 border-stone-800 dark:border-stone-700 pb-3">
+                        <div class="flex flex-wrap items-center justify-between gap-2 border-b-2 border-stone-800 dark:border-stone-700 pb-3">
                             <div class="flex items-center space-x-2 font-heading font-bold text-xs uppercase tracking-widest">
                                 <i class="fa-solid fa-book-open text-rose-800"></i>
                                 <span>Cartelera y archivo crítico</span>
                             </div>
-                            <button onclick="addAllFilteredToRoulette()" class="text-xs font-mono bg-stone-200 dark:bg-stone-800 hover:bg-rose-900 hover:text-white px-3 py-1.5 journal-border transition font-semibold">
-                                Cargar visibles al sorteo
-                            </button>
+                            <div class="flex items-center gap-2">
+                                <div class="inline-flex bg-stone-200 dark:bg-stone-950 p-0.5 journal-border font-mono text-[11px]">
+                                    <button type="button" id="catalogModeMoviesBtn" onclick="setCatalogMediaType('movie')" class="px-2.5 py-1 bg-rose-900 text-stone-100 font-bold uppercase tracking-wider transition cursor-pointer">
+                                        <i class="fa-solid fa-film mr-1"></i>Películas
+                                    </button>
+                                    <button type="button" id="catalogModeTvBtn" onclick="setCatalogMediaType('tv')" class="px-2.5 py-1 text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 uppercase tracking-wider transition cursor-pointer">
+                                        <i class="fa-solid fa-tv mr-1"></i>Series TV
+                                    </button>
+                                </div>
+                                <button onclick="addAllFilteredToRoulette()" class="text-xs font-mono bg-stone-200 dark:bg-stone-800 hover:bg-rose-900 hover:text-white px-3 py-1.5 journal-border transition font-semibold">
+                                    Cargar visibles al sorteo
+                                </button>
+                            </div>
                         </div>
 
                         <div class="space-y-3">
@@ -535,7 +545,7 @@
                         <summary class="flex items-center justify-between p-3.5 cursor-pointer select-none bg-stone-100 dark:bg-stone-950 hover:bg-stone-200/50 transition">
                             <div class="flex items-center space-x-2 font-heading font-bold text-xs uppercase tracking-widest text-amber-700 dark:text-amber-500">
                                 <i class="fa-solid fa-trophy text-xs"></i>
-                                <span>Archivo histórico de la Academia (Óscars)</span>
+                                <span id="oscarSectionTitle">Archivo histórico de la Academia (Óscars)</span>
                             </div>
                             <i class="fa-solid fa-chevron-down text-stone-400 text-xs transition-transform group-open:rotate-180"></i>
                         </summary>
@@ -649,6 +659,7 @@
                                     <span id="detailVotes"><i class="fa-solid fa-users mr-1"></i>120k votos</span>
                                 </div>
                                 <p class="text-xs font-mono text-stone-500 pt-0.5" id="detailYear">Año: 2024</p>
+                                <p class="text-[11px] font-mono text-amber-700 dark:text-amber-400 pt-0.5 hidden" id="detailTvMeta"></p>
                             </div>
                         </div>
     
@@ -656,6 +667,30 @@
                             <label class="block text-xs font-heading font-bold uppercase tracking-wider">Sinopsis editorial</label>
                             <div id="detailOverview" class="text-xs font-serif text-stone-700 dark:text-stone-300 bg-stone-100 dark:bg-stone-950 p-3 journal-border h-auto max-h-60 overflow-y-auto custom-scrollbar leading-relaxed">
                                 Sinopsis no disponible.</div>
+                        </div>
+
+                        <!-- Explorador interactivo de Temporadas y Capítulos (solo para Series TV) -->
+                        <div id="detailTvSeasonsSection" class="hidden space-y-2.5 border-t border-stone-200 dark:border-stone-800 pt-2.5">
+                            <div class="flex items-center justify-between gap-2">
+                                <h4 class="text-xs font-heading font-bold uppercase tracking-wider flex items-center gap-1.5 text-rose-900 dark:text-rose-400">
+                                    <i class="fa-solid fa-tv text-xs"></i><span>Temporadas y capítulos</span>
+                                </h4>
+                                <span id="detailTvProgressText" class="text-[10px] font-mono text-stone-500">0 / 0 vistos</span>
+                            </div>
+                            <div class="w-full h-1.5 bg-stone-200 dark:bg-stone-800 overflow-hidden journal-border">
+                                <div id="detailTvProgressBar" class="h-full bg-emerald-700 dark:bg-emerald-500 transition-all duration-300" style="width: 0%"></div>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-1.5">
+                                <select id="detailSeasonSelect" onchange="onDetailSeasonChange(this.value)" class="flex-grow bg-stone-100 dark:bg-stone-950 journal-border px-2 py-1 text-xs font-mono focus:outline-none focus:border-rose-800"></select>
+                                <button type="button" id="detailMarkSeasonBtn" onclick="toggleCurrentSeasonWatched()" class="px-2 py-1 bg-stone-200 dark:bg-stone-800 hover:bg-emerald-900 hover:text-stone-100 text-[10px] font-mono uppercase journal-border transition cursor-pointer" title="Marcar o desmarcar todos los capítulos de esta temporada">
+                                    <i class="fa-solid fa-check-double mr-1"></i>Temp. vista
+                                </button>
+                                <button type="button" id="detailReviewSeasonBtn" onclick="selectTvReviewScope('season')" class="px-2 py-1 bg-amber-600/15 hover:bg-amber-600/30 text-amber-800 dark:text-amber-300 text-[10px] font-mono uppercase journal-border transition cursor-pointer" title="Calificar y reseñar esta temporada">
+                                    <i class="fa-solid fa-feather-pointed mr-1"></i>Reseñar temp.
+                                </button>
+                            </div>
+                            <div id="detailSeasonOverview" class="hidden text-[11px] font-serif italic text-stone-600 dark:text-stone-400 bg-stone-100/70 dark:bg-stone-950/70 p-2 journal-border leading-snug"></div>
+                            <div id="detailEpisodesList" class="space-y-1.5 max-h-60 overflow-y-auto custom-scrollbar pr-1"></div>
                         </div>
     
                         <div class="space-y-2 border-t border-stone-200 dark:border-stone-800 pt-2">
@@ -674,6 +709,19 @@
                                         <i class="fa-solid fa-star text-amber-500"></i><span>Bitácora y calificación personal</span>
                                     </h4>
                                     <button onclick="clearPersonalRating()" class="text-[10px] font-mono text-stone-500 hover:text-rose-800 transition">Borrar nota</button>
+                                </div>
+
+                                <!-- Barra de alcance de reseña para Series TV (Serie completa / Temporada / Capítulo) -->
+                                <div id="detailReviewScopeBar" class="hidden bg-stone-50 dark:bg-stone-900 p-2 journal-border space-y-1.5">
+                                    <div class="flex items-center justify-between gap-2 text-[10px] font-mono">
+                                        <span class="text-stone-500 uppercase">Estás calificando y reseñando:</span>
+                                        <span id="detailReviewScopeLabel" class="font-bold text-rose-800 dark:text-rose-400 truncate">📺 Serie completa</span>
+                                    </div>
+                                    <div class="flex flex-wrap gap-1 font-mono text-[10px]">
+                                        <button type="button" id="scopeBtnSeries" onclick="selectTvReviewScope('series')" class="px-2 py-0.5 journal-border bg-rose-900 text-stone-100 font-bold cursor-pointer transition">📺 Serie completa</button>
+                                        <button type="button" id="scopeBtnSeason" onclick="selectTvReviewScope('season')" class="px-2 py-0.5 journal-border bg-stone-200 dark:bg-stone-800 text-stone-700 dark:text-stone-300 cursor-pointer transition">📂 Temporada actual</button>
+                                        <button type="button" id="scopeBtnEpisode" onclick="selectTvReviewScope('episode')" class="hidden px-2 py-0.5 journal-border bg-stone-200 dark:bg-stone-800 text-stone-700 dark:text-stone-300 cursor-pointer transition">🎬 Capítulo elegido</button>
+                                    </div>
                                 </div>
                     
                                 <div class="space-y-1">
@@ -819,22 +867,38 @@
     
             <form id="smartPublishForm" onsubmit="handleSmartPublishSubmit(event)" class="space-y-3 font-serif text-xs">
                 <div id="movieSelectContainer" class="space-y-1 relative hidden">
-                    <label class="block font-mono text-[10px] text-stone-500 uppercase">Buscar película a reseñar</label>
+                    <label class="block font-mono text-[10px] text-stone-500 uppercase">Buscar película o serie a reseñar</label>
                     <div class="relative flex items-center">
-                        <input type="text" id="modalMovieSearchInput" oninput="handleModalMovieAutocomplete(this.value)" placeholder="Escribe el título de la obra..." class="w-full bg-stone-100 dark:bg-stone-950 journal-border p-2 text-xs focus:outline-none focus:border-rose-900">
+                        <input type="text" id="modalMovieSearchInput" oninput="handleModalMovieAutocomplete(this.value)" placeholder="Escribe el título de la película o serie..." class="w-full bg-stone-100 dark:bg-stone-950 journal-border p-2 text-xs focus:outline-none focus:border-rose-900">
                         <input type="hidden" id="selectedTmdbMovieId" value="">
                     </div>
                     <div id="modalMovieDropdown" class="absolute left-0 right-0 top-full mt-1 bg-stone-50 dark:bg-stone-900 journal-border shadow-xl z-50 max-h-48 overflow-y-auto custom-scrollbar hidden"></div>
                     
-                    <!-- Tarjeta de vista previa de la película seleccionada -->
-                    <div id="selectedMoviePreview" class="hidden flex items-start space-x-3 bg-stone-100 dark:bg-stone-950 p-2.5 journal-border mt-2 relative">
-                        <button type="button" onclick="clearModalMovieSelection()" class="absolute top-1 right-1 text-stone-400 hover:text-rose-600 transition p-1" title="Quitar selección">
-                            <i class="fa-solid fa-circle-xmark"></i>
-                        </button>
-                        <img id="previewMoviePoster" src="" alt="Póster" class="w-16 h-24 object-cover journal-border flex-shrink-0 shadow-sm">
-                        <div class="flex-grow min-w-0 pr-4">
-                            <h5 id="previewMovieTitle" class="font-heading font-bold text-xs text-rose-900 dark:text-rose-400 leading-tight"></h5>
-                            <p id="previewMovieOverview" class="text-[10px] font-serif text-stone-600 dark:text-stone-400 mt-1 line-clamp-3 italic"></p>
+                    <!-- Tarjeta de vista previa de la obra seleccionada -->
+                    <div id="selectedMoviePreview" class="hidden flex flex-col gap-2 bg-stone-100 dark:bg-stone-950 p-2.5 journal-border mt-2 relative">
+                        <div class="flex items-start space-x-3">
+                            <button type="button" onclick="clearModalMovieSelection()" class="absolute top-1 right-1 text-stone-400 hover:text-rose-600 transition p-1" title="Quitar selección">
+                                <i class="fa-solid fa-circle-xmark"></i>
+                            </button>
+                            <img id="previewMoviePoster" src="" alt="Póster" class="w-16 h-24 object-cover journal-border flex-shrink-0 shadow-sm">
+                            <div class="flex-grow min-w-0 pr-4">
+                                <h5 id="previewMovieTitle" class="font-heading font-bold text-xs text-rose-900 dark:text-rose-400 leading-tight"></h5>
+                                <p id="previewMovieOverview" class="text-[10px] font-serif text-stone-600 dark:text-stone-400 mt-1 line-clamp-3 italic"></p>
+                            </div>
+                        </div>
+                        <div id="smartTvScopeBox" class="hidden pt-2 border-t border-stone-200 dark:border-stone-800 grid grid-cols-1 sm:grid-cols-2 gap-2 font-mono text-[11px]">
+                            <div>
+                                <label class="block text-[9px] text-stone-500 uppercase mb-0.5">Temporada a reseñar</label>
+                                <select id="smartSeasonSelect" onchange="onSmartSeasonChange(this.value)" class="w-full bg-stone-50 dark:bg-stone-900 journal-border px-2 py-1 text-[11px] focus:outline-none focus:border-rose-800">
+                                    <option value="">📺 Serie completa</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[9px] text-stone-500 uppercase mb-0.5">Capítulo (opcional)</label>
+                                <select id="smartEpisodeSelect" onchange="onSmartEpisodeChange(this.value)" disabled class="w-full bg-stone-50 dark:bg-stone-900 journal-border px-2 py-1 text-[11px] focus:outline-none focus:border-rose-800 disabled:opacity-50">
+                                    <option value="">📂 Toda la temporada</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
                 </div>
