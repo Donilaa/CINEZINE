@@ -8,7 +8,8 @@ const CINE_SYNC_KEYS = [
     'cine_custom_lists',
     'cine_diario_mural_posts',
     'cine_avatar_custom_url',
-    'cine_default_tab'
+    'cine_default_tab',
+    'cine_notif_read'
 ];
 window.CINE_SYNC_KEYS = CINE_SYNC_KEYS;
 
@@ -46,6 +47,9 @@ window.cineApplyKey = function (key, raw) {
                 window.currentAvatarCustomUrl = currentAvatarCustomUrl;
                 break;
             case 'cine_default_tab': defaultMainTab = raw || 'mural'; break;
+            case 'cine_notif_read':
+                if (typeof _applyNotifReadRaw === 'function') _applyNotifReadRaw(raw);
+                break;
         }
     } catch (e) {
         console.warn('Dato inválido en', key, e);
@@ -57,7 +61,8 @@ window.cineRefreshAfterSync = function () {
         () => renderCustomLists(),
         () => renderResultsGrid(),
         () => renderMuralFeed(),
-        () => updateProfileDrawerStats()
+        () => updateProfileDrawerStats(),
+        () => { if (typeof window.refreshNotifications === 'function') window.refreshNotifications(); }
     ];
     calls.forEach(fn => { try { fn(); } catch (e) { console.warn(e); } });
 };
@@ -1138,7 +1143,7 @@ function _muralModalClick(e) {
     }
 }
 
-async function openMuralPostModal(postId) {
+async function openMuralPostModal(postId, highlightCommentId) {
     let post = findPost(postId);
     if (!post && window.fbGetPost) {
         const raw = await window.fbGetPost(postId);
@@ -1194,7 +1199,19 @@ async function openMuralPostModal(postId) {
     makeModalDraggable('muralPostModal', 'muralPostHeader');
     modal.classList.remove('hidden');
     renderPostAuthor(post); renderPostBody(post); renderPostReactions(post); renderComments(post);
-    window.fbWatchComments(postId, () => refreshPostModal());
+    let _didHighlight = false;
+    window.fbWatchComments(postId, () => {
+        refreshPostModal();
+        if (highlightCommentId && !_didHighlight) {
+            const row = document.getElementById(`commentRow_${highlightCommentId}`);
+            if (row) {
+                _didHighlight = true;
+                row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                row.classList.add('ring-2', 'ring-rose-700');
+                setTimeout(() => row.classList.remove('ring-2', 'ring-rose-700'), 2600);
+            }
+        }
+    });
 }
 
 function closeMuralPostModal() {
@@ -1770,6 +1787,411 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!document.hidden && muralVisible && window.muralReady && !window.muralError) renderMuralFeed();
     }, 60000);
 });
+
+// ===== SISTEMA DE NOTIFICACIONES (CAMPANITA DE AVISOS) =====
+let _notifReadSet = new Set((() => {
+    try { return JSON.parse(localStorage.getItem('cine_notif_read') || '[]'); } catch (e) { return []; }
+})());
+let _notifItems = [];
+let _notifFilter = 'all';
+let _notifCommentsCache = new Map(); // postId -> { sig, comments }
+let _notifActorMap = new Map();      // uid -> { username, avatarSeed }
+let _notifKnownIds = new Set();
+let _notifInitialUid = null;
+let _notifBusy = false;
+let _notifQueued = false;
+
+function _applyNotifReadRaw(raw) {
+    try {
+        const arr = raw ? JSON.parse(raw) : [];
+        _notifReadSet = new Set(Array.isArray(arr) ? arr : []);
+        _updateNotifBadgeUI();
+        renderNotificationsPanel();
+    } catch (e) { }
+}
+
+function _saveNotifReadSet() {
+    const arr = Array.from(_notifReadSet).slice(-500);
+    localStorage.setItem('cine_notif_read', JSON.stringify(arr));
+}
+
+function _notifPostTitle(rawPost) {
+    if (!rawPost) return 'Publicación';
+    if (rawPost.type === 'review') {
+        const m = _viewerMovieOf(rawPost) || rawPost.movieObj;
+        if (m && m.title) return m.title;
+        if (rawPost.reviewTitle) return rawPost.reviewTitle;
+        return 'Reseña';
+    }
+    return rawPost.title || rawPost.reviewTitle || 'Debate';
+}
+
+async function _resolveNotifActor(uid, fallbackName, fallbackSeed) {
+    if (fallbackName && fallbackName !== 'Anónimo' && fallbackName !== 'Usuario') {
+        return { username: fallbackName, avatarSeed: fallbackSeed || fallbackName };
+    }
+    if (!uid) return { username: fallbackName || 'Cinéfilo/a', avatarSeed: fallbackSeed || 'Cinéfilo/a' };
+    if (_notifActorMap.has(uid)) return _notifActorMap.get(uid);
+    if (typeof window.fbGetPublicProfileLite === 'function') {
+        const prof = await window.fbGetPublicProfileLite(uid);
+        if (prof && prof.username) {
+            _notifActorMap.set(uid, prof);
+            return prof;
+        }
+    }
+    const fb = { username: fallbackName || 'Cinéfilo/a', avatarSeed: fallbackSeed || uid };
+    _notifActorMap.set(uid, fb);
+    return fb;
+}
+
+window.onNotifCommentsSnapshot = function (postId, comments) {
+    if (!postId || !Array.isArray(comments)) return;
+    const rawPost = (window.muralPosts || []).find(p => p.id === postId);
+    const sig = rawPost ? `${rawPost.commentCount || comments.length}|${rawPost.lastComment ? rawPost.lastComment.text : ''}` : `live_${comments.length}`;
+    _notifCommentsCache.set(postId, { sig, comments });
+    if (typeof window.refreshNotifications === 'function') window.refreshNotifications();
+};
+
+window.refreshNotifications = async function () {
+    const user = window.currentUser;
+    if (!user || _isUserUnverified(user)) {
+        _notifItems = [];
+        _notifInitialUid = null;
+        _notifKnownIds.clear();
+        _updateNotifBadgeUI();
+        renderNotificationsPanel();
+        return;
+    }
+
+    if (_notifBusy) {
+        _notifQueued = true;
+        return;
+    }
+    _notifBusy = true;
+
+    try {
+        const myUid = user.uid;
+        const myNameLower = String(currentUsername || '').trim().toLowerCase();
+        const posts = Array.isArray(window.muralPosts) ? window.muralPosts : [];
+
+        // 1) Poblar mapa rápido de autores conocidos desde las publicaciones visibles
+        posts.forEach(p => {
+            const pUid = p.authorUid || p.userId;
+            if (pUid && p.author) {
+                _notifActorMap.set(pUid, { username: p.author, avatarSeed: p.avatarSeed || p.author });
+            }
+        });
+
+        // 2) Obtener comentarios de las publicaciones que tienen actividad de comentarios
+        const postsWithComments = posts.filter(p => (p.commentCount || 0) > 0 || (p.lastComment && p.lastComment.text));
+        await Promise.all(postsWithComments.map(async (p) => {
+            const sig = `${p.commentCount || 0}|${p.lastComment ? p.lastComment.text : ''}`;
+            const cached = _notifCommentsCache.get(p.id);
+            if (cached && cached.sig === sig) return;
+            if (typeof window.fbFetchPostComments === 'function') {
+                const fetched = await window.fbFetchPostComments(p.id);
+                _notifCommentsCache.set(p.id, { sig, comments: fetched });
+            }
+        }));
+
+        // Poblar también autores conocidos desde los comentarios cargados
+        _notifCommentsCache.forEach(({ comments }) => {
+            (comments || []).forEach(c => {
+                if (c && c.authorUid && c.author) {
+                    _notifActorMap.set(c.authorUid, { username: c.author, avatarSeed: c.avatarSeed || c.author });
+                }
+            });
+        });
+
+        const built = [];
+
+        for (const p of posts) {
+            const postOwnerUid = p.authorUid || p.userId || '';
+            const isMyPost = postOwnerUid === myUid;
+            const postTitle = _notifPostTitle(p);
+            const postKind = p.type === 'review' ? 'reseña de' : 'debate';
+
+            // A) Votos en mis publicaciones
+            if (isMyPost && p.votes && typeof p.votes === 'object') {
+                const voterEntries = Object.entries(p.votes).filter(([vUid, vType]) => vUid !== myUid && (vType === 'agree' || vType === 'disagree'));
+                for (const [voterUid, voteType] of voterEntries) {
+                    const actor = await _resolveNotifActor(voterUid);
+                    const id = `vp_${p.id}_${voterUid}_${voteType}`;
+                    const verb = voteType === 'agree' ? 'está de acuerdo con' : 'discrepa de';
+                    built.push({
+                        id,
+                        type: voteType === 'agree' ? 'vote_agree' : 'vote_disagree',
+                        postId: p.id,
+                        commentId: null,
+                        actorUid: voterUid,
+                        actorName: actor.username,
+                        actorSeed: actor.avatarSeed,
+                        postTitle,
+                        postKind,
+                        verb,
+                        snippet: '',
+                        ts: _ms(p.updatedAt || p.createdAt),
+                        plainSummary: `${actor.username} ${verb} tu ${postKind} «${postTitle}»`
+                    });
+                }
+            }
+
+            // B) Comentarios, respuestas y votos en comentarios
+            const cachedEntry = _notifCommentsCache.get(p.id);
+            let comments = (cachedEntry && Array.isArray(cachedEntry.comments)) ? cachedEntry.comments : [];
+            if (!comments.length && p.lastComment && p.lastComment.text) {
+                comments = [{
+                    id: `lc_${p.id}`,
+                    authorUid: p.lastComment.authorUid || '',
+                    author: p.lastComment.author || 'Cinéfilo/a',
+                    avatarSeed: p.lastComment.avatarSeed || p.lastComment.author || 'Cinéfilo/a',
+                    text: p.lastComment.text,
+                    createdAt: p.lastComment.createdAt || p.updatedAt || p.createdAt,
+                    votes: {}
+                }];
+            }
+
+            const byId = new Map(comments.map(c => [c.id, c]));
+
+            for (const c of comments) {
+                if (!c || !c.text) continue;
+                const cUid = c.authorUid || '';
+                const cNameLower = String(c.author || '').trim().toLowerCase();
+                const isMyComment = (cUid && cUid === myUid) || (!cUid && myNameLower && cNameLower === myNameLower);
+
+                // Votos sobre un comentario mío
+                if (isMyComment && c.votes && typeof c.votes === 'object') {
+                    const cVoters = Object.entries(c.votes).filter(([vUid, vType]) => vUid !== myUid && (vType === 'agree' || vType === 'disagree'));
+                    for (const [voterUid, voteType] of cVoters) {
+                        const actor = await _resolveNotifActor(voterUid);
+                        const id = `vc_${p.id}_${c.id}_${voterUid}_${voteType}`;
+                        const verb = voteType === 'agree' ? 'está de acuerdo con' : 'discrepa de';
+                        built.push({
+                            id,
+                            type: voteType === 'agree' ? 'vote_agree' : 'vote_disagree',
+                            postId: p.id,
+                            commentId: c.id,
+                            actorUid: voterUid,
+                            actorName: actor.username,
+                            actorSeed: actor.avatarSeed,
+                            postTitle,
+                            postKind: 'nota en',
+                            verb,
+                            snippet: String(c.text).slice(0, 120),
+                            ts: _ms(c.updatedAt || c.createdAt),
+                            plainSummary: `${actor.username} ${verb} tu nota en «${postTitle}»`
+                        });
+                    }
+                }
+
+                if (isMyComment) continue;
+
+                // ¿Es respuesta a un comentario mío o me menciona?
+                const parent = c.parentId ? byId.get(c.parentId) : null;
+                const parentIsMine = parent && ((parent.authorUid && parent.authorUid === myUid) || (!parent.authorUid && myNameLower && String(parent.author || '').trim().toLowerCase() === myNameLower));
+                const replyToMe = myNameLower && String(c.replyToAuthor || '').trim().toLowerCase() === myNameLower;
+                const mentionsMe = myNameLower && myNameLower !== 'invitado/a' && String(c.text).toLowerCase().includes(`@${myNameLower}`);
+
+                if (parentIsMine || replyToMe || mentionsMe) {
+                    const id = `rep_${p.id}_${c.id}`;
+                    built.push({
+                        id,
+                        type: 'reply',
+                        postId: p.id,
+                        commentId: c.id,
+                        actorUid: cUid,
+                        actorName: c.author || 'Cinéfilo/a',
+                        actorSeed: c.avatarSeed || c.author || 'Cinéfilo/a',
+                        postTitle,
+                        postKind: '',
+                        verb: 'respondió a tu nota en',
+                        snippet: String(c.text).slice(0, 140),
+                        ts: _ms(c.createdAt),
+                        plainSummary: `${c.author || 'Alguien'} respondió a tu nota en «${postTitle}»`
+                    });
+                } else if (isMyPost) {
+                    const id = `cmt_${p.id}_${c.id}`;
+                    built.push({
+                        id,
+                        type: 'comment',
+                        postId: p.id,
+                        commentId: c.id,
+                        actorUid: cUid,
+                        actorName: c.author || 'Cinéfilo/a',
+                        actorSeed: c.avatarSeed || c.author || 'Cinéfilo/a',
+                        postTitle,
+                        postKind,
+                        verb: `comentó en tu ${postKind}`,
+                        snippet: String(c.text).slice(0, 140),
+                        ts: _ms(c.createdAt),
+                        plainSummary: `${c.author || 'Alguien'} comentó en tu ${postKind} «${postTitle}»`
+                    });
+                }
+            }
+        }
+
+        // Ordenar de más reciente a más antigua
+        built.sort((a, b) => b.ts - a.ts);
+        _notifItems = built;
+
+        // Detectar avisos nuevos llegados en tiempo real
+        if (_notifInitialUid !== myUid) {
+            _notifInitialUid = myUid;
+            _notifKnownIds = new Set(built.map(n => n.id));
+        } else {
+            const newlyArrived = built.filter(n => !_notifKnownIds.has(n.id) && !_notifReadSet.has(n.id));
+            built.forEach(n => _notifKnownIds.add(n.id));
+            if (newlyArrived.length > 0) {
+                showToast(`🔔 ${newlyArrived[0].plainSummary}`, 'info');
+                const bellIcon = document.getElementById('notifBellIcon');
+                if (bellIcon) {
+                    bellIcon.classList.add('animate-bounce');
+                    setTimeout(() => bellIcon.classList.remove('animate-bounce'), 1800);
+                }
+            }
+        }
+
+        _updateNotifBadgeUI();
+        renderNotificationsPanel();
+    } finally {
+        _notifBusy = false;
+        if (_notifQueued) {
+            _notifQueued = false;
+            window.refreshNotifications();
+        }
+    }
+};
+
+function _updateNotifBadgeUI() {
+    const badge = document.getElementById('notifBadge');
+    const icon = document.getElementById('notifBellIcon');
+    if (!badge) return;
+    const unread = _notifItems.filter(n => !_notifReadSet.has(n.id)).length;
+    if (unread > 0) {
+        badge.textContent = unread > 9 ? '9+' : String(unread);
+        badge.classList.remove('hidden');
+        if (icon) {
+            icon.classList.remove('text-stone-700', 'dark:text-stone-300');
+            icon.classList.add('text-rose-800', 'dark:text-rose-400');
+        }
+    } else {
+        badge.classList.add('hidden');
+        if (icon) {
+            icon.classList.remove('text-rose-800', 'dark:text-rose-400');
+            icon.classList.add('text-stone-700', 'dark:text-stone-300');
+        }
+    }
+}
+
+function toggleNotificationsPanel(ev) {
+    if (ev) ev.stopPropagation();
+    const panel = document.getElementById('notifPanel');
+    if (!panel) return;
+    const willOpen = panel.classList.contains('hidden');
+    if (willOpen) {
+        renderNotificationsPanel();
+        panel.classList.remove('hidden');
+        if (typeof window.refreshNotifications === 'function') window.refreshNotifications();
+    } else {
+        panel.classList.add('hidden');
+    }
+}
+
+function setNotifFilter(mode) {
+    _notifFilter = mode === 'unread' ? 'unread' : 'all';
+    const tabAll = document.getElementById('notifTabAll');
+    const tabUnread = document.getElementById('notifTabUnread');
+    const activeCls = 'flex-1 py-1.5 font-bold text-rose-800 dark:text-rose-400 border-b-2 border-rose-800 dark:border-rose-400 uppercase tracking-wider cursor-pointer';
+    const idleCls = 'flex-1 py-1.5 text-stone-500 hover:text-stone-800 dark:hover:text-stone-200 border-b-2 border-transparent uppercase tracking-wider cursor-pointer';
+    if (tabAll) tabAll.className = _notifFilter === 'all' ? activeCls : idleCls;
+    if (tabUnread) tabUnread.className = _notifFilter === 'unread' ? activeCls : idleCls;
+    renderNotificationsPanel();
+}
+
+function markAllNotificationsRead() {
+    if (!_notifItems.length) return;
+    _notifItems.forEach(n => _notifReadSet.add(n.id));
+    _saveNotifReadSet();
+    _updateNotifBadgeUI();
+    renderNotificationsPanel();
+}
+
+function openNotificationItem(idx) {
+    const list = _notifFilter === 'unread' ? _notifItems.filter(n => !_notifReadSet.has(n.id)) : _notifItems;
+    const item = list[idx];
+    if (!item) return;
+    _notifReadSet.add(item.id);
+    _saveNotifReadSet();
+    _updateNotifBadgeUI();
+    const panel = document.getElementById('notifPanel');
+    if (panel) panel.classList.add('hidden');
+    openMuralPostModal(item.postId, item.commentId || null);
+}
+
+function renderNotificationsPanel() {
+    const listEl = document.getElementById('notifList');
+    if (!listEl) return;
+
+    const user = window.currentUser;
+    if (!user || _isUserUnverified(user)) {
+        listEl.innerHTML = `
+            <div class="p-6 text-center space-y-2">
+                <i class="fa-regular fa-bell text-2xl text-stone-400"></i>
+                <p class="text-xs font-serif text-stone-600 dark:text-stone-400">Inicia sesión para recibir avisos cuando comenten o reaccionen a tus reseñas.</p>
+            </div>`;
+        return;
+    }
+
+    const items = _notifFilter === 'unread'
+        ? _notifItems.filter(n => !_notifReadSet.has(n.id))
+        : _notifItems;
+
+    if (!items.length) {
+        listEl.innerHTML = `
+            <div class="p-6 text-center space-y-1.5">
+                <i class="fa-regular fa-bell-slash text-xl text-stone-400"></i>
+                <p class="text-xs font-serif italic text-stone-500 dark:text-stone-400">${_notifFilter === 'unread' ? 'No tienes avisos pendientes por leer.' : 'Aún no hay avisos de actividad en tus publicaciones.'}</p>
+            </div>`;
+        return;
+    }
+
+    const typeBadge = (type) => {
+        if (type === 'reply') return '<span class="w-4 h-4 rounded-full bg-rose-800 text-white flex items-center justify-center text-[8px]"><i class="fa-solid fa-reply"></i></span>';
+        if (type === 'comment') return '<span class="w-4 h-4 rounded-full bg-amber-700 text-white flex items-center justify-center text-[8px]"><i class="fa-solid fa-comment-dots"></i></span>';
+        if (type === 'vote_agree') return '<span class="w-4 h-4 rounded-full bg-emerald-700 text-white flex items-center justify-center text-[8px]"><i class="fa-solid fa-thumbs-up"></i></span>';
+        return '<span class="w-4 h-4 rounded-full bg-rose-700 text-white flex items-center justify-center text-[8px]"><i class="fa-solid fa-thumbs-down"></i></span>';
+    };
+
+    listEl.innerHTML = items.map((n, idx) => {
+        const unread = !_notifReadSet.has(n.id);
+        return `
+            <button type="button" onclick="openNotificationItem(${idx})" class="w-full text-left p-3 flex items-start gap-3 transition cursor-pointer ${unread ? 'bg-rose-950/[0.06] dark:bg-rose-950/20 hover:bg-rose-950/10 dark:hover:bg-rose-950/30' : 'hover:bg-stone-100 dark:hover:bg-stone-800/60'}">
+                <div class="relative flex-shrink-0 mt-0.5">
+                    <img src="${_avatarOf(n.actorSeed, n.actorName)}" alt="" class="w-8 h-8 rounded-full cz-avatar">
+                    <div class="absolute -bottom-1 -right-1">${typeBadge(n.type)}</div>
+                </div>
+                <div class="flex-grow min-w-0 space-y-1">
+                    <p class="text-xs font-serif text-stone-800 dark:text-stone-200 leading-snug">
+                        <span class="font-heading font-bold">${_pmEsc(n.actorName)}</span>
+                        ${_pmEsc(n.verb)}
+                        <span class="font-bold text-rose-800 dark:text-rose-400">«${_pmEsc(n.postTitle)}»</span>
+                    </p>
+                    ${n.snippet ? `<p class="text-[11px] font-serif italic text-stone-600 dark:text-stone-400 line-clamp-2 border-l-2 border-stone-300 dark:border-stone-700 pl-2">“${_pmEsc(n.snippet)}”</p>` : ''}
+                    <span class="block text-[9px] font-mono text-stone-400 uppercase tracking-wider">${_pmEsc(relTime(n.ts))}</span>
+                </div>
+                ${unread ? '<span class="w-2 h-2 rounded-full bg-rose-700 dark:bg-rose-500 flex-shrink-0 mt-1.5" title="Sin leer"></span>' : ''}
+            </button>`;
+    }).join('');
+}
+
+document.addEventListener('click', (e) => {
+    const box = document.getElementById('notifBellContainer');
+    const panel = document.getElementById('notifPanel');
+    if (panel && !panel.classList.contains('hidden') && box && !box.contains(e.target)) {
+        panel.classList.add('hidden');
+    }
+});
+// ===== FIN SISTEMA DE NOTIFICACIONES =====
 // ===== FIN MURO COMPARTIDO =====
 
 // ===== VARIABLES GLOBALES Y ESTADO PRINCIPAL =====

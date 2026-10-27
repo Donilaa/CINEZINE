@@ -320,6 +320,28 @@
                         <i class="fa-solid fa-sliders text-stone-700 dark:text-stone-300"></i>
                         <span class="hidden sm:inline">Ajustes</span>
                     </button>
+                    <div class="relative" id="notifBellContainer">
+                        <button id="notifBellBtn" onclick="toggleNotificationsPanel(event)" class="relative flex items-center justify-center w-8 h-8 bg-stone-200 dark:bg-stone-900 hover:bg-stone-300 dark:hover:bg-stone-800 rounded-none journal-border transition cursor-pointer" title="Avisos de redacción" aria-label="Notificaciones">
+                            <i id="notifBellIcon" class="fa-solid fa-bell text-xs text-stone-700 dark:text-stone-300"></i>
+                            <span id="notifBadge" class="hidden absolute -top-1.5 -right-1.5 min-w-[17px] h-[17px] px-1 bg-rose-800 text-white text-[9px] font-mono font-bold flex items-center justify-center border border-stone-50 dark:border-stone-950 shadow-sm">0</span>
+                        </button>
+                        <div id="notifPanel" class="hidden fixed sm:absolute right-2 sm:right-0 top-16 sm:top-full sm:mt-2 w-[calc(100vw-1rem)] sm:w-96 bg-stone-50 dark:bg-stone-900 journal-border shadow-2xl z-50 overflow-hidden">
+                            <div class="px-3.5 py-2.5 bg-stone-100 dark:bg-stone-950 border-b border-stone-300 dark:border-stone-800 flex items-center justify-between gap-2">
+                                <div class="flex items-center gap-2 font-heading font-bold text-xs uppercase tracking-wider">
+                                    <i class="fa-solid fa-bell text-rose-800 dark:text-rose-500"></i>
+                                    <span>Avisos de redacción</span>
+                                </div>
+                                <button type="button" onclick="markAllNotificationsRead()" class="text-[10px] font-mono text-rose-800 dark:text-rose-400 hover:underline uppercase tracking-wider cursor-pointer">
+                                    Marcar todo leído
+                                </button>
+                            </div>
+                            <div class="flex border-b border-stone-200 dark:border-stone-800 bg-stone-100/60 dark:bg-stone-950/60 text-[10px] font-mono">
+                                <button type="button" id="notifTabAll" onclick="setNotifFilter('all')" class="flex-1 py-1.5 font-bold text-rose-800 dark:text-rose-400 border-b-2 border-rose-800 dark:border-rose-400 uppercase tracking-wider cursor-pointer">Todas</button>
+                                <button type="button" id="notifTabUnread" onclick="setNotifFilter('unread')" class="flex-1 py-1.5 text-stone-500 hover:text-stone-800 dark:hover:text-stone-200 border-b-2 border-transparent uppercase tracking-wider cursor-pointer">No leídas</button>
+                            </div>
+                            <div id="notifList" class="max-h-96 overflow-y-auto custom-scrollbar divide-y divide-stone-200 dark:divide-stone-800"></div>
+                        </div>
+                    </div>
                     <button onclick="toggleProfileDrawer()" class="flex items-center space-x-2 bg-stone-200 dark:bg-stone-900 hover:bg-stone-300 dark:hover:bg-stone-800 px-2.5 py-1.5 rounded-none journal-border transition font-serif">
                         <img id="headerProfileAvatar" src="https://api.dicebear.com/7.x/bottts/svg?seed=Invitado/a" alt="Avatar" class="w-5 h-5 rounded-full cz-avatar bg-stone-300 dark:bg-stone-800">
                         <span id="headerUsername" class="hidden sm:inline text-xs font-mono font-bold">Invitado/a</span>
@@ -1135,10 +1157,34 @@
             if (unsubComments) unsubComments();
             window.muralComments = [];
             const q = query(collection(db, 'posts', postId, 'comments'), orderBy('createdAt', 'asc'));
-            unsubComments = onSnapshot(q, (snap) => { window.muralComments = snap.docs.map(asDoc); onChange(); },
-                (err) => { console.warn('No se pudieron leer los comentarios:', err); onChange(); });
+            unsubComments = onSnapshot(q, (snap) => {
+                window.muralComments = snap.docs.map(asDoc);
+                onChange();
+                if (typeof window.onNotifCommentsSnapshot === 'function') window.onNotifCommentsSnapshot(postId, window.muralComments);
+            }, (err) => { console.warn('No se pudieron leer los comentarios:', err); onChange(); });
         };
         window.fbStopComments = () => { if (unsubComments) { unsubComments(); unsubComments = null; } window.muralComments = []; };
+
+        window.fbFetchPostComments = async (postId) => {
+            try {
+                const q = query(collection(db, 'posts', postId, 'comments'), orderBy('createdAt', 'asc'));
+                const s = await getDocs(q);
+                return s.docs.map(asDoc);
+            } catch (e) { return []; }
+        };
+
+        const _pubProfCache = new Map();
+        window.fbGetPublicProfileLite = async (uid) => {
+            if (!uid) return null;
+            if (_pubProfCache.has(uid)) return _pubProfCache.get(uid);
+            try {
+                const s = await getDoc(doc(db, 'profiles', uid));
+                const data = s.exists() ? s.data() : null;
+                const res = data ? { username: data.username || 'Cinéfilo/a', avatarSeed: data.avatarSeed || data.username || 'Cinéfilo/a' } : null;
+                _pubProfCache.set(uid, res);
+                return res;
+            } catch (e) { return null; }
+        };
 
         const postBody = (u, p) => ({
             authorUid: u.uid,
@@ -1241,6 +1287,7 @@
         window.fbWatchPosts(() => {
             if (typeof window.renderMuralFeed === 'function') window.renderMuralFeed();
             if (typeof window.refreshPostModal === 'function') window.refreshPostModal();
+            if (typeof window.refreshNotifications === 'function') window.refreshNotifications();
         });
 
         // ---------- Sincronización de datos de usuario ----------
@@ -1503,6 +1550,7 @@
             if (typeof window.renderMuralFeed === 'function') window.renderMuralFeed();
             if (typeof window.refreshPostModal === 'function') window.refreshPostModal();
             if (typeof window.maybeShowVerifyBanner === 'function') window.maybeShowVerifyBanner(user);
+            if (typeof window.refreshNotifications === 'function') window.refreshNotifications();
             return true;
         };
 
@@ -1555,6 +1603,7 @@
             if (typeof window.renderMuralFeed === 'function') window.renderMuralFeed();
             if (typeof window.refreshPostModal === 'function') window.refreshPostModal();
             if (typeof window.maybeShowVerifyBanner === 'function') window.maybeShowVerifyBanner(user);
+            if (typeof window.refreshNotifications === 'function') window.refreshNotifications();
         });
     </script>
 
