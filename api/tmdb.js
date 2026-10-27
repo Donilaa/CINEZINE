@@ -13,6 +13,8 @@ export default async function handler(req, res) {
     if (origin && (allowedEnv.length === 0 || allowedEnv.includes(origin) || isLocal)) {
         res.setHeader('Access-Control-Allow-Origin', origin === 'null' ? '*' : origin);
         res.setHeader('Vary', 'Origin');
+    } else if (!origin && allowedEnv.length === 0) {
+        res.setHeader('Access-Control-Allow-Origin', '*');
     }
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -24,7 +26,8 @@ export default async function handler(req, res) {
         return res.status(405).json({ error: 'Método no permitido' });
     }
 
-    const token = process.env.TMDB_BEARER_TOKEN;
+    const rawToken = process.env.TMDB_BEARER_TOKEN;
+    const token = rawToken ? rawToken.trim().replace(/^["']+|["';]+$/g, '') : '';
     if (!token) {
         return res.status(500).json({ error: 'Falta configurar TMDB_BEARER_TOKEN en Vercel' });
     }
@@ -35,12 +38,17 @@ export default async function handler(req, res) {
     }
 
     try {
-        const upstream = await fetch(`https://api.themoviedb.org/3${endpoint}`, {
+        const isBearerJwt = token.startsWith('eyJ') || token.length > 60;
+        const sep = endpoint.includes('?') ? '&' : '?';
+        const targetUrl = isBearerJwt
+            ? `https://api.themoviedb.org/3${endpoint}`
+            : `https://api.themoviedb.org/3${endpoint}${sep}api_key=${encodeURIComponent(token)}`;
+        const headers = { 'Content-Type': 'application/json;charset=utf-8' };
+        if (isBearerJwt) headers['Authorization'] = `Bearer ${token}`;
+
+        const upstream = await fetch(targetUrl, {
             method: 'GET',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json;charset=utf-8'
-            }
+            headers
         });
 
         if (!upstream.ok) {

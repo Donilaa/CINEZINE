@@ -1773,7 +1773,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // ===== FIN MURO COMPARTIDO =====
 
 // ===== VARIABLES GLOBALES Y ESTADO PRINCIPAL =====
-const TMDB_PROXY_URL = window.CINE_TMDB_PROXY || '/api/tmdb';
+const TMDB_PROXY_URL = window.CINE_TMDB_PROXY || 'https://cinezine.vercel.app/api/tmdb';
 let _catalogInitialized = false;
 let _oscarsInitialized = false;
 let _rouletteSeeded = false;
@@ -2727,15 +2727,22 @@ async function fetchFromTMDb(endpoint) {
     const task = (async () => {
         try {
             const isLocalEnv = location.protocol === 'file:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
-            const useLocalToken = isLocalEnv && !!window.LOCAL_TMDB_TOKEN;
+            const localTok = window.LOCAL_TMDB_TOKEN ? String(window.LOCAL_TMDB_TOKEN).trim().replace(/^["']+|["';]+$/g, '') : '';
+            const useLocalToken = isLocalEnv && !!localTok;
+            const isLocalBearer = localTok.startsWith('eyJ') || localTok.length > 60;
+            const sep = endpoint.includes('?') ? '&' : '?';
             const url = useLocalToken
-                ? `https://api.themoviedb.org/3${endpoint}`
+                ? (isLocalBearer ? `https://api.themoviedb.org/3${endpoint}` : `https://api.themoviedb.org/3${endpoint}${sep}api_key=${encodeURIComponent(localTok)}`)
                 : `${TMDB_PROXY_URL}?endpoint=${encodeURIComponent(endpoint)}`;
-            const headers = useLocalToken
-                ? { 'Authorization': `Bearer ${window.LOCAL_TMDB_TOKEN}`, 'Content-Type': 'application/json;charset=utf-8' }
+            const headers = (useLocalToken && isLocalBearer)
+                ? { 'Authorization': `Bearer ${localTok}`, 'Content-Type': 'application/json;charset=utf-8' }
                 : { 'Accept': 'application/json' };
 
-            const response = await fetch(url, { method: 'GET', headers });
+            let response = await fetch(url, { method: 'GET', headers });
+            if (!response.ok && useLocalToken) {
+                const proxyUrl = `${TMDB_PROXY_URL}?endpoint=${encodeURIComponent(endpoint)}`;
+                response = await fetch(proxyUrl, { method: 'GET', headers: { 'Accept': 'application/json' } });
+            }
             if (!response.ok) throw new Error("Error en TMDb API");
             const json = await response.json();
             _tmdbCache.set(endpoint, { t: Date.now(), v: json });
