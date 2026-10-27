@@ -1,0 +1,5 @@
+local-config.js
+reglas firebase.txt
+firestore.rules
+.env
+.env.*

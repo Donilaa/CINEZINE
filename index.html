@@ -791,6 +791,15 @@
                         <option value="en-US">Inglés</option>
                     </select>
                 </div>
+                <div class="pt-2 border-t border-stone-200 dark:border-stone-800">
+                    <label class="flex items-start gap-2.5 cursor-pointer select-none">
+                        <input type="checkbox" id="hideWatchedPublicCheck" onchange="toggleHideWatchedPublic(this.checked)" class="mt-0.5 rounded-none accent-rose-900 cursor-pointer">
+                        <span class="text-xs font-serif text-stone-700 dark:text-stone-300 leading-snug">
+                            Ocultar mis películas vistas en mi perfil público
+                            <span class="block text-[10px] font-mono text-stone-400 mt-0.5">Tus reseñas y cuadernos públicos seguirán visibles.</span>
+                        </span>
+                    </label>
+                </div>
             </div>
             <button onclick="toggleSettingsModal()" class="w-full py-2 bg-stone-900 hover:bg-stone-800 text-white font-mono text-xs journal-border transition mt-2 uppercase tracking-wider">Guardar ajustes</button>
         </div>
@@ -1091,7 +1100,14 @@
                 if (data.username !== undefined) pub.username = String(data.username).slice(0, 40);
                 if (data.avatarSeed !== undefined) pub.avatarSeed = String(data.avatarSeed).slice(0, 60);
                 if (data.bio !== undefined) pub.bio = String(data.bio).slice(0, 300);
-                if (Object.keys(pub).length) await setDoc(doc(db, 'profiles', user.uid), { ...pub, updatedAt: serverTimestamp() }, { merge: true });
+                if (Object.keys(pub).length) {
+                    await setDoc(doc(db, 'profiles', user.uid), {
+                        ...pub,
+                        publicLists: deleteField(),
+                        stats: deleteField(),
+                        updatedAt: serverTimestamp()
+                    }, { merge: true });
+                }
             } catch (e) { console.warn('No se pudo publicar la ficha pública:', e); }
         };
 
@@ -1124,9 +1140,10 @@
 
         // ---------- MURO COMPARTIDO (Firestore) ----------
         const POSTS_PAGE = 30;
-        let postsLimit = POSTS_PAGE, unsubPosts = null, unsubComments = null;
+        let postsLimit = POSTS_PAGE, unsubPosts = null, unsubComments = null, unsubNotifs = null;
         window.muralPosts = [];
         window.muralComments = [];
+        window.fbNotifications = [];
         window.muralHasMore = false;
         window.muralReady = false;
         window.muralError = null;
@@ -1151,7 +1168,13 @@
         window.fbLoadMorePosts = (onChange) => { postsLimit += POSTS_PAGE; window.fbWatchPosts(onChange); };
 
         window.fbGetPost = async (id) => {
-            try { const s = await getDoc(doc(db, 'posts', id)); return s.exists() ? asDoc(s) : null; } catch (e) { return null; }
+            try {
+                const s = await getDoc(doc(db, 'posts', id));
+                return s.exists() ? asDoc(s) : null;
+            } catch (e) {
+                console.warn('No se pudo obtener la publicación:', id, e);
+                return null;
+            }
         };
 
         window.fbWatchComments = (postId, onChange) => {
@@ -1171,7 +1194,78 @@
                 const q = query(collection(db, 'posts', postId, 'comments'), orderBy('createdAt', 'asc'));
                 const s = await getDocs(q);
                 return s.docs.map(asDoc);
-            } catch (e) { return []; }
+            } catch (e) {
+                console.warn('No se pudieron obtener comentarios del post:', postId, e);
+                return [];
+            }
+        };
+
+        // ---------- NOTIFICACIONES DEDICADAS (Firestore) ----------
+        window.fbWatchNotifications = (uid, onChange) => {
+            if (unsubNotifs) { unsubNotifs(); unsubNotifs = null; }
+            window.fbNotifications = [];
+            if (!uid) return;
+            try {
+                const q = query(collection(db, 'notifications', uid, 'items'), orderBy('createdAt', 'desc'), limit(40));
+                unsubNotifs = onSnapshot(q, (snap) => {
+                    window.fbNotifications = snap.docs.map(asDoc);
+                    if (typeof onChange === 'function') onChange();
+                }, (err) => {
+                    console.warn('Colección notifications aún no activa o sin permisos (usando respaldo local):', err?.code || err);
+                });
+            } catch (e) {
+                console.warn('No se pudo iniciar escucha de notificaciones:', e);
+            }
+        };
+
+        window.fbStopNotifications = () => {
+            if (unsubNotifs) { unsubNotifs(); unsubNotifs = null; }
+            window.fbNotifications = [];
+        };
+
+        window.fbPushNotification = async (recipientUid, notifId, data) => {
+            const u = auth.currentUser;
+            if (!u || isUnverifiedEmailUser(u) || !recipientUid || recipientUid === u.uid) return;
+            try {
+                const safeId = String(notifId).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 120);
+                await setDoc(doc(db, 'notifications', recipientUid, 'items', safeId), {
+                    type: String(data.type || 'comment').slice(0, 20),
+                    fromUid: u.uid,
+                    fromName: String(data.fromName || window.currentUsername || 'Cinéfilo/a').slice(0, 40),
+                    fromAvatarSeed: String(data.fromAvatarSeed || window.currentAvatarSeed || window.currentUsername || 'Cinéfilo/a').slice(0, 60),
+                    postId: String(data.postId || '').slice(0, 80),
+                    postLabel: String(data.postLabel || 'una publicación').slice(0, 160),
+                    commentId: data.commentId ? String(data.commentId).slice(0, 80) : null,
+                    text: String(data.text || '').slice(0, 200),
+                    read: false,
+                    createdAt: serverTimestamp()
+                });
+            } catch (e) {
+                console.warn('No se pudo registrar notificación remota:', e?.code || e);
+            }
+        };
+
+        window.fbRemoveNotification = async (recipientUid, notifId) => {
+            const u = auth.currentUser;
+            if (!u || !recipientUid || recipientUid === u.uid) return;
+            try {
+                const safeId = String(notifId).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 120);
+                await deleteDoc(doc(db, 'notifications', recipientUid, 'items', safeId));
+            } catch (e) {
+                console.warn('No se pudo borrar notificación remota:', e?.code || e);
+            }
+        };
+
+        window.fbMarkNotificationsRead = async (uid, notifIds) => {
+            const u = auth.currentUser;
+            if (!u || u.uid !== uid || !Array.isArray(notifIds) || !notifIds.length) return;
+            try {
+                await Promise.all(notifIds.slice(0, 40).map(id =>
+                    updateDoc(doc(db, 'notifications', uid, 'items', id), { read: true }).catch(() => { /* ignorar si es notificación local */ })
+                ));
+            } catch (e) {
+                console.warn('No se pudieron marcar notificaciones como leídas:', e);
+            }
         };
 
         const _pubProfCache = new Map();
@@ -1184,7 +1278,10 @@
                 const res = data ? { username: data.username || 'Cinéfilo/a', avatarSeed: data.avatarSeed || data.username || 'Cinéfilo/a' } : null;
                 _pubProfCache.set(uid, res);
                 return res;
-            } catch (e) { return null; }
+            } catch (e) {
+                console.warn('No se pudo obtener perfil público ligero:', uid, e);
+                return null;
+            }
         };
 
         const postBody = (u, p) => ({
@@ -1235,7 +1332,23 @@
             await Promise.all(cs.docs.map(d => deleteDoc(d.ref)));
             await deleteDoc(doc(db, 'posts', postId));
         };
-        window.fbVotePost = (postId, type) => { const u = needUser(); return updateDoc(doc(db, 'posts', postId), { [`votes.${u.uid}`]: type || deleteField() }); };
+        window.fbVotePost = async (postId, type, meta) => {
+            const u = needUser();
+            await updateDoc(doc(db, 'posts', postId), { [`votes.${u.uid}`]: type || deleteField() });
+            if (meta && meta.recipientUid && meta.recipientUid !== u.uid) {
+                const notifId = `vote_${postId}_${u.uid}`;
+                if (type) {
+                    window.fbPushNotification(meta.recipientUid, notifId, {
+                        type: 'vote',
+                        postId,
+                        postLabel: meta.postLabel || 'tu publicación',
+                        text: type === 'like' ? '👍 Le gustó tu publicación' : '👎 No le convenció tu publicación'
+                    });
+                } else {
+                    window.fbRemoveNotification(meta.recipientUid, notifId);
+                }
+            }
+        };
 
         window.fbAddComment = async (postId, c) => {
             const u = needUser();
@@ -1248,6 +1361,30 @@
                 votes: {}, createdAt: serverTimestamp()
             });
             await updateDoc(doc(db, 'posts', postId), { commentCount: increment(1), lastComment: { author, avatarSeed, text: text.slice(0, 160) } });
+
+            const postLabel = String(c.postLabel || 'una publicación').slice(0, 160);
+            if (c.postAuthorUid && c.postAuthorUid !== u.uid) {
+                window.fbPushNotification(c.postAuthorUid, `cmt_${postId}_${ref.id}`, {
+                    type: 'comment',
+                    fromName: author,
+                    fromAvatarSeed: avatarSeed,
+                    postId,
+                    commentId: ref.id,
+                    postLabel,
+                    text
+                });
+            }
+            if (c.parentAuthorUid && c.parentAuthorUid !== u.uid && c.parentAuthorUid !== c.postAuthorUid) {
+                window.fbPushNotification(c.parentAuthorUid, `reply_${postId}_${ref.id}`, {
+                    type: 'reply',
+                    fromName: author,
+                    fromAvatarSeed: avatarSeed,
+                    postId,
+                    commentId: ref.id,
+                    postLabel,
+                    text
+                });
+            }
             return ref.id;
         };
         window.fbEditComment = (postId, cid, text) => { needUser(); return updateDoc(doc(db, 'posts', postId, 'comments', cid), { text, updatedAt: serverTimestamp() }); };
@@ -1256,25 +1393,56 @@
             await deleteDoc(doc(db, 'posts', postId, 'comments', cid));
             await updateDoc(doc(db, 'posts', postId), { commentCount: increment(-1), lastComment: newLast || null });
         };
-        window.fbVoteComment = (postId, cid, type) => { const u = needUser(); return updateDoc(doc(db, 'posts', postId, 'comments', cid), { [`votes.${u.uid}`]: type || deleteField() }); };
+        window.fbVoteComment = async (postId, cid, type, meta) => {
+            const u = needUser();
+            await updateDoc(doc(db, 'posts', postId, 'comments', cid), { [`votes.${u.uid}`]: type || deleteField() });
+            if (meta && meta.recipientUid && meta.recipientUid !== u.uid) {
+                const notifId = `cvote_${postId}_${cid}_${u.uid}`;
+                if (type) {
+                    window.fbPushNotification(meta.recipientUid, notifId, {
+                        type: 'comment_vote',
+                        postId,
+                        commentId: cid,
+                        postLabel: meta.postLabel || 'una publicación',
+                        text: type === 'like' ? `👍 Le gustó tu comentario: "${String(meta.commentText || '').slice(0, 70)}"` : `👎 Votó tu comentario: "${String(meta.commentText || '').slice(0, 70)}"`
+                    });
+                } else {
+                    window.fbRemoveNotification(meta.recipientUid, notifId);
+                }
+            }
+        };
 
         window.fbGetProfile = async (uid) => {
             const out = {};
             try {
                 const s = await getDoc(doc(db, 'profiles', uid));
                 if (s.exists()) Object.assign(out, s.data());
-            } catch (e) { }
+            } catch (e) {
+                console.warn('No se pudo leer profiles/' + uid + ':', e);
+            }
+            try {
+                const pubSnap = await getDoc(doc(db, 'profiles', uid, 'public', 'library'));
+                if (pubSnap.exists() && pubSnap.data()?.library) {
+                    out.library = { ...(out.library || {}), ...pubSnap.data().library };
+                }
+            } catch (e) {
+                /* subcolección public/library opcional si aún no está activa en reglas */
+            }
             if (auth.currentUser && auth.currentUser.uid === uid) {
                 try {
                     const u = await getDoc(doc(db, 'users', uid));
                     if (u.exists()) Object.assign(out, u.data(), out);
-                } catch (e) { }
+                } catch (e) {
+                    console.warn('No se pudo leer users/' + uid + ':', e);
+                }
                 try {
                     const ds = await getDocs(collection(db, 'users', uid, 'data'));
                     const lib = out.library || {};
                     ds.forEach(d => { lib[d.id] = d.data().value; });
                     if (Object.keys(lib).length) out.library = lib;
-                } catch (e) { }
+                } catch (e) {
+                    console.warn('No se pudo leer biblioteca privada de users/' + uid + ':', e);
+                }
             }
             return Object.keys(out).length ? out : null;
         };
@@ -1295,29 +1463,135 @@
         const pendingWrites = new Map();
         const PUBLIC_LIB_KEYS = ['cine_watched_movies', 'cine_watched_movies_data', 'cine_personal_reviews', 'cine_custom_lists'];
 
+        function slimMovieForPublicLib(m) {
+            if (!m || typeof m !== 'object') return null;
+            return {
+                id: m.id,
+                title: String(m.title || '').slice(0, 120),
+                subtitle: String(m.subtitle || '').slice(0, 60),
+                poster: String(m.poster || '').slice(0, 220),
+                rating: m.rating ?? null,
+                year: m.year ?? null
+            };
+        }
+
         function sanitizePublicLibValue(key, raw) {
             if (raw === null || raw === undefined) return null;
+            const hideWatched = localStorage.getItem('cine_hide_watched_public') === 'true';
             try {
+                if (key === 'cine_watched_movies') {
+                    if (hideWatched) return '[]';
+                    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                    const arr = Array.isArray(parsed) ? parsed.slice(-1000) : [];
+                    return JSON.stringify(arr);
+                }
+                if (key === 'cine_watched_movies_data') {
+                    if (hideWatched) return '{}';
+                    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                    const slimMap = {};
+                    const keys = Object.keys(parsed || {}).slice(-1000);
+                    keys.forEach(k => {
+                        const slim = slimMovieForPublicLib(parsed[k]);
+                        if (slim) slimMap[k] = slim;
+                    });
+                    return JSON.stringify(slimMap);
+                }
                 if (key === 'cine_personal_reviews') {
                     const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
                     const pubOnly = {};
-                    Object.keys(parsed || {}).forEach(k => {
+                    Object.keys(parsed || {}).slice(-200).forEach(k => {
                         const rv = parsed[k];
-                        if (rv && rv.isPublic !== false) pubOnly[k] = rv;
+                        if (rv && rv.isPublic !== false) {
+                            pubOnly[k] = {
+                                rating: rv.rating ?? null,
+                                reviewTitle: String(rv.reviewTitle || '').slice(0, 150),
+                                review: String(rv.review || '').slice(0, 1000),
+                                timestamp: rv.timestamp || '',
+                                isPublic: true,
+                                movie: slimMovieForPublicLib(rv.movie)
+                            };
+                        }
                     });
                     return JSON.stringify(pubOnly);
                 }
                 if (key === 'cine_custom_lists') {
                     const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
-                    const pubOnly = Array.isArray(parsed) ? parsed.filter(l => l && l.isPublic !== false) : [];
+                    const pubOnly = (Array.isArray(parsed) ? parsed : [])
+                        .filter(l => l && l.isPublic !== false)
+                        .slice(0, 30)
+                        .map(l => ({
+                            id: l.id,
+                            name: String(l.name || '').slice(0, 80),
+                            desc: String(l.desc || '').slice(0, 240),
+                            isPublic: true,
+                            movies: (Array.isArray(l.movies) ? l.movies : []).slice(0, 100).map(slimMovieForPublicLib).filter(Boolean)
+                        }));
                     return JSON.stringify(pubOnly);
                 }
-            } catch (e) { }
+            } catch (e) {
+                console.warn('Error al sanitizar biblioteca pública para', key, e);
+            }
             return typeof raw === 'string' ? raw : JSON.stringify(raw);
+        }
+
+        function buildCompleteSlimPublicLib() {
+            const pubLib = {};
+            PUBLIC_LIB_KEYS.forEach(k => {
+                const v = localStorage.getItem(k);
+                if (v !== null) pubLib[k] = sanitizePublicLibValue(k, v);
+            });
+            return pubLib;
+        }
+
+        function enforcePublicLibSizeCap(payload) {
+            try {
+                let bytes = new Blob([JSON.stringify(payload)]).size;
+                if (bytes <= 800 * 1024) return payload;
+                console.warn('Biblioteca pública supera 800 KB (' + bytes + ' bytes). Recortando entradas antiguas...');
+                if (payload.cine_watched_movies_data) {
+                    const dataObj = JSON.parse(payload.cine_watched_movies_data || '{}');
+                    const trimmed = {};
+                    Object.keys(dataObj).slice(-400).forEach(k => { trimmed[k] = dataObj[k]; });
+                    payload.cine_watched_movies_data = JSON.stringify(trimmed);
+                }
+                if (typeof window.showToast === 'function' && !window._pubSizeWarned) {
+                    window._pubSizeWarned = true;
+                    window.showToast('Tu biblioteca pública es muy grande; se resumió para optimizar la carga.');
+                }
+            } catch (e) {
+                console.warn('No se pudo verificar el tamaño de la biblioteca pública:', e);
+            }
+            return payload;
         }
 
         let _pubLibBatch = {};
         let _pubLibTimer = null;
+
+        async function writePublicLibraryDocs(uid, payload) {
+            const safePayload = enforcePublicLibSizeCap(payload);
+            try {
+                await setDoc(doc(db, 'profiles', uid, 'public', 'library'), {
+                    library: safePayload,
+                    updatedAt: serverTimestamp()
+                }, { merge: true });
+            } catch (e) {
+                /* Subcolección opcional hasta que se actualicen las reglas en Firebase Console */
+            }
+            try {
+                await setDoc(doc(db, 'profiles', uid), {
+                    library: safePayload,
+                    publicLists: deleteField(),
+                    stats: deleteField(),
+                    updatedAt: serverTimestamp()
+                }, { merge: true });
+            } catch (e) {
+                console.warn('No se pudo sincronizar la biblioteca pública en profiles/' + uid + ':', e);
+                if (e?.code === 'permission-denied' && typeof window.showToast === 'function' && !window._pubPermWarned) {
+                    window._pubPermWarned = true;
+                    window.showToast('Aviso: actualiza las reglas de Firestore para sincronizar tu perfil público.');
+                }
+            }
+        }
 
         async function flushPublicLib(uid) {
             if (_pubLibTimer) { clearTimeout(_pubLibTimer); _pubLibTimer = null; }
@@ -1325,17 +1599,28 @@
             if (!keys.length || !auth.currentUser || isUnverifiedEmailUser(auth.currentUser)) return;
             const payload = { ..._pubLibBatch };
             _pubLibBatch = {};
-            try {
-                await setDoc(doc(db, 'profiles', uid), { library: payload, updatedAt: serverTimestamp() }, { merge: true });
-            } catch (e) { }
+            await writePublicLibraryDocs(uid, payload);
         }
 
         function queuePublicLibSync(uid, key, value) {
+            if (key === 'cine_hide_watched_public') {
+                window.fbSyncPublicLibraryNow();
+                return;
+            }
             if (!PUBLIC_LIB_KEYS.includes(key) || !auth.currentUser || isUnverifiedEmailUser(auth.currentUser)) return;
             _pubLibBatch[key] = sanitizePublicLibValue(key, value);
             if (_pubLibTimer) clearTimeout(_pubLibTimer);
             _pubLibTimer = setTimeout(() => flushPublicLib(uid), 1200);
         }
+
+        window.fbSyncPublicLibraryNow = async () => {
+            const user = auth.currentUser;
+            if (!user || isUnverifiedEmailUser(user)) return;
+            const pubLib = buildCompleteSlimPublicLib();
+            if (Object.keys(pubLib).length) {
+                await writePublicLibraryDocs(user.uid, pubLib);
+            }
+        };
 
         async function writeNow(uid, key, value) {
             try {
@@ -1421,14 +1706,10 @@
 
             await Promise.all(toUpload.map(k => writeNow(user.uid, k, localStorage.getItem(k))));
             if (!isUnverifiedEmailUser(user)) {
-                try {
-                    const pubLib = {};
-                    PUBLIC_LIB_KEYS.forEach(k => {
-                        const v = localStorage.getItem(k);
-                        if (v !== null) pubLib[k] = sanitizePublicLibValue(k, v);
-                    });
-                    if (Object.keys(pubLib).length) await setDoc(doc(db, 'profiles', user.uid), { library: pubLib, updatedAt: serverTimestamp() }, { merge: true });
-                } catch (e) { }
+                const pubLib = buildCompleteSlimPublicLib();
+                if (Object.keys(pubLib).length) {
+                    await writePublicLibraryDocs(user.uid, pubLib);
+                }
             }
 
             window._libraryReady = true;
@@ -1436,7 +1717,12 @@
         };
 
         window.fbSignOut = async () => {
-            try { await window.fbFlushData(); } catch (e) { }
+            try {
+                await window.fbFlushData();
+            } catch (e) {
+                console.warn('Error al vaciar datos pendientes antes de cerrar sesión:', e);
+            }
+            window.fbStopNotifications();
             window._libraryReady = false;
             await signOut(auth);
             wipeLocalLibrary();
@@ -1468,6 +1754,7 @@
                 try {
                     pendingWrites.forEach(e => clearTimeout(e.timer));
                     pendingWrites.clear();
+                    window.fbStopNotifications();
                     window._libraryReady = false;
                     try {
                         const snap = await getDocs(collection(db, 'users', uid, 'data'));
@@ -1477,6 +1764,7 @@
                     try {
                         const mine = await getDocs(query(collection(db, 'posts'), where('authorUid', '==', uid)));
                         for (const d of mine.docs) await window.fbDeletePost(d.id);
+                        try { await deleteDoc(doc(db, 'profiles', uid, 'public', 'library')); } catch (e) { /* subcolección opcional */ }
                         await deleteDoc(doc(db, 'profiles', uid));
                     } catch (e) { console.warn('No se pudieron borrar tus publicaciones del muro:', e); }
 
@@ -1544,6 +1832,10 @@
 
             if (remote !== false) await window.fbSaveProfile({ username, avatarSeed, bio });
 
+            window.fbWatchNotifications(user.uid, () => {
+                if (typeof window.refreshNotifications === 'function') window.refreshNotifications();
+            });
+
             await window.fbInitLibrary();
             if (typeof migrateLegacyMural === 'function') await migrateLegacyMural();
 
@@ -1566,7 +1858,9 @@
                     try {
                         await reload(user);
                         if (user.emailVerified) await user.getIdToken(true);
-                    } catch (e) { }
+                    } catch (e) {
+                        console.warn('No se pudo refrescar el estado de verificación del usuario:', e);
+                    }
                 }
 
                 if (isUnverifiedEmailUser(user)) {
@@ -1584,6 +1878,7 @@
                 await window.fbCompleteVerifiedSession(user);
                 return;
             } else {
+                window.fbStopNotifications();
                 window._libraryReady = false;
                 if (typeof window.stopAuthVerifyWatcher === 'function') window.stopAuthVerifyWatcher();
                 sessionStorage.setItem('guestMode', 'true');

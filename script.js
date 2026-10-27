@@ -9,7 +9,8 @@ const CINE_SYNC_KEYS = [
     'cine_diario_mural_posts',
     'cine_avatar_custom_url',
     'cine_default_tab',
-    'cine_notif_read'
+    'cine_notif_read',
+    'cine_hide_watched_public'
 ];
 window.CINE_SYNC_KEYS = CINE_SYNC_KEYS;
 
@@ -50,6 +51,11 @@ window.cineApplyKey = function (key, raw) {
             case 'cine_notif_read':
                 if (typeof _applyNotifReadRaw === 'function') _applyNotifReadRaw(raw);
                 break;
+            case 'cine_hide_watched_public': {
+                const chk = document.getElementById('hideWatchedPublicCheck');
+                if (chk) chk.checked = (raw === 'true');
+                break;
+            }
         }
     } catch (e) {
         console.warn('Dato inválido en', key, e);
@@ -688,7 +694,7 @@ function _countVotes(votes) {
 const _VIEWER_CACHE_KEY = 'cine_viewer_movie_cache_v1';
 const _viewerMovieCache = new Map((() => {
     try { return Object.entries(JSON.parse(localStorage.getItem(_VIEWER_CACHE_KEY) || '{}')); }
-    catch (e) { return []; }
+    catch (e) { /* valor por defecto intencional */ return []; }
 })());
 const _viewerMoviePromises = new Map();
 let _viewerMovieRefreshTimer = null;
@@ -698,7 +704,9 @@ function _saveViewerMovieCache() {
         const obj = {};
         for (const [k, v] of _viewerMovieCache.entries()) obj[k] = v;
         window.cineRawStorage.set(_VIEWER_CACHE_KEY, JSON.stringify(obj));
-    } catch (e) { }
+    } catch (e) {
+        console.warn('No se pudo guardar caché local de películas del muro:', e);
+    }
 }
 
 function _scheduleViewerMovieRefresh() {
@@ -838,7 +846,7 @@ function _loadMuralSort() {
     try {
         const v = JSON.parse(localStorage.getItem('cine_mural_sort'));
         if (v && _SORT_MODES.includes(v.mode) && (v.dir === 'asc' || v.dir === 'desc')) return v;
-    } catch (e) { }
+    } catch (e) { /* valor por defecto intencional */ }
     return { mode: 'date', dir: 'desc' };
 }
 window.muralSort = _loadMuralSort();
@@ -1273,7 +1281,11 @@ async function reactToMuralPost(postId, type) {
     const post = findPost(postId);
     if (!post) return;
     try {
-        await window.fbVotePost(postId, post.myVote === type ? null : type);
+        const nextType = post.myVote === type ? null : type;
+        await window.fbVotePost(postId, nextType, {
+            recipientUid: post.authorUid || '',
+            postLabel: _notifPostTitle(post)
+        });
         await _afterPostWrite(postId);
     } catch (err) { handleWriteError(err, 'reaccionar'); }
 }
@@ -1282,7 +1294,15 @@ async function reactToComment(postId, commentId, type) {
     if (!requireAuth('Inicia sesión para reaccionar.')) return;
     const c = (window.muralComments || []).map(normComment).find(x => x.id === commentId);
     if (!c) return;
-    try { await window.fbVoteComment(postId, commentId, c.myVote === type ? null : type); }
+    const post = findPost(postId);
+    const nextType = c.myVote === type ? null : type;
+    try {
+        await window.fbVoteComment(postId, commentId, nextType, {
+            recipientUid: c.authorUid || '',
+            postLabel: post ? _notifPostTitle(post) : 'una publicación',
+            commentText: c.text || ''
+        });
+    }
     catch (err) { handleWriteError(err, 'reaccionar'); }
 }
 
@@ -1290,7 +1310,8 @@ async function reactToComment(postId, commentId, type) {
 function setReplyTarget(postId, parentCommentId, repliedCommentId) {
     const target = (window.muralComments || []).find(c => c.id === repliedCommentId);
     const author = target ? (target.author || 'Usuario') : 'Usuario';
-    replyingTargetMap[postId] = { commentId: parentCommentId, author };
+    const authorUid = target ? (target.authorUid || '') : '';
+    replyingTargetMap[postId] = { commentId: parentCommentId, author, authorUid };
     const input = document.getElementById(`newCommentInput_${postId}`);
     const indicator = document.getElementById(`replyIndicator_${postId}`);
     if (input) { input.value = `@${author} `; input.focus(); }
@@ -1321,11 +1342,17 @@ async function submitMuralComment(postId) {
     const t = replyingTargetMap[postId];
     if (t && !text.startsWith('@' + t.author)) text = `@${t.author} ${text}`;
     if (text.length > 1000) { showToast('El comentario es demasiado largo (máx. 1000 caracteres).', 'error'); return; }
+    const post = findPost(postId);
+    const parentComment = t && t.commentId ? (window.muralComments || []).find(c => c.id === t.commentId) : null;
+    const parentAuthorUid = (t && t.authorUid) || (parentComment && parentComment.authorUid) || '';
     input.disabled = true;
     try {
         await window.fbAddComment(postId, {
             text, parentId: t ? t.commentId : null, replyToAuthor: t ? t.author : null,
-            author: _myName(), avatarSeed: currentAvatarSeed
+            author: _myName(), avatarSeed: currentAvatarSeed,
+            postAuthorUid: post ? (post.authorUid || '') : '',
+            parentAuthorUid,
+            postLabel: post ? _notifPostTitle(post) : 'una publicación'
         });
         input.value = '';
         clearReplyTarget(postId);
@@ -1609,7 +1636,7 @@ async function openUserProfileModal(uid, fallbackName, fallbackSeed) {
         <button type="button" data-act="close" class="w-full py-2 bg-stone-800 hover:bg-stone-700 text-stone-100 font-mono text-xs journal-border transition uppercase tracking-wider">Cerrar ficha</button>`);
 }
 
-// ----- Estrellas reutilizables con soporte de medias estrellas (0.5) -----
+// ----- Estrellas reutilizables con soporte de medias estrellas (0.5) y teclado -----
 function mountStars(containerId, textId, initial, onChange) {
     const c = document.getElementById(containerId);
     if (!c) return null;
@@ -1622,25 +1649,53 @@ function mountStars(containerId, textId, initial, onChange) {
             else if (v >= starNum - 0.5) ic.className = 'fa-solid fa-star-half-stroke text-amber-500';
             else ic.className = 'fa-regular fa-star text-stone-300 dark:text-stone-600';
         });
+        c.setAttribute('aria-valuenow', String(val));
         const t = document.getElementById(textId);
         if (t) t.textContent = v ? `${_fmtRating(v)}/10` : 'Sin nota';
     };
     c.innerHTML = '';
-    c.setAttribute('role', 'radiogroup');
-    c.setAttribute('aria-label', 'Calificación de 0.5 a 10');
+    c.setAttribute('role', 'slider');
+    c.setAttribute('aria-valuemin', '0');
+    c.setAttribute('aria-valuemax', '10');
+    c.setAttribute('aria-valuenow', String(val));
+    c.setAttribute('aria-label', 'Calificación de 0 a 10 en pasos de 0.5 (usa flechas izquierda/derecha)');
     for (let i = 1; i <= 10; i++) {
         const b = document.createElement('button');
         b.type = 'button';
-        b.className = 'px-0.5 text-base leading-none transition-transform hover:scale-125 cursor-pointer';
-        b.setAttribute('aria-label', `${i} de 10`);
+        b.className = 'px-0.5 text-base leading-none transition-transform hover:scale-125 cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber-500';
+        b.setAttribute('aria-label', `${i} de 10 estrellas (flechas ajustan media estrella)`);
         b.innerHTML = '<i></i>';
         const pickVal = (e) => {
+            if (!e || e.detail === 0) return i;
             const rect = b.getBoundingClientRect();
             return (e.clientX - rect.left) < rect.width / 2 ? i - 0.5 : i;
         };
         b.onmousemove = (e) => paint(pickVal(e));
-        b.onfocus = () => paint(i);
+        b.onfocus = () => paint();
         b.onclick = (e) => { val = pickVal(e); paint(); onChange(val); };
+        b.onkeydown = (e) => {
+            if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
+                e.preventDefault();
+                val = Math.min(10, Math.round((val + 0.5) * 2) / 2);
+                paint();
+                onChange(val);
+            } else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
+                e.preventDefault();
+                val = Math.max(0, Math.round((val - 0.5) * 2) / 2);
+                paint();
+                onChange(val);
+            } else if (e.key === 'Home' || e.key === 'Backspace' || e.key === 'Delete') {
+                e.preventDefault();
+                val = 0;
+                paint();
+                onChange(val);
+            } else if (e.key === 'End') {
+                e.preventDefault();
+                val = 10;
+                paint();
+                onChange(val);
+            }
+        };
         c.appendChild(b);
     }
     c.onmouseleave = () => paint();
@@ -1829,7 +1884,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // ===== SISTEMA DE NOTIFICACIONES (CAMPANITA DE AVISOS) =====
 let _notifReadSet = new Set((() => {
-    try { return JSON.parse(localStorage.getItem('cine_notif_read') || '[]'); } catch (e) { return []; }
+    try { return JSON.parse(localStorage.getItem('cine_notif_read') || '[]'); } catch (e) { /* valor por defecto intencional */ return []; }
 })());
 let _notifItems = [];
 let _notifFilter = 'all';
@@ -1846,7 +1901,7 @@ function _applyNotifReadRaw(raw) {
         _notifReadSet = new Set(Array.isArray(arr) ? arr : []);
         _updateNotifBadgeUI();
         renderNotificationsPanel();
-    } catch (e) { }
+    } catch (e) { /* valor por defecto intencional */ }
 }
 
 function _saveNotifReadSet() {
@@ -1921,9 +1976,14 @@ window.refreshNotifications = async function () {
             }
         });
 
-        // 2) Obtener comentarios de las publicaciones que tienen actividad de comentarios
-        const postsWithComments = posts.filter(p => (p.commentCount || 0) > 0 || (p.lastComment && p.lastComment.text));
-        await Promise.all(postsWithComments.map(async (p) => {
+        // 2) Obtener comentarios ÚNICAMENTE de MIS publicaciones con actividad (cero lecturas ajenas en segundo plano)
+        const isPostMine = (p) => {
+            const pUid = p.authorUid || p.userId || '';
+            const pAuthorLower = String(p.author || '').trim().toLowerCase();
+            return (pUid && pUid === myUid) || (!pUid && myNameLower && pAuthorLower === myNameLower);
+        };
+        const myPostsWithComments = posts.filter(p => isPostMine(p) && ((p.commentCount || 0) > 0 || (p.lastComment && p.lastComment.text)));
+        await Promise.all(myPostsWithComments.map(async (p) => {
             const sig = `${p.commentCount || 0}|${p.lastComment ? p.lastComment.text : ''}`;
             const cached = _notifCommentsCache.get(p.id);
             if (cached && cached.sig === sig) return;
@@ -1933,7 +1993,7 @@ window.refreshNotifications = async function () {
             }
         }));
 
-        // Poblar también autores conocidos desde los comentarios cargados
+        // Poblar también autores conocidos desde los comentarios en caché
         _notifCommentsCache.forEach(({ comments }) => {
             (comments || []).forEach(c => {
                 if (c && c.authorUid && c.author) {
@@ -1943,11 +2003,54 @@ window.refreshNotifications = async function () {
         });
 
         const built = [];
+        const dedupKeys = new Set();
 
+        // 3) Incorporar primero las notificaciones dedicadas de Firestore (notifications/{uid}/items) con timestamp exacto
+        const remoteNotifs = Array.isArray(window.fbNotifications) ? window.fbNotifications : [];
+        for (const rn of remoteNotifs) {
+            if (!rn || !rn.id) continue;
+            if (rn.read) _notifReadSet.add(rn.id);
+            const actorName = rn.fromName || 'Cinéfilo/a';
+            const actorSeed = rn.fromAvatarSeed || actorName;
+            const postTitle = rn.postLabel || 'una publicación';
+            let uiType = 'comment';
+            let verb = 'comentó en';
+            let postKind = '';
+            if (rn.type === 'reply') {
+                uiType = 'reply';
+                verb = 'respondió a tu nota en';
+            } else if (rn.type === 'vote') {
+                const isDisagree = String(rn.text || '').includes('👎');
+                uiType = isDisagree ? 'vote_disagree' : 'vote_agree';
+                verb = isDisagree ? 'discrepa de tu publicación' : 'está de acuerdo con tu publicación';
+            } else if (rn.type === 'comment_vote') {
+                const isDisagree = String(rn.text || '').includes('👎');
+                uiType = isDisagree ? 'vote_disagree' : 'vote_agree';
+                verb = isDisagree ? 'discrepa de tu nota en' : 'está de acuerdo con tu nota en';
+            }
+            const dedupKey = `${uiType}|${rn.postId || ''}|${rn.commentId || ''}|${rn.fromUid || ''}`;
+            dedupKeys.add(dedupKey);
+            built.push({
+                id: rn.id,
+                remoteId: rn.id,
+                type: uiType,
+                postId: rn.postId || '',
+                commentId: rn.commentId || null,
+                actorUid: rn.fromUid || '',
+                actorName,
+                actorSeed,
+                postTitle,
+                postKind,
+                verb,
+                snippet: (rn.type === 'comment' || rn.type === 'reply') ? String(rn.text || '').slice(0, 140) : '',
+                ts: _ms(rn.createdAt),
+                plainSummary: `${actorName} ${verb} «${postTitle}»`
+            });
+        }
+
+        // 4) Respaldo local sin lecturas extra para mis publicaciones (y comentarios ya abiertos en memoria)
         for (const p of posts) {
-            const postOwnerUid = p.authorUid || p.userId || '';
-            const postAuthorLower = String(p.author || '').trim().toLowerCase();
-            const isMyPost = (postOwnerUid && postOwnerUid === myUid) || (!postOwnerUid && myNameLower && postAuthorLower === myNameLower);
+            const isMyPost = isPostMine(p);
             const postTitle = _notifPostTitle(p);
             const postKind = p.type === 'review' ? 'reseña de' : 'debate';
 
@@ -1955,12 +2058,15 @@ window.refreshNotifications = async function () {
             if (isMyPost && p.votes && typeof p.votes === 'object') {
                 const voterEntries = Object.entries(p.votes).filter(([vUid, vType]) => vUid !== myUid && (vType === 'agree' || vType === 'disagree'));
                 for (const [voterUid, voteType] of voterEntries) {
+                    const uiType = voteType === 'agree' ? 'vote_agree' : 'vote_disagree';
+                    const dedupKey = `${uiType}|${p.id}||${voterUid}`;
+                    if (dedupKeys.has(dedupKey)) continue;
                     const actor = await _resolveNotifActor(voterUid);
                     const id = `vp_${p.id}_${voterUid}_${voteType}`;
                     const verb = voteType === 'agree' ? 'está de acuerdo con' : 'discrepa de';
                     built.push({
                         id,
-                        type: voteType === 'agree' ? 'vote_agree' : 'vote_disagree',
+                        type: uiType,
                         postId: p.id,
                         commentId: null,
                         actorUid: voterUid,
@@ -1968,7 +2074,7 @@ window.refreshNotifications = async function () {
                         actorSeed: actor.avatarSeed,
                         postTitle,
                         postKind,
-                        verb,
+                        verb: `${verb} tu ${postKind}`,
                         snippet: '',
                         ts: _ms(p.updatedAt || p.createdAt),
                         plainSummary: `${actor.username} ${verb} tu ${postKind} «${postTitle}»`
@@ -1976,10 +2082,10 @@ window.refreshNotifications = async function () {
                 }
             }
 
-            // B) Comentarios, respuestas y votos en comentarios
+            // B) Comentarios, respuestas y votos en comentarios (de mis posts o posts ya abiertos en sesión)
             const cachedEntry = _notifCommentsCache.get(p.id);
             let comments = (cachedEntry && Array.isArray(cachedEntry.comments)) ? cachedEntry.comments : [];
-            if (!comments.length && p.lastComment && p.lastComment.text) {
+            if (!comments.length && isMyPost && p.lastComment && p.lastComment.text) {
                 comments = [{
                     id: `lc_${p.id}`,
                     authorUid: p.lastComment.authorUid || '',
@@ -2003,12 +2109,15 @@ window.refreshNotifications = async function () {
                 if (isMyComment && c.votes && typeof c.votes === 'object') {
                     const cVoters = Object.entries(c.votes).filter(([vUid, vType]) => vUid !== myUid && (vType === 'agree' || vType === 'disagree'));
                     for (const [voterUid, voteType] of cVoters) {
+                        const uiType = voteType === 'agree' ? 'vote_agree' : 'vote_disagree';
+                        const dedupKey = `${uiType}|${p.id}|${c.id}|${voterUid}`;
+                        if (dedupKeys.has(dedupKey)) continue;
                         const actor = await _resolveNotifActor(voterUid);
                         const id = `vc_${p.id}_${c.id}_${voterUid}_${voteType}`;
                         const verb = voteType === 'agree' ? 'está de acuerdo con' : 'discrepa de';
                         built.push({
                             id,
-                            type: voteType === 'agree' ? 'vote_agree' : 'vote_disagree',
+                            type: uiType,
                             postId: p.id,
                             commentId: c.id,
                             actorUid: voterUid,
@@ -2016,7 +2125,7 @@ window.refreshNotifications = async function () {
                             actorSeed: actor.avatarSeed,
                             postTitle,
                             postKind: 'nota en',
-                            verb,
+                            verb: `${verb} tu nota en`,
                             snippet: String(c.text).slice(0, 120),
                             ts: _ms(c.updatedAt || c.createdAt),
                             plainSummary: `${actor.username} ${verb} tu nota en «${postTitle}»`
@@ -2033,6 +2142,8 @@ window.refreshNotifications = async function () {
                 const mentionsMe = myNameLower && myNameLower !== 'invitado/a' && String(c.text).toLowerCase().includes(`@${myNameLower}`);
 
                 if (parentIsMine || replyToMe || mentionsMe) {
+                    const dedupKey = `reply|${p.id}|${c.id}|${cUid}`;
+                    if (dedupKeys.has(dedupKey)) continue;
                     const id = `rep_${p.id}_${c.id}`;
                     built.push({
                         id,
@@ -2050,6 +2161,8 @@ window.refreshNotifications = async function () {
                         plainSummary: `${c.author || 'Alguien'} respondió a tu nota en «${postTitle}»`
                     });
                 } else if (isMyPost) {
+                    const dedupKey = `comment|${p.id}|${c.id}|${cUid}`;
+                    if (dedupKeys.has(dedupKey)) continue;
                     const id = `cmt_${p.id}_${c.id}`;
                     built.push({
                         id,
@@ -2150,8 +2263,15 @@ function setNotifFilter(mode) {
 
 function markAllNotificationsRead() {
     if (!_notifItems.length) return;
-    _notifItems.forEach(n => _notifReadSet.add(n.id));
+    const remoteIds = [];
+    _notifItems.forEach(n => {
+        _notifReadSet.add(n.id);
+        if (n.remoteId) remoteIds.push(n.remoteId);
+    });
     _saveNotifReadSet();
+    if (window.currentUser && remoteIds.length && typeof window.fbMarkNotificationsRead === 'function') {
+        window.fbMarkNotificationsRead(window.currentUser.uid, remoteIds);
+    }
     _updateNotifBadgeUI();
     renderNotificationsPanel();
 }
@@ -2162,6 +2282,9 @@ function openNotificationItem(idx) {
     if (!item) return;
     _notifReadSet.add(item.id);
     _saveNotifReadSet();
+    if (window.currentUser && item.remoteId && typeof window.fbMarkNotificationsRead === 'function') {
+        window.fbMarkNotificationsRead(window.currentUser.uid, [item.remoteId]);
+    }
     _updateNotifBadgeUI();
     const panel = document.getElementById('notifPanel');
     if (panel) panel.classList.add('hidden');
@@ -2373,7 +2496,7 @@ function playTickSound() {
         gain.connect(ctx.destination);
         osc.start();
         osc.stop(ctx.currentTime + 0.04);
-    } catch (e) { }
+    } catch (e) { /* AudioContext opcional si el navegador bloquea reproducción automática */ }
 }
 
 function toggleSortDirection() {
@@ -2404,7 +2527,7 @@ function playVictorySound() {
             osc.start(ctx.currentTime + idx * 0.08);
             osc.stop(ctx.currentTime + idx * 0.08 + 0.5);
         });
-    } catch (e) { }
+    } catch (e) { /* AudioContext opcional si el navegador bloquea reproducción automática */ }
 }
 
 function toggleTheme() {
@@ -2448,11 +2571,21 @@ function toggleSettingsModal() {
     const startPageSelect = document.getElementById('startPageSelect');
     const titleLangSelect = document.getElementById('titleLangSelect');
     const languageSelect = document.getElementById('languageSelect');
+    const hideWatchedCheck = document.getElementById('hideWatchedPublicCheck');
     if (uInput) uInput.value = currentUsername;
     if (startPageSelect) startPageSelect.value = defaultMainTab;
     if (titleLangSelect) titleLangSelect.value = currentTitleLang;
     if (languageSelect) languageSelect.value = currentLang;
+    if (hideWatchedCheck) hideWatchedCheck.checked = (localStorage.getItem('cine_hide_watched_public') === 'true');
     if (modal) modal.classList.toggle('hidden');
+}
+
+function toggleHideWatchedPublic(checked) {
+    localStorage.setItem('cine_hide_watched_public', checked ? 'true' : 'false');
+    if (typeof window.fbSyncPublicLibraryNow === 'function') {
+        window.fbSyncPublicLibraryNow();
+    }
+    showToast(checked ? 'Tus películas vistas ahora están ocultas en tu perfil público.' : 'Tus películas vistas vuelven a ser visibles en tu perfil público.', 'info');
 }
 
 function updateUsername(val) {
@@ -2749,18 +2882,25 @@ function closeModal() {
     if (modal) modal.classList.add('hidden');
 }
 
-// Selector de estrellas del modal de detalle con soporte de medias estrellas (0.5)
+// Selector de estrellas del modal de detalle con soporte de medias estrellas (0.5) y teclado
 function renderStarSelector(val) {
     selectedStarRating = Number(val) || 0;
     const container = document.getElementById('starContainer');
     if (!container) return;
     container.innerHTML = '';
+    container.setAttribute('role', 'slider');
+    container.setAttribute('aria-valuemin', '0');
+    container.setAttribute('aria-valuemax', '10');
+    container.setAttribute('aria-valuenow', String(selectedStarRating));
+    container.setAttribute('aria-label', 'Calificación personal de 0 a 10 en pasos de 0.5');
     const textEl = document.getElementById('starRatingText');
     if (textEl) textEl.innerText = selectedStarRating.toFixed(1);
 
     for (let i = 1; i <= 10; i++) {
-        const starWrapper = document.createElement('div');
-        starWrapper.className = "relative w-6 h-6 flex items-center justify-center cursor-pointer text-sm px-0.5 text-stone-300 dark:text-stone-700 hover:scale-110 transition-transform";
+        const starWrapper = document.createElement('button');
+        starWrapper.type = 'button';
+        starWrapper.className = "relative w-6 h-6 flex items-center justify-center cursor-pointer text-sm px-0.5 text-stone-300 dark:text-stone-700 hover:scale-110 transition-transform focus:outline-none focus:ring-1 focus:ring-amber-500";
+        starWrapper.setAttribute('aria-label', `${i} de 10 estrellas (flechas ajustan media estrella)`);
         let iconClass = "fa-regular fa-star text-stone-300 dark:text-stone-700";
         if (selectedStarRating >= i) {
             iconClass = "fa-solid fa-star text-amber-600";
@@ -2769,10 +2909,36 @@ function renderStarSelector(val) {
         }
         starWrapper.innerHTML = `<i class="${iconClass}"></i>`;
         starWrapper.onclick = (e) => {
-            const rect = starWrapper.getBoundingClientRect();
-            const clickX = e.clientX - rect.left;
-            selectedStarRating = (clickX < rect.width / 2) ? i - 0.5 : i;
+            if (!e || e.detail === 0) {
+                selectedStarRating = i;
+            } else {
+                const rect = starWrapper.getBoundingClientRect();
+                const clickX = e.clientX - rect.left;
+                selectedStarRating = (clickX < rect.width / 2) ? i - 0.5 : i;
+            }
             renderStarSelector(selectedStarRating);
+        };
+        starWrapper.onkeydown = (e) => {
+            let next = null;
+            if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
+                e.preventDefault();
+                next = Math.min(10, Math.round((selectedStarRating + 0.5) * 2) / 2);
+            } else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
+                e.preventDefault();
+                next = Math.max(0, Math.round((selectedStarRating - 0.5) * 2) / 2);
+            } else if (e.key === 'Home' || e.key === 'Backspace' || e.key === 'Delete') {
+                e.preventDefault();
+                next = 0;
+            } else if (e.key === 'End') {
+                e.preventDefault();
+                next = 10;
+            }
+            if (next !== null) {
+                renderStarSelector(next);
+                const buttons = container.querySelectorAll('button');
+                const focusIdx = Math.max(0, Math.min(9, Math.ceil(next || 1) - 1));
+                if (buttons[focusIdx]) buttons[focusIdx].focus();
+            }
         };
         container.appendChild(starWrapper);
     }
@@ -3901,7 +4067,7 @@ async function _silentCheckEmailVerified() {
             if (window.fbCompleteVerifiedSession) await window.fbCompleteVerifiedSession(u);
             showToast('¡Correo verificado con éxito! Bienvenido/a a CineZine ✓', 'ok');
         }
-    } catch (e) { }
+    } catch (e) { console.warn('Comprobación automática de verificación:', e); }
 }
 
 window.showAuthLoginStep = function () {
@@ -4016,7 +4182,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnBackFromVerify) {
         btnBackFromVerify.addEventListener('click', async () => {
             window.stopAuthVerifyWatcher();
-            try { if (window.fbSignOutQuiet) await window.fbSignOutQuiet(); } catch (e) { }
+            try { if (window.fbSignOutQuiet) await window.fbSignOutQuiet(); } catch (e) { console.warn('Error al cerrar sesión temporal:', e); }
             window.showAuthLoginStep();
         });
     }
@@ -4026,7 +4192,7 @@ document.addEventListener('DOMContentLoaded', () => {
             window.stopAuthVerifyWatcher();
             sessionStorage.setItem('cineGuestChosen', '1');
             sessionStorage.setItem('guestMode', 'true');
-            try { if (window.fbSignOutQuiet) await window.fbSignOutQuiet(); } catch (e) { }
+            try { if (window.fbSignOutQuiet) await window.fbSignOutQuiet(); } catch (e) { console.warn('Error al cerrar sesión temporal:', e); }
             if (authModal) authModal.classList.add('hidden');
             currentUsername = 'Invitado/a'; window.currentUsername = 'Invitado/a';
             currentAvatarSeed = 'Invitado/a'; window.currentAvatarSeed = 'Invitado/a';

@@ -4,17 +4,23 @@
 //   Valor:  (tu Read Access Token v4 de TMDb)
 
 const ALLOWED_ENDPOINT_RE = /^\/(movie\/\d+|search\/movie|discover\/movie)(\?[^\s#]*)?$/;
+const DEFAULT_ORIGIN_RE = /^https:\/\/(cinezine(-[a-z0-9-]+)?\.vercel\.app|donilaa\.github\.io)$/i;
 
 export default async function handler(req, res) {
     const origin = req.headers.origin || '';
     const allowedEnv = (process.env.ALLOWED_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean);
     const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin) || origin === 'null';
+    const isAllowedOrigin = origin && (
+        allowedEnv.includes(origin) ||
+        (allowedEnv.length === 0 && DEFAULT_ORIGIN_RE.test(origin)) ||
+        isLocal
+    );
 
-    if (origin && (allowedEnv.length === 0 || allowedEnv.includes(origin) || isLocal)) {
+    if (isAllowedOrigin) {
         res.setHeader('Access-Control-Allow-Origin', origin === 'null' ? '*' : origin);
         res.setHeader('Vary', 'Origin');
-    } else if (!origin && allowedEnv.length === 0) {
-        res.setHeader('Access-Control-Allow-Origin', '*');
+    } else if (!origin) {
+        res.setHeader('Access-Control-Allow-Origin', 'https://cinezine.vercel.app');
     }
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -33,10 +39,18 @@ export default async function handler(req, res) {
     }
 
     const endpoint = String((req.query && req.query.endpoint) || '');
-    if (!endpoint || !ALLOWED_ENDPOINT_RE.test(endpoint)) {
+    if (
+        !endpoint ||
+        endpoint.length > 300 ||
+        endpoint.includes('..') ||
+        endpoint.includes('//') ||
+        !ALLOWED_ENDPOINT_RE.test(endpoint)
+    ) {
         return res.status(400).json({ error: 'Consulta no permitida' });
     }
 
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
     try {
         const isBearerJwt = token.startsWith('eyJ') || token.length > 60;
         const sep = endpoint.includes('?') ? '&' : '?';
@@ -48,7 +62,8 @@ export default async function handler(req, res) {
 
         const upstream = await fetch(targetUrl, {
             method: 'GET',
-            headers
+            headers,
+            signal: ctrl.signal
         });
 
         if (!upstream.ok) {
@@ -60,6 +75,9 @@ export default async function handler(req, res) {
         res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
         return res.status(200).json(data);
     } catch (err) {
-        return res.status(502).json({ error: 'Fallo de red con TMDb' });
+        const isTimeout = err && err.name === 'AbortError';
+        return res.status(isTimeout ? 504 : 502).json({ error: isTimeout ? 'Tiempo de espera agotado en TMDb' : 'Fallo de red con TMDb' });
+    } finally {
+        clearTimeout(timer);
     }
 }
