@@ -1125,6 +1125,7 @@ function renderPostAuthor(p) {
             </span>
         </button>
         <div class="flex items-center gap-3 text-[10px] font-mono text-stone-500 flex-shrink-0">
+            ${p.type === 'review' ? `<button type="button" onclick="openExportCardModalFromPost('${_pmEsc(p.id)}')" class="hover:text-rose-700 dark:hover:text-rose-400 transition cursor-pointer flex items-center gap-1 text-rose-800 dark:text-rose-400" title="Exportar tarjeta editorial"><i class="fa-solid fa-share-nodes"></i>Tarjeta</button>` : ''}
             ${p.mine ? `<button type="button" data-act="edit" class="hover:text-stone-900 dark:hover:text-stone-200 transition cursor-pointer"><i class="fa-solid fa-pen mr-1"></i>Editar</button>
             <button type="button" data-act="delete" class="hover:text-rose-600 transition cursor-pointer"><i class="fa-solid fa-trash mr-1"></i>Borrar</button>` : ''}
         </div>`;
@@ -1940,6 +1941,7 @@ document.addEventListener('keydown', (e) => {
     if (!top) return;
     if (top.id === 'muralPostModal') closeMuralPostModal();
     else if (top.id === 'smartPublishModal') closeSmartPublishModal();
+    else if (top.id === 'exportCardModal') closeExportCardModal();
     else if (top.id === 'profileDrawerBackdrop') toggleProfileDrawer();
     else top.classList.add('hidden');
 });
@@ -3120,6 +3122,10 @@ function openEpisodeDetailView(seasonNum, epNum) {
     if (reviewPanel) reviewPanel.classList.remove('hidden');
 
     selectTvReviewScope('episode', sNum, eNum, ep.name || `Capítulo ${eNum}`, stillForPost);
+    if (_detailTvState.baseId) {
+        const p = _parseMediaId(_detailTvState.baseId);
+        renderDetailWatchProviders(p.tmdbId, true);
+    }
 }
 
 function openSeasonDetailView(seasonNum) {
@@ -3278,6 +3284,10 @@ function returnToSeriesOverview(targetTab) {
     _renderDetailEpisodesList();
     selectTvReviewScope('series');
     switchDetailSeriesTab(targetTab || 'seasons');
+    if (_detailTvState.baseId) {
+        const p = _parseMediaId(_detailTvState.baseId);
+        renderDetailWatchProviders(p.tmdbId, true);
+    }
 }
 
 function _updateTvProgressUI() {
@@ -3634,6 +3644,7 @@ function openDetailModal(movie, tag) {
     renderDetailPublicReviews(movie);
     _loadReviewFieldsForTarget(movie.id);
     _initDetailTvExplorer(movie, parsed, tag);
+    renderDetailWatchProviders(parsed.tmdbId, parsed.isTv);
 
     const detailModal = document.getElementById('detailModal');
     if (detailModal) {
@@ -3646,6 +3657,716 @@ function openDetailModal(movie, tag) {
 function closeDetailModal() {
     const detailModal = document.getElementById('detailModal');
     if (detailModal) detailModal.classList.add('hidden');
+    const wpSec = document.getElementById('detailWatchProvidersSection');
+    if (wpSec) wpSec.classList.add('hidden');
+}
+
+// ===== PLATAFORMAS DE STREAMING EN CHILE (JustWatch / TMDb) =====
+const _watchProvidersCache = new Map();
+let _currentWatchProviderRequestId = 0;
+
+async function fetchWatchProvidersChile(tmdbId, isTv) {
+    if (!tmdbId) return null;
+    const cacheKey = `${isTv ? 'tv' : 'movie'}_${tmdbId}`;
+    const cached = _watchProvidersCache.get(cacheKey);
+    if (cached && (Date.now() - cached.t < 30 * 60 * 1000)) {
+        return cached.data;
+    }
+    const endpoint = `/${isTv ? 'tv' : 'movie'}/${tmdbId}/watch/providers`;
+    try {
+        const json = await fetchFromTMDb(endpoint);
+        const clData = json && json.results && json.results.CL ? json.results.CL : null;
+        _watchProvidersCache.set(cacheKey, { t: Date.now(), data: clData });
+        return clData;
+    } catch (e) {
+        return null;
+    }
+}
+
+async function renderDetailWatchProviders(tmdbId, isTv) {
+    const section = document.getElementById('detailWatchProvidersSection');
+    const list = document.getElementById('detailWatchProvidersList');
+    if (!section || !list) return;
+
+    if (!tmdbId) {
+        section.classList.add('hidden');
+        list.innerHTML = '';
+        return;
+    }
+
+    const reqId = ++_currentWatchProviderRequestId;
+    section.classList.remove('hidden');
+    list.innerHTML = `
+        <div class="flex items-center gap-2 py-1 text-stone-400 dark:text-stone-500 italic text-xs font-mono">
+            <i class="fa-solid fa-spinner fa-spin text-rose-800 dark:text-rose-400"></i>
+            <span>Consultando catálogo de Chile...</span>
+        </div>`;
+
+    const data = await fetchWatchProvidersChile(tmdbId, isTv);
+    if (reqId !== _currentWatchProviderRequestId) return; // Solicitud obsoleta
+
+    const flatrate = (data && Array.isArray(data.flatrate)) ? data.flatrate : [];
+    const free = (data && Array.isArray(data.free)) ? data.free : [];
+    const ads = (data && Array.isArray(data.ads)) ? data.ads : [];
+    const rent = (data && Array.isArray(data.rent)) ? data.rent : [];
+    const buy = (data && Array.isArray(data.buy)) ? data.buy : [];
+
+    const streamProviders = [...flatrate, ...free, ...ads];
+    const seen = new Set();
+    const uniqueStream = streamProviders.filter(p => {
+        if (!p || !p.provider_id || seen.has(p.provider_id)) return false;
+        seen.add(p.provider_id);
+        return true;
+    });
+
+    if (uniqueStream.length === 0 && rent.length === 0 && buy.length === 0) {
+        list.innerHTML = `
+            <div class="p-2 bg-stone-100 dark:bg-stone-950 journal-border text-stone-500 text-[11px] leading-relaxed">
+                <span>No figura en streaming por suscripción en Chile actualmente.</span>
+                ${data && data.link ? `<a href="${data.link}" target="_blank" rel="noopener noreferrer" class="ml-1 text-rose-800 dark:text-rose-400 hover:underline inline-flex items-center gap-1 font-bold">Ver opciones en JustWatch <i class="fa-solid fa-arrow-up-right-from-square text-[9px]"></i></a>` : ''}
+            </div>`;
+        return;
+    }
+
+    let html = '';
+
+    if (uniqueStream.length > 0) {
+        html += `
+            <div class="space-y-1">
+                <span class="text-[10px] uppercase font-bold text-stone-600 dark:text-stone-400 tracking-wider">Streaming (Suscripción):</span>
+                <div class="flex flex-wrap gap-1.5 pt-0.5">
+                    ${uniqueStream.map(p => `
+                        <div class="inline-flex items-center gap-1.5 px-2 py-1 bg-stone-100 dark:bg-stone-950 hover:bg-stone-200 dark:hover:bg-stone-800 journal-border transition" title="${_pmEsc(p.provider_name)}">
+                            ${p.logo_path ? `<img src="https://image.tmdb.org/t/p/w92${p.logo_path}" alt="${_pmEsc(p.provider_name)}" class="w-4 h-4 rounded object-cover shadow-xs flex-shrink-0">` : '<i class="fa-solid fa-tv text-rose-800 text-[10px]"></i>'}
+                            <span class="text-[11px] font-bold text-stone-800 dark:text-stone-200">${_pmEsc(p.provider_name)}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>`;
+    }
+
+    const rentBuy = [...rent, ...buy].filter(p => {
+        if (!p || !p.provider_id || seen.has(p.provider_id)) return false;
+        seen.add(p.provider_id);
+        return true;
+    });
+
+    if (rentBuy.length > 0) {
+        html += `
+            <div class="pt-1 text-[10px] text-stone-500 dark:text-stone-400">
+                <span class="font-bold text-stone-600 dark:text-stone-300">Alquiler / Compra:</span>
+                <span class="ml-1">${rentBuy.map(p => _pmEsc(p.provider_name)).slice(0, 4).join(', ')}${rentBuy.length > 4 ? ` (+${rentBuy.length - 4})` : ''}</span>
+            </div>`;
+    }
+
+    if (data && data.link) {
+        html += `
+            <div class="pt-0.5 text-right">
+                <a href="${data.link}" target="_blank" rel="noopener noreferrer" class="text-[10px] text-rose-800 dark:text-rose-400 hover:underline inline-flex items-center gap-1 font-mono">
+                    <span>Más opciones y precios en JustWatch</span>
+                    <i class="fa-solid fa-arrow-up-right-from-square text-[8px]"></i>
+                </a>
+            </div>`;
+    }
+
+    list.innerHTML = html;
+}
+
+// ===== EXPORTAR TARJETA EDITORIAL / FANZINE (CANVAS) =====
+const _exportCardState = {
+    movie: null,
+    review: null,
+    format: 'story', // 'story' (9:16) | 'feed' (4:5)
+    theme: 'dark',   // 'dark' (Noir) | 'light' (Pergamino)
+    blob: null,
+    dataUrl: null
+};
+
+async function _loadCorsImage(rawUrl) {
+    if (!rawUrl) return null;
+    if (rawUrl.startsWith('data:') || rawUrl.startsWith('blob:')) {
+        return new Promise((resolve) => {
+            const el = new Image();
+            el.onload = () => resolve(el);
+            el.onerror = () => resolve(null);
+            el.src = rawUrl;
+        });
+    }
+
+    const candidates = [];
+    // 1. Endpoint Vercel Serverless propio con cabecera Access-Control-Allow-Origin: *
+    candidates.push(`/api/image?url=${encodeURIComponent(rawUrl)}`);
+    // 2. Global CORS image cache (Cloudflare weserv)
+    candidates.push(`https://images.weserv.nl/?url=${encodeURIComponent(rawUrl)}`);
+    // 3. Intento directo con anonymous CORS
+    candidates.push(rawUrl);
+
+    for (const testUrl of candidates) {
+        try {
+            const img = await new Promise((resolve) => {
+                const el = new Image();
+                el.crossOrigin = 'anonymous';
+                let resolved = false;
+                const timer = setTimeout(() => {
+                    if (!resolved) { resolved = true; resolve(null); }
+                }, 4500);
+                el.onload = () => {
+                    if (!resolved) {
+                        resolved = true;
+                        clearTimeout(timer);
+                        resolve(el);
+                    }
+                };
+                el.onerror = () => {
+                    if (!resolved) {
+                        resolved = true;
+                        clearTimeout(timer);
+                        resolve(null);
+                    }
+                };
+                el.src = testUrl;
+            });
+            if (img && img.naturalWidth > 0) return img;
+        } catch {}
+    }
+    return null;
+}
+
+function _formatCardRating(review, movie) {
+    let raw = null;
+    if (review && review.rating != null && review.rating !== '' && Number(review.rating) > 0) {
+        raw = Number(review.rating);
+    } else if (movie && movie.rating != null && movie.rating !== '' && movie.rating !== 'N/A' && Number(movie.rating) > 0) {
+        raw = Number(movie.rating);
+    }
+
+    if (raw == null || isNaN(raw) || raw <= 0) return null;
+
+    // CineZine usa escala de 0 a 10
+    const scoreOutOf10 = raw;
+    const stars5 = Math.min(5, Math.max(0, scoreOutOf10 / 2));
+
+    let starsStr = '';
+    for (let s = 1; s <= 5; s++) {
+        if (stars5 >= s) {
+            starsStr += '★ ';
+        } else if (stars5 >= s - 0.5) {
+            starsStr += '★ ';
+        } else {
+            starsStr += '☆ ';
+        }
+    }
+
+    return {
+        starsStr: starsStr.trim(),
+        scoreText: `${scoreOutOf10.toFixed(1)} / 10`
+    };
+}
+
+function _wrapCanvasText(ctx, text, maxWidth, maxLines = 4) {
+    if (!text) return [];
+    const words = String(text).replace(/\s+/g, ' ').trim().split(' ');
+    const lines = [];
+    let cur = '';
+
+    for (let i = 0; i < words.length; i++) {
+        const w = words[i];
+        const test = cur ? cur + ' ' + w : w;
+        if (ctx.measureText(test).width > maxWidth && cur) {
+            lines.push(cur);
+            cur = w;
+            if (lines.length === maxLines - 1) {
+                let last = cur;
+                i++;
+                while (i < words.length && ctx.measureText(last + ' ' + words[i] + '...').width <= maxWidth) {
+                    last += ' ' + words[i];
+                    i++;
+                }
+                if (i < words.length) last += '...';
+                lines.push(last);
+                return lines;
+            }
+        } else {
+            cur = test;
+        }
+    }
+    if (cur && lines.length < maxLines) lines.push(cur);
+    return lines;
+}
+
+function _syncExportCardControls() {
+    const isStory = _exportCardState.format === 'story';
+    const isDark = _exportCardState.theme === 'dark';
+
+    const bStory = document.getElementById('exportFmtStory');
+    const bFeed = document.getElementById('exportFmtFeed');
+    const bDark = document.getElementById('exportThemeDark');
+    const bLight = document.getElementById('exportThemeLight');
+
+    const activeCls = ['bg-rose-900', 'text-stone-100', 'font-bold'];
+    const inactiveCls = ['bg-stone-200', 'dark:bg-stone-800', 'text-stone-700', 'dark:text-stone-300', 'font-normal'];
+
+    if (bStory && bFeed) {
+        if (isStory) {
+            bStory.classList.add(...activeCls); bStory.classList.remove(...inactiveCls);
+            bFeed.classList.remove(...activeCls); bFeed.classList.add(...inactiveCls);
+        } else {
+            bFeed.classList.add(...activeCls); bFeed.classList.remove(...inactiveCls);
+            bStory.classList.remove(...activeCls); bStory.classList.add(...inactiveCls);
+        }
+    }
+
+    if (bDark && bLight) {
+        if (isDark) {
+            bDark.classList.add(...activeCls); bDark.classList.remove(...inactiveCls);
+            bLight.classList.remove(...activeCls); bLight.classList.add(...inactiveCls);
+        } else {
+            bLight.classList.add(...activeCls); bLight.classList.remove(...inactiveCls);
+            bDark.classList.remove(...activeCls); bDark.classList.add(...inactiveCls);
+        }
+    }
+}
+
+function setExportCardFormat(fmt) {
+    if (_exportCardState.format === fmt) return;
+    _exportCardState.format = fmt;
+    _syncExportCardControls();
+    generateExportCardCanvas();
+}
+
+function setExportCardTheme(th) {
+    if (_exportCardState.theme === th) return;
+    _exportCardState.theme = th;
+    _syncExportCardControls();
+    generateExportCardCanvas();
+}
+
+function closeExportCardModal() {
+    const modal = document.getElementById('exportCardModal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function openExportCardModalFromDetail(optionalMovie) {
+    if (optionalMovie) currentDetailMovie = optionalMovie;
+    if (!currentDetailMovie) {
+        showToast('Abre la ficha de una película o serie primero.', 'info');
+        return;
+    }
+
+    const isEpisode = _detailTvState.isTv && _detailTvState.viewMode === 'episode';
+    const targetId = isEpisode ? _detailTvState.activeReviewId : currentDetailMovie.id;
+    const baseMovie = isEpisode ? (_detailTvState.activeReviewMovieObj || currentDetailMovie) : currentDetailMovie;
+    const pReview = personalReviews[targetId] || null;
+
+    _exportCardState.movie = {
+        ...baseMovie,
+        isEpisode,
+        seasonNumber: isEpisode ? _detailTvState.selectedSeason : null,
+        episodeNumber: isEpisode ? _detailTvState.selectedEpisode : null,
+        episodeName: isEpisode ? _detailTvState.selectedEpisodeName : null,
+        poster: isEpisode ? (_detailTvState.selectedEpisodePoster || baseMovie.poster) : baseMovie.poster
+    };
+
+    _exportCardState.review = pReview ? {
+        reviewTitle: pReview.reviewTitle || '',
+        review: pReview.review || '',
+        rating: pReview.rating,
+        author: currentUsername || 'CineZine',
+        avatarSeed: currentUserAvatarSeed || currentUsername,
+        date: new Date(pReview.updatedAt || pReview.createdAt || Date.now()).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' })
+    } : null;
+
+    _exportCardState.format = _exportCardState.format || 'story';
+    _exportCardState.theme = _exportCardState.theme || 'dark';
+    _syncExportCardControls();
+
+    const modal = document.getElementById('exportCardModal');
+    if (modal) modal.classList.remove('hidden');
+
+    generateExportCardCanvas();
+}
+
+function openExportCardModalFromPost(postId) {
+    const post = (typeof findPost === 'function' ? findPost(postId) : null)
+        || ((window.muralPosts || []).find(p => p.id === postId))
+        || (window._extraPosts && window._extraPosts[postId])
+        || null;
+
+    if (!post) {
+        showToast('No se encontró la publicación para exportar.', 'error');
+        return;
+    }
+
+    const movie = (typeof _resolveViewerMovie === 'function' ? _resolveViewerMovie(post) : null)
+        || post.movieObj
+        || { title: post.movieTitle || post.title || 'Obra', poster: post.poster || POSTER_FALLBACK };
+
+    _exportCardState.movie = movie;
+    _exportCardState.review = {
+        reviewTitle: post.reviewTitle || '',
+        review: post.content || post.review || '',
+        rating: post.rating != null ? post.rating : null,
+        author: post.author || 'CineZine',
+        authorUid: post.authorUid || '',
+        avatarSeed: post.avatarSeed || post.author,
+        date: post.date || new Date(post.createdAt || Date.now()).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' })
+    };
+
+    _exportCardState.format = _exportCardState.format || 'story';
+    _exportCardState.theme = _exportCardState.theme || 'dark';
+    _syncExportCardControls();
+
+    const modal = document.getElementById('exportCardModal');
+    if (modal) modal.classList.remove('hidden');
+
+    generateExportCardCanvas();
+}
+
+async function generateExportCardCanvas() {
+    const modal = document.getElementById('exportCardModal');
+    const loadingEl = document.getElementById('exportCardLoading');
+    const previewImg = document.getElementById('exportCardPreviewImg');
+    if (!modal || modal.classList.contains('hidden')) return;
+
+    if (loadingEl) loadingEl.classList.remove('hidden');
+    if (previewImg) previewImg.classList.add('hidden');
+
+    if (document.fonts && document.fonts.ready) {
+        try { await document.fonts.ready; } catch {}
+    }
+
+    const movie = _exportCardState.movie || currentDetailMovie || {};
+    const review = _exportCardState.review || null;
+    const isStory = _exportCardState.format === 'story';
+    const isDark = _exportCardState.theme === 'dark';
+
+    const W = 1080;
+    const H = isStory ? 1920 : 1350;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Paleta editorial
+    const bg = isDark ? '#121110' : '#f5f0e4';
+    const textCol = isDark ? '#f7f4ed' : '#1c1917';
+    const textMuted = isDark ? '#a8a29e' : '#78716c';
+    const accentRed = isDark ? '#dc2626' : '#991b1b';
+    const borderCol = isDark ? '#332d28' : '#cfc5b4';
+    const boxBg = isDark ? 'rgba(255, 255, 255, 0.035)' : 'rgba(0, 0, 0, 0.035)';
+    const starCol = isDark ? '#f59e0b' : '#d97706';
+
+    // 1. Fondo base y textura de grano
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.fillStyle = isDark ? 'rgba(255,255,255,0.018)' : 'rgba(0,0,0,0.018)';
+    for (let i = 0; i < 4500; i++) {
+        ctx.fillRect(Math.random() * W, Math.random() * H, Math.random() * 2 + 0.5, Math.random() * 2 + 0.5);
+    }
+
+    // 2. Bordes dobles de diario
+    const outerPad = isStory ? 36 : 30;
+    const innerPad = outerPad + 12;
+
+    ctx.strokeStyle = borderCol;
+    ctx.lineWidth = 4;
+    ctx.strokeRect(outerPad, outerPad, W - outerPad * 2, H - outerPad * 2);
+
+    ctx.strokeStyle = accentRed;
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(innerPad, innerPad, W - innerPad * 2, H - innerPad * 2);
+
+    // Esquinas decorativas
+    ctx.fillStyle = accentRed;
+    [
+        [innerPad, innerPad],
+        [W - innerPad, innerPad],
+        [innerPad, H - innerPad],
+        [W - innerPad, H - innerPad]
+    ].forEach(([cx, cy]) => {
+        ctx.fillRect(cx - 4, cy - 4, 8, 8);
+    });
+
+    // 3. Cabecera editorial (Masthead)
+    const headY = isStory ? 92 : 78;
+    ctx.fillStyle = accentRed;
+    ctx.font = "bold 20px 'Space Mono', monospace";
+    ctx.textAlign = 'center';
+    ctx.fillText("★  C I N E Z I N E  ·  D I A R I O   C I N É F I L O  ★", W / 2, headY);
+
+    const ruleY = headY + 22;
+    ctx.strokeStyle = borderCol;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(outerPad + 40, ruleY);
+    ctx.lineTo(W - (outerPad + 40), ruleY);
+    ctx.stroke();
+
+    // 4. Cargar imágenes (con proxy / weserv cascade)
+    let posterUrl = null;
+    if (movie.poster) {
+        posterUrl = movie.poster.startsWith('http') ? movie.poster : `https://image.tmdb.org/t/p/w780${movie.poster}`;
+    }
+    const authorAvatarSeed = (review && review.avatarSeed) || currentUserAvatarSeed || currentUsername || 'cine';
+    const authorName = (review && review.author) || currentUsername || 'CineZine';
+    const avatarUrl = `https://api.dicebear.com/7.x/bottts-neutral/png?seed=${encodeURIComponent(authorAvatarSeed)}`;
+
+    const [posterImg, avatarImg] = await Promise.all([
+        _loadCorsImage(posterUrl),
+        _loadCorsImage(avatarUrl)
+    ]);
+
+    // 5. Dimensiones y colocación del Póster
+    const isWide = !!(movie.isEpisode || (posterImg && posterImg.naturalWidth / posterImg.naturalHeight > 1.2));
+    let pw, ph, px, py;
+
+    if (isStory) {
+        if (isWide) {
+            pw = 860; ph = 484; px = (W - pw) / 2; py = 150;
+        } else {
+            pw = 520; ph = 780; px = (W - pw) / 2; py = 150;
+        }
+    } else {
+        // Post 4:5 (1080x1350)
+        if (isWide) {
+            pw = 760; ph = 428; px = (W - pw) / 2; py = 130;
+        } else {
+            pw = 420; ph = 630; px = (W - pw) / 2; py = 125;
+        }
+    }
+
+    if (posterImg) {
+        ctx.save();
+        ctx.shadowColor = 'rgba(0,0,0,0.55)';
+        ctx.shadowBlur = 24;
+        ctx.shadowOffsetY = 8;
+        ctx.drawImage(posterImg, px, py, pw, ph);
+        ctx.restore();
+
+        ctx.strokeStyle = borderCol;
+        ctx.lineWidth = 3;
+        ctx.strokeRect(px, py, pw, ph);
+    } else {
+        ctx.fillStyle = boxBg;
+        ctx.fillRect(px, py, pw, ph);
+        ctx.strokeStyle = borderCol;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(px, py, pw, ph);
+        ctx.fillStyle = textMuted;
+        ctx.font = "italic 32px Georgia, serif";
+        ctx.textAlign = 'center';
+        ctx.fillText(movie.title || 'CineZine', W / 2, py + ph / 2);
+    }
+
+    // 6. Metadata y Título
+    let curY = py + ph + (isStory ? 40 : 28);
+
+    let tag = '';
+    if (movie.isEpisode) {
+        tag = `SERIE TV · T${movie.seasonNumber || 1}:E${movie.episodeNumber || 1}`;
+    } else {
+        const parsed = _parseMediaId(movie.id);
+        const yStr = movie.year ? String(movie.year) : '';
+        tag = (parsed.isTv ? 'SERIE TV' : 'PELÍCULA') + (yStr ? ` · ${yStr}` : '');
+    }
+
+    ctx.fillStyle = accentRed;
+    ctx.font = "bold 18px 'Space Mono', monospace";
+    ctx.textAlign = 'center';
+    ctx.fillText(tag.toUpperCase(), W / 2, curY);
+    curY += (isStory ? 44 : 34);
+
+    const titleText = movie.isEpisode && movie.episodeName ? `${movie.title}: ${movie.episodeName}` : (movie.title || 'Sin título');
+    ctx.fillStyle = textCol;
+    ctx.font = `bold ${isStory ? 46 : 38}px 'Playfair Display', Georgia, serif`;
+    ctx.textAlign = 'center';
+    const titleLines = _wrapCanvasText(ctx, titleText, 900, 2);
+    titleLines.forEach(l => {
+        ctx.fillText(l, W / 2, curY);
+        curY += (isStory ? 50 : 42);
+    });
+
+    // 7. Calificación (Estrellas + Calificación / 10)
+    const ratingObj = _formatCardRating(review, movie);
+    if (ratingObj) {
+        ctx.fillStyle = starCol;
+        ctx.font = `${isStory ? 28 : 24}px 'Playfair Display', Georgia, serif`;
+        ctx.textAlign = 'center';
+        ctx.fillText(`${ratingObj.starsStr}   ${ratingObj.scoreText}`, W / 2, curY);
+        curY += (isStory ? 40 : 30);
+    }
+
+    // 8. Caja de Apunte / Reseña / Cita Editorial
+    const footerTop = H - (isStory ? 120 : 105);
+    const boxX = 80;
+    const boxW = W - 160;
+
+    const headline = (review && review.reviewTitle) ? review.reviewTitle.trim() : '';
+    const quoteBody = (review && review.review) ? review.review.trim() : (movie.overview || 'Una obra seleccionada en el diario cinéfilo CineZine.');
+
+    // Medir altura requerida de texto para no dejar vacío desproporcionado
+    ctx.font = `italic ${isStory ? 22 : 19}px Georgia, serif`;
+    const quoteLines = _wrapCanvasText(ctx, headline ? quoteBody : `“${quoteBody}”`, boxW - 80, isStory ? 5 : 3);
+    const textLinesHeight = quoteLines.length * (isStory ? 32 : 26);
+    const headlineHeight = headline ? 36 : 0;
+    const requiredBoxHeight = headlineHeight + textLinesHeight + (isStory ? 60 : 45);
+
+    const availableSpace = Math.max(100, footerTop - curY - 20);
+    const actualBoxH = Math.min(availableSpace, Math.max(isStory ? 130 : 110, requiredBoxHeight));
+    
+    // Centrar la caja verticalmente en el espacio disponible restante
+    const boxY = curY + Math.max(10, (availableSpace - actualBoxH) / 2);
+
+    ctx.fillStyle = boxBg;
+    ctx.fillRect(boxX, boxY, boxW, actualBoxH);
+    ctx.strokeStyle = borderCol;
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(boxX, boxY, boxW, actualBoxH);
+
+    // Pequeñas esquinas decorativas en la caja de cita
+    ctx.fillStyle = accentRed;
+    [[boxX, boxY], [boxX + boxW, boxY], [boxX, boxY + actualBoxH], [boxX + boxW, boxY + actualBoxH]].forEach(([kx, ky]) => {
+        ctx.fillRect(kx - 3, ky - 3, 6, 6);
+    });
+
+    let qy = boxY + (headline ? (isStory ? 38 : 32) : (isStory ? 45 : 38));
+    if (headline) {
+        ctx.fillStyle = accentRed;
+        ctx.font = `bold ${isStory ? 24 : 20}px 'Playfair Display', Georgia, serif`;
+        ctx.textAlign = 'center';
+        ctx.fillText(`“${headline}”`, W / 2, qy);
+        qy += (isStory ? 34 : 28);
+    }
+
+    ctx.fillStyle = textCol;
+    ctx.font = `italic ${isStory ? 22 : 18}px Georgia, serif`;
+    ctx.textAlign = 'center';
+    quoteLines.forEach(l => {
+        ctx.fillText(l, W / 2, qy);
+        qy += (isStory ? 32 : 26);
+    });
+
+    // 9. Pie de página (Autor + Sello de autenticidad)
+    const footLineY = H - (isStory ? 110 : 96);
+    ctx.strokeStyle = borderCol;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(outerPad + 40, footLineY);
+    ctx.lineTo(W - (outerPad + 40), footLineY);
+    ctx.stroke();
+
+    const avatarCenterY = footLineY + (isStory ? 45 : 42);
+    if (avatarImg) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(outerPad + 60, avatarCenterY, 22, 0, Math.PI * 2);
+        ctx.closePath();
+        ctx.clip();
+        ctx.drawImage(avatarImg, outerPad + 38, avatarCenterY - 22, 44, 44);
+        ctx.restore();
+        ctx.strokeStyle = accentRed;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(outerPad + 60, avatarCenterY, 23, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+
+    const textLeftX = avatarImg ? outerPad + 95 : outerPad + 50;
+    ctx.textAlign = 'left';
+    ctx.fillStyle = textCol;
+    ctx.font = "bold 15px 'Space Mono', monospace";
+    ctx.fillText(`CRÍTICA POR ${authorName.toUpperCase()}`, textLeftX, avatarCenterY - 6);
+
+    const dateStr = (review && review.date) || new Date().toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' });
+    ctx.fillStyle = textMuted;
+    ctx.font = "12px 'Space Mono', monospace";
+    ctx.fillText(dateStr.toUpperCase(), textLeftX, avatarCenterY + 12);
+
+    ctx.textAlign = 'right';
+    ctx.fillStyle = accentRed;
+    ctx.font = "bold 15px 'Space Mono', monospace";
+    ctx.fillText("CINEZINE · ARCHIVO", W - (outerPad + 50), avatarCenterY - 6);
+
+    ctx.fillStyle = textMuted;
+    ctx.font = "12px 'Space Mono', monospace";
+    ctx.fillText("cinezine.vercel.app", W - (outerPad + 50), avatarCenterY + 12);
+
+    // 10. Generar Blob y DataURL
+    try {
+        const dataUrl = canvas.toDataURL('image/png');
+        _exportCardState.dataUrl = dataUrl;
+        canvas.toBlob((blob) => {
+            _exportCardState.blob = blob;
+        }, 'image/png');
+
+        if (previewImg) {
+            previewImg.src = dataUrl;
+            previewImg.classList.remove('hidden');
+        }
+    } catch (taintErr) {
+        _exportCardState.blob = null;
+        _exportCardState.dataUrl = null;
+        showToast('No se pudo generar la vista previa debido a restricciones de seguridad de imagen.', 'error');
+    } finally {
+        if (loadingEl) loadingEl.classList.add('hidden');
+    }
+}
+
+function downloadExportCard() {
+    if (!_exportCardState.dataUrl) {
+        showToast('Generando tarjeta, espera un momento...', 'info');
+        return;
+    }
+    const movie = _exportCardState.movie || {};
+    const title = (movie.title || 'obra').replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase();
+    const cleanFileName = `cinezine-${title}-${_exportCardState.format}-${_exportCardState.theme}.png`;
+
+    const a = document.createElement('a');
+    a.href = _exportCardState.dataUrl;
+    a.download = cleanFileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    showToast('Tarjeta fanzine descargada ✓', 'ok');
+}
+
+async function shareExportCard() {
+    if (!_exportCardState.blob) {
+        if (_exportCardState.dataUrl) {
+            downloadExportCard();
+            showToast('Imagen descargada. ¡Lista para compartir en WhatsApp o Instagram Stories! 📱', 'ok');
+            return;
+        }
+        showToast('Generando tarjeta, espera un momento...', 'info');
+        return;
+    }
+
+    const movie = _exportCardState.movie || {};
+    const title = movie.title || 'CineZine';
+    const cleanTitle = (title).replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase();
+    const fileName = `cinezine-${cleanTitle}.png`;
+
+    try {
+        const file = new File([_exportCardState.blob], fileName, { type: 'image/png' });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            await navigator.share({
+                title: `${title} · CineZine`,
+                text: `Mi crítica de ${title} en CineZine`,
+                files: [file]
+            });
+            showToast('¡Tarjeta compartida! ✓', 'ok');
+            return;
+        }
+    } catch (err) {
+        if (err && err.name === 'AbortError') return;
+    }
+
+    // Fallback: descargar directamente
+    downloadExportCard();
+    showToast('Imagen descargada. ¡Lista para compartir en WhatsApp o Instagram Stories! 📱', 'ok');
 }
 
 function showWinnerModal(movie) {
@@ -4221,6 +4942,7 @@ window.onload = async () => {
     makeModalDraggable('smartPublishModal', 'smartPublishHeader');
     makeModalDraggable('winnerModal', 'winnerModalHeader');
     makeModalDraggable('settingsModal', 'settingsHeader');
+    makeModalDraggable('exportCardModal', 'exportCardHeader');
 
     const resultsGridEl = document.getElementById('resultsGrid');
     if (resultsGridEl) {
@@ -4993,12 +5715,14 @@ document.addEventListener('click', (e) => {
         'avatarWordModal',
         'muralPostModal',
         'userProfileModal',
-        'customConfirmModal'
+        'customConfirmModal',
+        'exportCardModal'
     ];
 
     if (modalIds.includes(e.target.id)) {
         if (e.target.id === 'smartPublishModal') closeSmartPublishModal();
         else if (e.target.id === 'muralPostModal') closeMuralPostModal();
+        else if (e.target.id === 'exportCardModal') closeExportCardModal();
         else e.target.classList.add('hidden');
     }
 });
