@@ -2449,7 +2449,11 @@ document.addEventListener('click', (e) => {
 // ===== FIN MURO COMPARTIDO =====
 
 // ===== VARIABLES GLOBALES Y ESTADO PRINCIPAL =====
-const TMDB_PROXY_URL = window.CINE_TMDB_PROXY || 'https://cinezine.vercel.app/api/tmdb';
+const TMDB_PROXY_URL = window.CINE_TMDB_PROXY || (
+    (typeof location !== 'undefined' && /\.vercel\.app$/i.test(location.hostname))
+        ? '/api/tmdb'
+        : 'https://cinezine.vercel.app/api/tmdb'
+);
 let _catalogInitialized = false;
 let _oscarsInitialized = false;
 let _rouletteSeeded = false;
