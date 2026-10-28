@@ -3,7 +3,7 @@
 //   Nombre: TMDB_BEARER_TOKEN
 //   Valor:  (tu Read Access Token v4 de TMDb)
 
-const ALLOWED_ENDPOINT_RE = /^\/(movie\/\d+|search\/movie|discover\/movie)(\?[^\s#]*)?$/;
+const ALLOWED_ENDPOINT_RE = /^\/(movie\/\d+|tv\/\d+(\/season\/\d+(\/episode\/\d+)?)?|search\/(movie|tv|multi)|discover\/(movie|tv))(\?[^\s#]*)?$/;
 const DEFAULT_ORIGIN_RE = /^https:\/\/(cinezine(-[a-z0-9-]+)?\.vercel\.app|donilaa\.github\.io)$/i;
 
 export default async function handler(req, res) {
