@@ -3884,9 +3884,10 @@ function closeExportCardModal() {
     if (modal) modal.classList.add('hidden');
 }
 
-function openExportCardModalFromDetail() {
+function openExportCardModalFromDetail(optionalMovie) {
+    if (optionalMovie) currentDetailMovie = optionalMovie;
     if (!currentDetailMovie) {
-        showToast('No hay ninguna obra seleccionada.', 'info');
+        showToast('Abre la ficha de una película o serie primero.', 'info');
         return;
     }
 
@@ -3924,7 +3925,8 @@ function openExportCardModalFromDetail() {
 }
 
 function openExportCardModalFromPost(postId) {
-    const post = (Array.isArray(allPosts) ? allPosts.find(p => p.id === postId) : null)
+    const post = (typeof findPost === 'function' ? findPost(postId) : null)
+        || ((window.muralPosts || []).find(p => p.id === postId))
         || (window._extraPosts && window._extraPosts[postId])
         || null;
 
@@ -3935,7 +3937,7 @@ function openExportCardModalFromPost(postId) {
 
     const movie = (typeof _resolveViewerMovie === 'function' ? _resolveViewerMovie(post) : null)
         || post.movieObj
-        || { title: post.movieTitle || 'Obra', poster: post.poster || POSTER_FALLBACK };
+        || { title: post.movieTitle || post.title || 'Obra', poster: post.poster || POSTER_FALLBACK };
 
     _exportCardState.movie = movie;
     _exportCardState.review = {
