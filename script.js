@@ -4111,7 +4111,7 @@ async function generateExportCardCanvas() {
         posterUrl = movie.poster.startsWith('http') ? movie.poster : `https://image.tmdb.org/t/p/w780${movie.poster}`;
     }
     const authorAvatarSeed = (review && review.avatarSeed) || currentUserAvatarSeed || currentUsername || 'cine';
-    const authorName = (review && review.author) || currentUsername || 'Dani & Mauri';
+    const authorName = (review && review.author) || currentUsername || 'CineZine';
     const avatarUrl = `https://api.dicebear.com/7.x/bottts-neutral/png?seed=${encodeURIComponent(authorAvatarSeed)}`;
 
     const [posterImg, avatarImg] = await Promise.all([
