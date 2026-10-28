@@ -697,6 +697,17 @@
                             <div id="detailOverview" class="text-xs font-serif text-stone-700 dark:text-stone-300 bg-stone-100 dark:bg-stone-950 p-3 journal-border h-auto max-h-56 overflow-y-auto custom-scrollbar leading-relaxed">
                                 Sinopsis no disponible.</div>
                         </div>
+
+                        <!-- Plataformas de streaming en Chile (JustWatch / TMDb) -->
+                        <div id="detailWatchProvidersSection" class="hidden space-y-1.5 border-t border-stone-200 dark:border-stone-800 pt-2">
+                            <div class="flex items-center justify-between">
+                                <h4 class="text-xs font-heading font-bold uppercase tracking-wider flex items-center space-x-1.5 text-rose-800 dark:text-rose-400">
+                                    <i class="fa-solid fa-play text-xs"></i><span>Dónde verla en Chile</span>
+                                </h4>
+                                <span class="text-[9px] font-mono text-stone-400">vía JustWatch</span>
+                            </div>
+                            <div id="detailWatchProvidersList" class="space-y-1.5 text-xs font-mono"></div>
+                        </div>
     
                         <div class="space-y-2 border-t border-stone-200 dark:border-stone-800 pt-2">
                             <h4 class="text-xs font-heading font-bold uppercase tracking-wider flex items-center space-x-1.5 text-amber-700 dark:text-amber-500">
@@ -778,6 +789,7 @@
                                 </label>
                                 <div class="flex items-center space-x-2 w-full sm:w-auto justify-end">
                                     <span id="saveStatusIndicator" class="text-[11px] font-mono text-emerald-600 dark:text-emerald-400 hidden"><i class="fa-solid fa-check mr-1"></i>Guardado</span>
+                                    <button type="button" id="detailExportCardBtn" onclick="openExportCardModalFromDetail()" class="py-1.5 px-2.5 bg-stone-200 dark:bg-stone-800 hover:bg-stone-300 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 journal-border text-xs font-mono transition uppercase tracking-wider cursor-pointer flex items-center gap-1.5" title="Exportar tarjeta fanzine para compartir"><i class="fa-solid fa-share-nodes text-rose-800 dark:text-rose-400"></i><span>Tarjeta</span></button>
                                     <button type="button" id="deletePersonalReviewBtn" onclick="deletePersonalReviewFromDetail()" class="hidden py-1.5 px-2.5 bg-rose-950/90 hover:bg-rose-900 text-rose-200 journal-border text-xs font-mono transition uppercase tracking-wider cursor-pointer" title="Eliminar este apunte"><i class="fa-solid fa-trash-can mr-1"></i>Borrar</button>
                                     <button onclick="savePersonalReview()" class="py-1.5 px-3 bg-stone-800 hover:bg-stone-700 dark:bg-stone-800 text-stone-100 journal-border text-xs font-mono font-semibold transition uppercase tracking-wider cursor-pointer">Guardar apunte</button>
                                 </div>
@@ -798,6 +810,52 @@
         </div>
     </div>
     
+    <!-- Modal de exportación de tarjeta fanzine / editorial -->
+    <div id="exportCardModal" class="fixed inset-0 bg-stone-950/85 backdrop-blur-sm z-[280] hidden flex items-center justify-center p-3 sm:p-4">
+        <div class="bg-stone-50 dark:bg-stone-900 journal-border rounded-none w-full max-w-lg p-5 text-left relative shadow-2xl draggable-modal-content flex flex-col max-h-[92vh]">
+            <div id="exportCardHeader" class="modal-header-drag flex items-center justify-between border-b border-stone-300 dark:border-stone-800 pb-2 mb-3 flex-shrink-0">
+                <span class="text-xs font-mono text-stone-500 uppercase tracking-widest flex items-center gap-2">
+                    <i class="fa-solid fa-stamp text-rose-800 dark:text-rose-400"></i> Tarjeta editorial para compartir
+                </span>
+                <button onclick="closeExportCardModal()" class="text-stone-400 hover:text-stone-800 dark:hover:text-white text-lg p-1 transition cursor-pointer">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Controles de formato y tema -->
+            <div class="flex flex-wrap items-center justify-between gap-2 p-2 bg-stone-100 dark:bg-stone-950 journal-border text-xs font-mono flex-shrink-0">
+                <div class="flex items-center gap-1.5">
+                    <span class="text-[10px] uppercase text-stone-500 font-bold">Formato:</span>
+                    <button type="button" id="exportFmtStory" onclick="setExportCardFormat('story')" class="px-2 py-0.5 bg-rose-900 text-stone-100 font-bold journal-border transition cursor-pointer text-[10px]">📱 Historia (9:16)</button>
+                    <button type="button" id="exportFmtFeed" onclick="setExportCardFormat('feed')" class="px-2 py-0.5 bg-stone-200 dark:bg-stone-800 text-stone-700 dark:text-stone-300 journal-border transition cursor-pointer text-[10px]">📷 Post (4:5)</button>
+                </div>
+                <div class="flex items-center gap-1.5">
+                    <span class="text-[10px] uppercase text-stone-500 font-bold">Estilo:</span>
+                    <button type="button" id="exportThemeDark" onclick="setExportCardTheme('dark')" class="px-2 py-0.5 bg-rose-900 text-stone-100 font-bold journal-border transition cursor-pointer text-[10px]">🌑 Noir</button>
+                    <button type="button" id="exportThemeLight" onclick="setExportCardTheme('light')" class="px-2 py-0.5 bg-stone-200 dark:bg-stone-800 text-stone-700 dark:text-stone-300 journal-border transition cursor-pointer text-[10px]">📜 Pergamino</button>
+                </div>
+            </div>
+
+            <!-- Vista previa de la tarjeta generada en Canvas -->
+            <div class="my-3 flex-grow min-h-0 flex items-center justify-center overflow-auto bg-stone-200/50 dark:bg-stone-950 p-2 sm:p-3 journal-border">
+                <div id="exportCardLoading" class="text-xs font-mono text-stone-500 flex items-center gap-2">
+                    <i class="fa-solid fa-spinner fa-spin text-rose-800"></i> Generando tarjeta fanzine...
+                </div>
+                <img id="exportCardPreviewImg" src="" alt="Vista previa de tarjeta" class="max-h-[50vh] w-auto journal-border shadow-2xl hidden object-contain">
+            </div>
+
+            <!-- Botones de descarga y compartir -->
+            <div class="grid grid-cols-2 gap-2 pt-2 border-t border-stone-200 dark:border-stone-800 font-mono text-xs flex-shrink-0">
+                <button type="button" onclick="downloadExportCard()" class="py-2.5 bg-stone-200 dark:bg-stone-800 hover:bg-stone-300 dark:hover:bg-stone-700 text-stone-900 dark:text-stone-100 font-bold journal-border transition uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer">
+                    <i class="fa-solid fa-download"></i><span>Descargar PNG</span>
+                </button>
+                <button type="button" onclick="shareExportCard()" class="py-2.5 bg-rose-900 hover:bg-rose-800 text-stone-100 font-bold journal-border transition uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer">
+                    <i class="fa-solid fa-share-nodes"></i><span>Compartir</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal de ganador -->
     <div id="winnerModal" class="fixed inset-0 bg-stone-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
         <div class="bg-stone-50 dark:bg-stone-900 journal-border rounded-none max-w-xl w-full p-6 space-y-4 text-center relative shadow-2xl draggable-modal-content">
