@@ -2852,6 +2852,7 @@ let _detailTvState = {
     tmdbId: 0,
     baseId: '',
     baseSeriesObj: null,
+    seriesTag: '',
     seasons: [],
     totalEpisodes: 0,
     selectedSeason: 1,
@@ -2859,6 +2860,8 @@ let _detailTvState = {
     selectedEpisodeName: '',
     selectedEpisodePoster: '',
     currentSeasonEpisodes: [],
+    viewMode: 'series', // 'series' | 'season' | 'episode'
+    activeTab: 'seasons', // 'seasons' | 'review'
     activeScope: 'series', // 'series' | 'season' | 'episode'
     activeReviewId: null,
     activeReviewMovieObj: null
@@ -2887,6 +2890,71 @@ function _loadReviewFieldsForTarget(targetId) {
     }
 }
 
+function _setDetailPosterLayout(isWidescreen) {
+    const headerCard = document.getElementById('detailHeaderCard');
+    const posterWrap = document.getElementById('detailPosterWrap');
+    const posterImg = document.getElementById('detailPoster');
+    if (!headerCard || !posterWrap || !posterImg) return;
+
+    if (isWidescreen) {
+        headerCard.className = "flex flex-col space-y-2.5 bg-stone-100 dark:bg-stone-950 p-2.5 journal-border";
+        posterWrap.className = "relative w-full";
+        posterImg.className = "w-full aspect-video object-cover journal-border shadow-md bg-stone-900";
+    } else {
+        headerCard.className = "flex items-start space-x-3 bg-stone-100 dark:bg-stone-950 p-2.5 journal-border";
+        posterWrap.className = "relative flex-shrink-0";
+        posterImg.className = "w-28 h-40 object-cover journal-border shadow-md";
+    }
+}
+
+function _updateEpisodeWatchedBtnUI(seasonNum, epNum) {
+    const btn = document.getElementById('detailWatchedBtn');
+    if (!btn || !_detailTvState.isTv) return;
+    const baseId = _detailTvState.baseId;
+    const code = `S${Number(seasonNum)}E${Number(epNum)}`;
+    const isWatched = Array.isArray(watchedEpisodes[baseId]) && watchedEpisodes[baseId].includes(code);
+    if (isWatched) {
+        btn.className = "absolute top-2 right-2 bg-emerald-800 text-stone-100 px-2 py-1.5 journal-border text-xs font-mono transition shadow-md cursor-pointer flex items-center gap-1";
+        btn.innerHTML = `<i class="fa-solid fa-eye"></i><span class="text-[10px]">Visto</span>`;
+        btn.title = "Capítulo visto (clic para desmarcar)";
+    } else {
+        btn.className = "absolute top-2 right-2 bg-stone-900/85 hover:bg-rose-900 text-stone-100 px-2 py-1.5 journal-border text-xs font-mono transition shadow-md cursor-pointer flex items-center gap-1";
+        btn.innerHTML = `<i class="fa-regular fa-eye-slash"></i><span class="text-[10px]">Marcar visto</span>`;
+        btn.title = "Marcar este capítulo como visto";
+    }
+}
+
+function switchDetailSeriesTab(tab) {
+    if (!_detailTvState.isTv) return;
+    _detailTvState.activeTab = tab === 'review' ? 'review' : 'seasons';
+
+    const btnSeasons = document.getElementById('detailTabBtnSeasons');
+    const btnReview = document.getElementById('detailTabBtnReview');
+    const seasonsPanel = document.getElementById('detailTvSeasonsSection');
+    const reviewPanel = document.getElementById('detailReviewPanel');
+
+    const activeCls = "py-2 px-3 bg-rose-900 text-stone-100 font-bold uppercase tracking-wider journal-border transition cursor-pointer flex items-center justify-center gap-1.5";
+    const inactiveCls = "py-2 px-3 bg-stone-100 dark:bg-stone-900 text-stone-700 dark:text-stone-300 hover:bg-stone-300 dark:hover:bg-stone-800 uppercase tracking-wider journal-border transition cursor-pointer flex items-center justify-center gap-1.5";
+
+    if (btnSeasons) btnSeasons.className = _detailTvState.activeTab === 'seasons' ? activeCls : inactiveCls;
+    if (btnReview) btnReview.className = _detailTvState.activeTab === 'review' ? activeCls : inactiveCls;
+
+    if (_detailTvState.activeTab === 'seasons') {
+        if (seasonsPanel) {
+            seasonsPanel.classList.remove('hidden');
+            seasonsPanel.classList.add('flex');
+        }
+        if (reviewPanel) reviewPanel.classList.add('hidden');
+    } else {
+        if (seasonsPanel) {
+            seasonsPanel.classList.add('hidden');
+            seasonsPanel.classList.remove('flex');
+        }
+        if (reviewPanel) reviewPanel.classList.remove('hidden');
+        selectTvReviewScope('series');
+    }
+}
+
 function selectTvReviewScope(scope, seasonNum, epNum, epName, epPoster) {
     if (!_detailTvState.isTv || !currentDetailMovie) return;
     if (seasonNum != null) _detailTvState.selectedSeason = Number(seasonNum);
@@ -2903,13 +2971,15 @@ function selectTvReviewScope(scope, seasonNum, epNum, epName, epPoster) {
 
     let targetId = _detailTvState.baseId;
     let scopeLabel = '';
-    let scopeBadgeText = '📺 Serie completa';
+    let scopeBadgeText = `📺 ${base.title} (Serie completa)`;
+    let boxHeading = 'Bitácora y calificación de la serie';
     let posterToUse = base.poster;
 
     if (scope === 'season') {
         targetId = `${_detailTvState.baseId}_s${sNum}`;
         scopeLabel = `Temporada ${sNum}`;
-        scopeBadgeText = `📂 Temporada ${sNum}`;
+        scopeBadgeText = `📂 ${base.title} · Temporada ${sNum}`;
+        boxHeading = `Bitácora y calificación · Temporada ${sNum}`;
         const sObj = (_detailTvState.seasons || []).find(s => Number(s.season_number) === Number(sNum));
         if (sObj && sObj.poster_path) posterToUse = `https://image.tmdb.org/t/p/w500${sObj.poster_path}`;
     } else if (scope === 'episode') {
@@ -2917,6 +2987,7 @@ function selectTvReviewScope(scope, seasonNum, epNum, epName, epPoster) {
         const epTitleShort = _detailTvState.selectedEpisodeName ? `: ${_detailTvState.selectedEpisodeName}` : '';
         scopeLabel = `T${sNum}·E${eNum}${epTitleShort}`.slice(0, 90);
         scopeBadgeText = `🎬 ${scopeLabel}`;
+        boxHeading = `Bitácora y calificación · Capítulo ${eNum}`;
         if (_detailTvState.selectedEpisodePoster) posterToUse = _detailTvState.selectedEpisodePoster;
     }
 
@@ -2931,30 +3002,282 @@ function selectTvReviewScope(scope, seasonNum, epNum, epName, epPoster) {
 
     const lbl = document.getElementById('detailReviewScopeLabel');
     if (lbl) lbl.textContent = scopeBadgeText;
-
-    const btnSeries = document.getElementById('scopeBtnSeries');
-    const btnSeason = document.getElementById('scopeBtnSeason');
-    const btnEpisode = document.getElementById('scopeBtnEpisode');
-    const onCls = 'px-2 py-0.5 journal-border bg-rose-900 text-stone-100 font-bold cursor-pointer transition';
-    const offCls = 'px-2 py-0.5 journal-border bg-stone-200 dark:bg-stone-800 text-stone-700 dark:text-stone-300 cursor-pointer transition';
-
-    if (btnSeries) btnSeries.className = scope === 'series' ? onCls : offCls;
-    if (btnSeason) {
-        btnSeason.textContent = `📂 Temporada ${sNum}`;
-        btnSeason.className = scope === 'season' ? onCls : offCls;
-    }
-    if (btnEpisode) {
-        if (_detailTvState.selectedEpisode != null) {
-            btnEpisode.classList.remove('hidden');
-            btnEpisode.textContent = `🎬 T${sNum}·E${eNum}`;
-            btnEpisode.className = scope === 'episode' ? onCls : offCls;
-        } else {
-            btnEpisode.classList.add('hidden');
-        }
-    }
+    const headingEl = document.getElementById('detailReviewBoxHeading');
+    if (headingEl) headingEl.textContent = boxHeading;
 
     _loadReviewFieldsForTarget(targetId);
     renderDetailPublicReviews(_detailTvState.activeReviewMovieObj);
+}
+
+function openEpisodeDetailView(seasonNum, epNum) {
+    if (!_detailTvState.isTv) return;
+    const sNum = Number(seasonNum || _detailTvState.selectedSeason || 1);
+    const eNum = Number(epNum || 1);
+    const base = _detailTvState.baseSeriesObj || currentDetailMovie;
+    const eps = _detailTvState.currentSeasonEpisodes || [];
+    const ep = eps.find(x => Number(x.episode_number) === eNum) || {
+        episode_number: eNum,
+        name: _detailTvState.selectedEpisodeName || `Capítulo ${eNum}`,
+        overview: 'Sin descripción disponible para este capítulo.',
+        vote_average: 0,
+        runtime: null,
+        air_date: '',
+        still_path: ''
+    };
+
+    _detailTvState.viewMode = 'episode';
+    _detailTvState.selectedSeason = sNum;
+    _detailTvState.selectedEpisode = eNum;
+    _detailTvState.selectedEpisodeName = ep.name || `Capítulo ${eNum}`;
+    const stillHigh = ep.still_path ? `https://image.tmdb.org/t/p/w780${ep.still_path}` : (base.poster || POSTER_FALLBACK);
+    const stillForPost = ep.still_path ? `https://image.tmdb.org/t/p/w500${ep.still_path}` : (base.poster || '');
+    _detailTvState.selectedEpisodePoster = stillForPost;
+
+    // 1. Mostrar barra superior de navegación de capítulo («← Volver a la serie» + Anterior / Siguiente)
+    const headerModalTitle = document.getElementById('detailHeaderModalTitle');
+    if (headerModalTitle) headerModalTitle.textContent = `Ficha de capítulo · ${base.title}`;
+
+    const navBar = document.getElementById('detailSubViewNavBar');
+    if (navBar) navBar.classList.remove('hidden');
+    const backLbl = document.getElementById('detailBackToSeriesLabel');
+    if (backLbl) backLbl.textContent = `Volver a ${base.title} (Temp. ${sNum})`;
+    const epNavControls = document.getElementById('detailEpisodeNavControls');
+    if (epNavControls) epNavControls.classList.remove('hidden');
+
+    const curIdx = eps.findIndex(x => Number(x.episode_number) === eNum);
+    const prevBtn = document.getElementById('detailPrevEpBtn');
+    const nextBtn = document.getElementById('detailNextEpBtn');
+    const epCounter = document.getElementById('detailEpCounterLabel');
+    if (prevBtn) prevBtn.disabled = curIdx <= 0;
+    if (nextBtn) nextBtn.disabled = curIdx === -1 || curIdx >= eps.length - 1;
+    if (epCounter) epCounter.textContent = eps.length ? `Cap. ${eNum} de ${eps.length}` : `Cap. ${eNum}`;
+
+    // 2. Transformar columna izquierda en la Ficha exclusiva del Capítulo (con imagen panorámica 16:9)
+    _setDetailPosterLayout(true);
+    const detailPoster = document.getElementById('detailPoster');
+    if (detailPoster) detailPoster.src = stillHigh;
+
+    const watchedBtn = document.getElementById('detailWatchedBtn');
+    if (watchedBtn) {
+        watchedBtn.onclick = () => {
+            toggleEpisodeWatched(sNum, eNum);
+            _updateEpisodeWatchedBtnUI(sNum, eNum);
+        };
+        _updateEpisodeWatchedBtnUI(sNum, eNum);
+    }
+
+    const detailTag = document.getElementById('detailTag');
+    if (detailTag) detailTag.textContent = `${base.title} · Temporada ${sNum} · Cap. ${eNum}`;
+
+    const detailTitle = document.getElementById('detailTitle');
+    if (detailTitle) detailTitle.textContent = `E${eNum} · ${ep.name || 'Capítulo ' + eNum}`;
+
+    const detailSubtitle = document.getElementById('detailSubtitle');
+    if (detailSubtitle) detailSubtitle.classList.add('hidden');
+
+    const detailRating = document.getElementById('detailRating');
+    if (detailRating) {
+        const rVal = ep.vote_average ? Number(ep.vote_average).toFixed(1) : (base.rating || 'N/A');
+        detailRating.innerHTML = `<i class="fa-solid fa-star mr-1"></i>${rVal}`;
+    }
+
+    const detailVotes = document.getElementById('detailVotes');
+    if (detailVotes) {
+        detailVotes.innerHTML = ep.runtime
+            ? `<i class="fa-regular fa-clock mr-1"></i>${ep.runtime} min`
+            : `<i class="fa-solid fa-tv mr-1"></i>Temp. ${sNum}`;
+    }
+
+    const detailYear = document.getElementById('detailYear');
+    if (detailYear) {
+        detailYear.textContent = ep.air_date ? `Emisión: ${ep.air_date}` : `Año: ${base.year || 'N/A'}`;
+    }
+
+    const tvMeta = document.getElementById('detailTvMeta');
+    if (tvMeta) tvMeta.classList.add('hidden');
+    const progBox = document.getElementById('detailTvProgressBox');
+    if (progBox) progBox.classList.add('hidden');
+
+    const overviewLabel = document.getElementById('detailOverviewLabel');
+    if (overviewLabel) overviewLabel.textContent = `Sinopsis del capítulo ${eNum}`;
+    const detailOverview = document.getElementById('detailOverview');
+    if (detailOverview) {
+        detailOverview.innerText = ep.overview || 'Sin descripción disponible para este capítulo.';
+    }
+
+    const pubReviewsTitle = document.getElementById('detailPublicReviewsTitle');
+    if (pubReviewsTitle) pubReviewsTitle.textContent = `Comentarios sobre este capítulo`;
+
+    // 3. Mostrar directamente la Bitácora a la derecha (como en las películas)
+    const tabsBar = document.getElementById('detailSeriesTabsBar');
+    if (tabsBar) tabsBar.classList.add('hidden');
+    const seasonsPanel = document.getElementById('detailTvSeasonsSection');
+    if (seasonsPanel) {
+        seasonsPanel.classList.add('hidden');
+        seasonsPanel.classList.remove('flex');
+    }
+    const reviewPanel = document.getElementById('detailReviewPanel');
+    if (reviewPanel) reviewPanel.classList.remove('hidden');
+
+    selectTvReviewScope('episode', sNum, eNum, ep.name || `Capítulo ${eNum}`, stillForPost);
+}
+
+function openSeasonDetailView(seasonNum) {
+    if (!_detailTvState.isTv) return;
+    const sNum = Number(seasonNum || _detailTvState.selectedSeason || 1);
+    const base = _detailTvState.baseSeriesObj || currentDetailMovie;
+    const sObj = (_detailTvState.seasons || []).find(s => Number(s.season_number) === sNum);
+
+    _detailTvState.viewMode = 'season';
+    _detailTvState.selectedSeason = sNum;
+
+    const headerModalTitle = document.getElementById('detailHeaderModalTitle');
+    if (headerModalTitle) headerModalTitle.textContent = `Ficha de temporada · ${base.title}`;
+
+    const navBar = document.getElementById('detailSubViewNavBar');
+    if (navBar) navBar.classList.remove('hidden');
+    const backLbl = document.getElementById('detailBackToSeriesLabel');
+    if (backLbl) backLbl.textContent = `Volver a ${base.title}`;
+    const epNavControls = document.getElementById('detailEpisodeNavControls');
+    if (epNavControls) epNavControls.classList.add('hidden');
+
+    _setDetailPosterLayout(false);
+    const sPoster = (sObj && sObj.poster_path) ? `https://image.tmdb.org/t/p/w500${sObj.poster_path}` : safePoster(base.poster);
+    const detailPoster = document.getElementById('detailPoster');
+    if (detailPoster) detailPoster.src = sPoster;
+
+    const watchedBtn = document.getElementById('detailWatchedBtn');
+    if (watchedBtn) {
+        watchedBtn.onclick = () => toggleCurrentSeasonWatched();
+        updateWatchedBtnUI(base.id);
+    }
+
+    const detailTag = document.getElementById('detailTag');
+    if (detailTag) detailTag.textContent = `${base.title} · Temporada ${sNum}`;
+
+    const detailTitle = document.getElementById('detailTitle');
+    if (detailTitle) detailTitle.textContent = (sObj && sObj.name) ? `${sObj.name}` : `Temporada ${sNum}`;
+
+    const detailSubtitle = document.getElementById('detailSubtitle');
+    if (detailSubtitle) {
+        detailSubtitle.textContent = base.title;
+        detailSubtitle.classList.remove('hidden');
+    }
+
+    const detailRating = document.getElementById('detailRating');
+    if (detailRating) detailRating.innerHTML = `<i class="fa-solid fa-star mr-1"></i>${base.rating || 'N/A'}`;
+
+    const detailVotes = document.getElementById('detailVotes');
+    if (detailVotes) {
+        const epCnt = (sObj && sObj.episode_count) || _detailTvState.currentSeasonEpisodes.length || '?';
+        detailVotes.innerHTML = `<i class="fa-solid fa-film mr-1"></i>${epCnt} capítulos`;
+    }
+
+    const detailYear = document.getElementById('detailYear');
+    if (detailYear) {
+        const sYear = (sObj && sObj.air_date) ? sObj.air_date.split('-')[0] : (base.year || 'N/A');
+        detailYear.textContent = `Año: ${sYear}`;
+    }
+
+    const overviewLabel = document.getElementById('detailOverviewLabel');
+    if (overviewLabel) overviewLabel.textContent = `Sinopsis de la Temporada ${sNum}`;
+    const detailOverview = document.getElementById('detailOverview');
+    if (detailOverview) {
+        detailOverview.innerText = (sObj && sObj.overview) || base.overview || 'Sin descripción disponible.';
+    }
+
+    const pubReviewsTitle = document.getElementById('detailPublicReviewsTitle');
+    if (pubReviewsTitle) pubReviewsTitle.textContent = `Comentarios sobre la Temporada ${sNum}`;
+
+    const tabsBar = document.getElementById('detailSeriesTabsBar');
+    if (tabsBar) tabsBar.classList.add('hidden');
+    const seasonsPanel = document.getElementById('detailTvSeasonsSection');
+    if (seasonsPanel) {
+        seasonsPanel.classList.add('hidden');
+        seasonsPanel.classList.remove('flex');
+    }
+    const reviewPanel = document.getElementById('detailReviewPanel');
+    if (reviewPanel) reviewPanel.classList.remove('hidden');
+
+    selectTvReviewScope('season', sNum);
+}
+
+function navigateDetailEpisode(delta) {
+    if (!_detailTvState.isTv || _detailTvState.viewMode !== 'episode') return;
+    const eps = _detailTvState.currentSeasonEpisodes || [];
+    const curIdx = eps.findIndex(x => Number(x.episode_number) === Number(_detailTvState.selectedEpisode));
+    if (curIdx === -1) return;
+    const nextEp = eps[curIdx + delta];
+    if (!nextEp) return;
+    openEpisodeDetailView(_detailTvState.selectedSeason, nextEp.episode_number);
+}
+
+function returnToSeriesOverview(targetTab) {
+    if (!_detailTvState.isTv) return;
+    const base = _detailTvState.baseSeriesObj || currentDetailMovie;
+    _detailTvState.viewMode = 'series';
+
+    const headerModalTitle = document.getElementById('detailHeaderModalTitle');
+    if (headerModalTitle) headerModalTitle.textContent = 'Ventana de detalle';
+
+    const navBar = document.getElementById('detailSubViewNavBar');
+    if (navBar) navBar.classList.add('hidden');
+
+    _setDetailPosterLayout(false);
+    const detailPoster = document.getElementById('detailPoster');
+    if (detailPoster) detailPoster.src = safePoster(base.poster);
+
+    const watchedBtn = document.getElementById('detailWatchedBtn');
+    if (watchedBtn) {
+        watchedBtn.onclick = () => toggleWatchedStatus(_detailTvState.baseId);
+        updateWatchedBtnUI(_detailTvState.baseId);
+    }
+
+    const detailTag = document.getElementById('detailTag');
+    if (detailTag) detailTag.textContent = _detailTvState.seriesTag || 'Ficha de serie TV';
+
+    const detailTitle = document.getElementById('detailTitle');
+    if (detailTitle) detailTitle.textContent = base.title || '';
+
+    const detailSubtitle = document.getElementById('detailSubtitle');
+    if (detailSubtitle) {
+        if (base.subtitle && base.subtitle.trim() !== '' && base.subtitle !== base.title) {
+            detailSubtitle.textContent = base.subtitle;
+            detailSubtitle.classList.remove('hidden');
+        } else {
+            detailSubtitle.classList.add('hidden');
+        }
+    }
+
+    const detailRating = document.getElementById('detailRating');
+    if (detailRating) detailRating.innerHTML = `<i class="fa-solid fa-star mr-1"></i>${base.rating || 'N/A'}`;
+
+    const detailVotes = document.getElementById('detailVotes');
+    if (detailVotes) detailVotes.innerHTML = `<i class="fa-solid fa-users mr-1"></i>${base.votes || 0} votos`;
+
+    const detailYear = document.getElementById('detailYear');
+    if (detailYear) detailYear.textContent = `Año: ${base.year || 'N/A'}`;
+
+    const tvMeta = document.getElementById('detailTvMeta');
+    if (tvMeta) tvMeta.classList.remove('hidden');
+    const progBox = document.getElementById('detailTvProgressBox');
+    if (progBox) progBox.classList.remove('hidden');
+
+    const overviewLabel = document.getElementById('detailOverviewLabel');
+    if (overviewLabel) overviewLabel.textContent = 'Sinopsis editorial';
+    const detailOverview = document.getElementById('detailOverview');
+    if (detailOverview) detailOverview.innerText = base.overview || 'Sin descripción disponible.';
+
+    const pubReviewsTitle = document.getElementById('detailPublicReviewsTitle');
+    if (pubReviewsTitle) pubReviewsTitle.textContent = 'Comentarios del diario mural';
+
+    const tabsBar = document.getElementById('detailSeriesTabsBar');
+    if (tabsBar) tabsBar.classList.remove('hidden');
+
+    _updateTvProgressUI();
+    _renderDetailEpisodesList();
+    selectTvReviewScope('series');
+    switchDetailSeriesTab(targetTab || 'seasons');
 }
 
 function _updateTvProgressUI() {
@@ -2969,9 +3292,16 @@ function _updateTvProgressUI() {
     const bar = document.getElementById('detailTvProgressBar');
     if (bar) bar.style.width = `${pct}%`;
 
+    const sNum = _detailTvState.selectedSeason;
+    const reviewSeasonBtn = document.getElementById('detailReviewSeasonBtn');
+    if (reviewSeasonBtn) {
+        const sId = `${baseId}_s${sNum}`;
+        const hasSeasonReview = !!(personalReviews[sId] && (personalReviews[sId].review || personalReviews[sId].rating));
+        reviewSeasonBtn.innerHTML = `<i class="fa-solid fa-feather-pointed mr-1"></i>${hasSeasonReview ? `Tu reseña T${sNum}` : `Reseñar T${sNum}`}`;
+    }
+
     const markSeasonBtn = document.getElementById('detailMarkSeasonBtn');
     if (markSeasonBtn && _detailTvState.currentSeasonEpisodes.length) {
-        const sNum = _detailTvState.selectedSeason;
         const allSeasonWatched = _detailTvState.currentSeasonEpisodes.every(ep =>
             watchedArr.includes(`S${sNum}E${ep.episode_number}`)
         );
@@ -2979,8 +3309,8 @@ function _updateTvProgressUI() {
             ? `<i class="fa-solid fa-rotate-left mr-1"></i>Desmarcar T${sNum}`
             : `<i class="fa-solid fa-check-double mr-1"></i>T${sNum} vista`;
         markSeasonBtn.className = allSeasonWatched
-            ? 'px-2 py-1 bg-emerald-800 text-stone-100 text-[10px] font-mono uppercase journal-border transition cursor-pointer'
-            : 'px-2 py-1 bg-stone-200 dark:bg-stone-800 hover:bg-emerald-900 hover:text-stone-100 text-[10px] font-mono uppercase journal-border transition cursor-pointer';
+            ? 'px-2.5 py-1.5 bg-emerald-800 text-stone-100 text-[10px] font-mono uppercase journal-border transition cursor-pointer'
+            : 'px-2.5 py-1.5 bg-stone-200 dark:bg-stone-800 hover:bg-emerald-900 hover:text-stone-100 text-[10px] font-mono uppercase journal-border transition cursor-pointer';
     }
 }
 
@@ -3000,6 +3330,9 @@ function toggleEpisodeWatched(seasonNum, epNum) {
     }
     _updateTvProgressUI();
     _renderDetailEpisodesList();
+    if (_detailTvState.viewMode === 'episode' && Number(_detailTvState.selectedSeason) === Number(seasonNum) && Number(_detailTvState.selectedEpisode) === Number(epNum)) {
+        _updateEpisodeWatchedBtnUI(seasonNum, epNum);
+    }
     renderResultsGrid();
 }
 
@@ -3031,7 +3364,7 @@ function _renderDetailEpisodesList() {
     if (!listEl) return;
     const eps = _detailTvState.currentSeasonEpisodes || [];
     if (!eps.length) {
-        listEl.innerHTML = `<p class="text-[11px] font-serif italic text-stone-400 text-center py-3">No hay información de episodios para esta temporada.</p>`;
+        listEl.innerHTML = `<p class="text-[11px] font-serif italic text-stone-400 text-center py-4">No hay información de episodios para esta temporada.</p>`;
         return;
     }
     const baseId = _detailTvState.baseId;
@@ -3043,32 +3376,36 @@ function _renderDetailEpisodesList() {
         const code = `S${sNum}E${epNum}`;
         const isWatched = watchedArr.includes(code);
         const epId = `${baseId}_s${sNum}_e${epNum}`;
-        const hasMyReview = !!(personalReviews[epId] && (personalReviews[epId].review || personalReviews[epId].rating));
+        const myRev = personalReviews[epId];
+        const hasMyReview = !!(myRev && (myRev.review || myRev.rating));
+        const myRatingBadge = (myRev && myRev.rating)
+            ? `<span class="text-rose-700 dark:text-rose-400 font-bold"><i class="fa-solid fa-feather-pointed mr-0.5"></i>${Number(myRev.rating).toFixed(1)} (Tú)</span>`
+            : '';
         const stillUrl = ep.still_path ? `https://image.tmdb.org/t/p/w300${ep.still_path}` : '';
-        const epPosterForReview = ep.still_path ? `https://image.tmdb.org/t/p/w500${ep.still_path}` : ((_detailTvState.baseSeriesObj && _detailTvState.baseSeriesObj.poster) || '');
         const ratingStr = ep.vote_average ? Number(ep.vote_average).toFixed(1) : '';
         const runtimeStr = ep.runtime ? `${ep.runtime} min` : '';
         const dateStr = ep.air_date ? ep.air_date.split('-')[0] : '';
 
         return `
-            <div class="p-2 bg-stone-100 dark:bg-stone-950 journal-border flex items-start gap-2.5 transition ${isWatched ? 'opacity-75 border-l-2 border-l-emerald-600' : ''}">
-                <button type="button" onclick="toggleEpisodeWatched(${sNum}, ${epNum})" title="${isWatched ? 'Capítulo visto (clic para desmarcar)' : 'Marcar capítulo como visto'}" class="mt-0.5 w-6 h-6 flex-shrink-0 flex items-center justify-center journal-border text-[10px] transition cursor-pointer ${isWatched ? 'bg-emerald-800 text-stone-100' : 'bg-stone-200 dark:bg-stone-900 text-stone-400 hover:text-stone-800 dark:hover:text-stone-200'}">
+            <div onclick="openEpisodeDetailView(${sNum}, ${epNum})" class="p-2.5 bg-stone-50 dark:bg-stone-900 hover:border-rose-800 dark:hover:border-rose-500 journal-border flex items-start gap-3 transition cursor-pointer group ${isWatched ? 'opacity-80 border-l-2 border-l-emerald-600' : ''}">
+                <button type="button" onclick="event.stopPropagation(); toggleEpisodeWatched(${sNum}, ${epNum})" title="${isWatched ? 'Capítulo visto (clic para desmarcar)' : 'Marcar capítulo como visto'}" class="mt-0.5 w-7 h-7 flex-shrink-0 flex items-center justify-center journal-border text-xs transition cursor-pointer ${isWatched ? 'bg-emerald-800 text-stone-100' : 'bg-stone-200 dark:bg-stone-950 text-stone-400 hover:text-stone-800 dark:hover:text-stone-200'}">
                     <i class="fa-solid fa-check"></i>
                 </button>
-                ${stillUrl ? `<img src="${_pmEsc(stillUrl)}" loading="lazy" alt="" class="w-16 h-10 object-cover journal-border flex-shrink-0 bg-stone-800">` : `<div class="w-16 h-10 journal-border flex-shrink-0 bg-stone-200 dark:bg-stone-900 flex items-center justify-center text-stone-400 text-xs"><i class="fa-solid fa-tv"></i></div>`}
+                ${stillUrl ? `<img src="${_pmEsc(stillUrl)}" loading="lazy" alt="" class="w-24 h-14 object-cover journal-border flex-shrink-0 bg-stone-800 group-hover:opacity-95 transition">` : `<div class="w-24 h-14 journal-border flex-shrink-0 bg-stone-200 dark:bg-stone-950 flex items-center justify-center text-stone-400 text-sm"><i class="fa-solid fa-tv"></i></div>`}
                 <div class="flex-grow min-w-0">
-                    <div class="flex items-start justify-between gap-1">
-                        <span class="font-heading font-bold text-xs text-stone-900 dark:text-stone-100 leading-snug">E${epNum} · ${_pmEsc(ep.name || 'Capítulo ' + epNum)}</span>
-                        <button type="button" onclick="selectTvReviewScope('episode', ${sNum}, ${epNum}, '${_pmEsc((ep.name || '').replace(/'/g, "\\'"))}', '${_pmEsc(epPosterForReview)}'); document.getElementById('userPersonalReview')?.focus();" class="flex-shrink-0 px-1.5 py-0.5 text-[9px] font-mono uppercase journal-border cursor-pointer transition ${hasMyReview ? 'bg-rose-900 text-stone-100 font-bold' : 'bg-stone-200 dark:bg-stone-900 text-rose-800 dark:text-rose-400 hover:bg-rose-900 hover:text-stone-100'}" title="Calificar o reseñar este capítulo">
-                            <i class="fa-solid fa-feather-pointed mr-0.5"></i>${hasMyReview ? 'Edit. nota' : 'Reseñar'}
-                        </button>
+                    <div class="flex items-start justify-between gap-2">
+                        <span class="font-heading font-bold text-xs sm:text-[13px] text-stone-900 dark:text-stone-100 group-hover:text-rose-800 dark:group-hover:text-rose-400 transition leading-snug">E${epNum} · ${_pmEsc(ep.name || 'Capítulo ' + epNum)}</span>
+                        <span class="flex-shrink-0 px-2 py-0.5 text-[9px] font-mono uppercase journal-border transition ${hasMyReview ? 'bg-rose-900 text-stone-100 font-bold' : 'bg-stone-200/80 dark:bg-stone-950 text-rose-800 dark:text-rose-400 group-hover:bg-rose-900 group-hover:text-stone-100'}">
+                            <i class="fa-solid fa-feather-pointed mr-1"></i>${hasMyReview ? 'Ver tu reseña' : 'Ficha / Reseñar →'}
+                        </span>
                     </div>
-                    <div class="flex items-center gap-2 text-[10px] font-mono text-stone-500 mt-0.5">
+                    <div class="flex flex-wrap items-center gap-2 text-[10px] font-mono text-stone-500 mt-0.5">
                         ${ratingStr && ratingStr !== '0.0' ? `<span class="text-amber-600 dark:text-amber-400 font-bold"><i class="fa-solid fa-star mr-0.5"></i>${ratingStr}</span>` : ''}
                         ${runtimeStr ? `<span>${runtimeStr}</span>` : ''}
                         ${dateStr ? `<span>· ${dateStr}</span>` : ''}
+                        ${myRatingBadge}
                     </div>
-                    ${ep.overview ? `<p class="text-[11px] font-serif text-stone-600 dark:text-stone-400 mt-1 leading-snug line-clamp-2" title="${_pmEsc(ep.overview)}">${_pmEsc(ep.overview)}</p>` : ''}
+                    ${ep.overview ? `<p class="text-[11px] font-serif text-stone-600 dark:text-stone-400 mt-1 leading-snug line-clamp-2">${_pmEsc(ep.overview)}</p>` : ''}
                 </div>
             </div>
         `;
@@ -3095,7 +3432,7 @@ async function onDetailSeasonChange(seasonNum, preselectEpisodeNum) {
     }
 
     const listEl = document.getElementById('detailEpisodesList');
-    if (listEl) listEl.innerHTML = `<p class="text-[11px] font-mono text-stone-400 text-center py-4"><i class="fa-solid fa-spinner fa-spin mr-1.5"></i>Cargando capítulos de Temporada ${sNum}...</p>`;
+    if (listEl) listEl.innerHTML = `<p class="text-[11px] font-mono text-stone-400 text-center py-6"><i class="fa-solid fa-spinner fa-spin mr-1.5"></i>Cargando capítulos de Temporada ${sNum}...</p>`;
 
     const seasonData = await fetchTvSeasonDual(_detailTvState.tmdbId, sNum);
     if (!_detailTvState.isTv || _detailTvState.selectedSeason !== sNum) return;
@@ -3105,38 +3442,54 @@ async function onDetailSeasonChange(seasonNum, preselectEpisodeNum) {
     _renderDetailEpisodesList();
 
     if (preselectEpisodeNum != null) {
-        const epMatch = _detailTvState.currentSeasonEpisodes.find(e => Number(e.episode_number) === Number(preselectEpisodeNum));
-        const epPoster = epMatch && epMatch.still_path ? `https://image.tmdb.org/t/p/w500${epMatch.still_path}` : '';
-        selectTvReviewScope('episode', sNum, preselectEpisodeNum, epMatch ? epMatch.name : `Capítulo ${preselectEpisodeNum}`, epPoster);
-    } else if (_detailTvState.activeScope === 'season') {
-        selectTvReviewScope('season', sNum);
-    } else {
-        const btnSeason = document.getElementById('scopeBtnSeason');
-        if (btnSeason) btnSeason.textContent = `📂 Temporada ${sNum}`;
+        openEpisodeDetailView(sNum, preselectEpisodeNum);
+    } else if (_detailTvState.viewMode === 'season') {
+        openSeasonDetailView(sNum);
     }
 }
 
-async function _initDetailTvExplorer(movie, parsed) {
+async function _initDetailTvExplorer(movie, parsed, tag) {
     const tvSection = document.getElementById('detailTvSeasonsSection');
+    const tabsBar = document.getElementById('detailSeriesTabsBar');
+    const reviewPanel = document.getElementById('detailReviewPanel');
+    const navBar = document.getElementById('detailSubViewNavBar');
     const scopeBar = document.getElementById('detailReviewScopeBar');
     const tvMeta = document.getElementById('detailTvMeta');
+    const progBox = document.getElementById('detailTvProgressBox');
+    const headerModalTitle = document.getElementById('detailHeaderModalTitle');
+    const overviewLabel = document.getElementById('detailOverviewLabel');
+    const pubReviewsTitle = document.getElementById('detailPublicReviewsTitle');
+    const reviewHeading = document.getElementById('detailReviewBoxHeading');
+
+    _setDetailPosterLayout(false);
+    if (navBar) navBar.classList.add('hidden');
+    if (headerModalTitle) headerModalTitle.textContent = 'Ventana de detalle';
+    if (overviewLabel) overviewLabel.textContent = 'Sinopsis editorial';
+    if (pubReviewsTitle) pubReviewsTitle.textContent = 'Comentarios del diario mural';
+    if (reviewHeading) reviewHeading.textContent = 'Bitácora y calificación personal';
 
     if (!parsed.isTv || !parsed.tmdbId) {
         _detailTvState.isTv = false;
+        _detailTvState.viewMode = 'series';
         _detailTvState.activeReviewId = movie.id;
         _detailTvState.activeReviewMovieObj = movie;
-        if (tvSection) tvSection.classList.add('hidden');
+        if (tvSection) { tvSection.classList.add('hidden'); tvSection.classList.remove('flex'); }
+        if (tabsBar) tabsBar.classList.add('hidden');
+        if (reviewPanel) reviewPanel.classList.remove('hidden');
         if (scopeBar) scopeBar.classList.add('hidden');
         if (tvMeta) tvMeta.classList.add('hidden');
+        if (progBox) progBox.classList.add('hidden');
         return;
     }
 
     const baseSeries = { ...movie, id: parsed.baseId, mediaType: 'tv', scopeLabel: undefined };
+    const initialViewMode = parsed.episodeNumber ? 'episode' : (parsed.seasonNumber ? 'season' : 'series');
     _detailTvState = {
         isTv: true,
         tmdbId: parsed.tmdbId,
         baseId: parsed.baseId,
         baseSeriesObj: baseSeries,
+        seriesTag: tag || 'Ficha de serie TV',
         seasons: [],
         totalEpisodes: 0,
         selectedSeason: parsed.seasonNumber || 1,
@@ -3144,19 +3497,27 @@ async function _initDetailTvExplorer(movie, parsed) {
         selectedEpisodeName: '',
         selectedEpisodePoster: '',
         currentSeasonEpisodes: [],
-        activeScope: parsed.episodeNumber ? 'episode' : (parsed.seasonNumber ? 'season' : 'series'),
+        viewMode: initialViewMode,
+        activeTab: 'seasons',
+        activeScope: initialViewMode,
         activeReviewId: movie.id,
         activeReviewMovieObj: movie
     };
 
-    if (tvSection) tvSection.classList.remove('hidden');
     if (scopeBar) scopeBar.classList.remove('hidden');
+    if (progBox) progBox.classList.remove('hidden');
     if (tvMeta) {
         tvMeta.textContent = '📺 Serie de TV · Cargando temporadas...';
         tvMeta.classList.remove('hidden');
     }
+
+    if (initialViewMode === 'series') {
+        if (tabsBar) tabsBar.classList.remove('hidden');
+        switchDetailSeriesTab('seasons');
+    }
+
     const listEl = document.getElementById('detailEpisodesList');
-    if (listEl) listEl.innerHTML = `<p class="text-[11px] font-mono text-stone-400 text-center py-4"><i class="fa-solid fa-spinner fa-spin mr-1.5"></i>Cargando estructura de la serie...</p>`;
+    if (listEl) listEl.innerHTML = `<p class="text-[11px] font-mono text-stone-400 text-center py-6"><i class="fa-solid fa-spinner fa-spin mr-1.5"></i>Cargando temporadas y capítulos...</p>`;
 
     const details = await fetchDualLanguageMovie(`/tv/${parsed.tmdbId}`);
     if (!currentDetailMovie || _parseMediaId(currentDetailMovie.id).baseId !== parsed.baseId) return;
@@ -3167,15 +3528,15 @@ async function _initDetailTvExplorer(movie, parsed) {
         if (!_detailTvState.seasons.length && Array.isArray(details.seasons)) {
             _detailTvState.seasons = details.seasons;
         }
-        _detailTvState.totalEpisodes = Number(details.numberOfEpisodes) || _detailTvState.seasons.reduce((acc, s) => acc + (Number(s.episode_count) || 0), 0);
+        _detailTvState.totalEpisodes = Number(details.number_of_episodes || details.numberOfEpisodes) || _detailTvState.seasons.reduce((acc, s) => acc + (Number(s.episode_count) || 0), 0);
 
         if (tvMeta) {
-            const nS = details.numberOfSeasons || _detailTvState.seasons.length || 1;
+            const nS = details.number_of_seasons || details.numberOfSeasons || _detailTvState.seasons.length || 1;
             const nE = _detailTvState.totalEpisodes || '?';
             tvMeta.textContent = `📺 Serie TV · ${nS} temp. · ${nE} episodios`;
         }
         const detailOverview = document.getElementById('detailOverview');
-        if (detailOverview && (!movie.overview || movie.overview === 'Sin descripción' || movie.overview === 'Sin descripción disponible.') && details.overview) {
+        if (_detailTvState.viewMode === 'series' && detailOverview && (!movie.overview || movie.overview === 'Sin descripción' || movie.overview === 'Sin descripción disponible.') && details.overview) {
             detailOverview.innerText = details.overview;
         }
     }
@@ -3188,8 +3549,11 @@ async function _initDetailTvExplorer(movie, parsed) {
     }
 
     const initialSeason = parsed.seasonNumber || (_detailTvState.seasons[0] ? _detailTvState.seasons[0].season_number : 1);
-    selectTvReviewScope(_detailTvState.activeScope, initialSeason, parsed.episodeNumber);
+    selectTvReviewScope('series');
     await onDetailSeasonChange(initialSeason, parsed.episodeNumber);
+    if (!parsed.episodeNumber && parsed.seasonNumber) {
+        openSeasonDetailView(initialSeason);
+    }
 }
 
 function openDetailModal(movie, tag) {
@@ -3269,7 +3633,7 @@ function openDetailModal(movie, tag) {
     }
     renderDetailPublicReviews(movie);
     _loadReviewFieldsForTarget(movie.id);
-    _initDetailTvExplorer(movie, parsed);
+    _initDetailTvExplorer(movie, parsed, tag);
 
     const detailModal = document.getElementById('detailModal');
     if (detailModal) {
