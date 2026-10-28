@@ -3782,23 +3782,85 @@ const _exportCardState = {
     dataUrl: null
 };
 
-function _loadCorsImage(url) {
-    if (!url) return Promise.resolve(null);
-    return new Promise((resolve) => {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        let done = false;
-        const timer = setTimeout(() => {
-            if (!done) { done = true; resolve(null); }
-        }, 5000);
-        img.onload = () => {
-            if (!done) { done = true; clearTimeout(timer); resolve(img); }
-        };
-        img.onerror = () => {
-            if (!done) { done = true; clearTimeout(timer); resolve(null); }
-        };
-        img.src = url;
-    });
+async function _loadCorsImage(rawUrl) {
+    if (!rawUrl) return null;
+    if (rawUrl.startsWith('data:') || rawUrl.startsWith('blob:')) {
+        return new Promise((resolve) => {
+            const el = new Image();
+            el.onload = () => resolve(el);
+            el.onerror = () => resolve(null);
+            el.src = rawUrl;
+        });
+    }
+
+    const candidates = [];
+    // 1. Endpoint Vercel Serverless propio con cabecera Access-Control-Allow-Origin: *
+    candidates.push(`/api/image?url=${encodeURIComponent(rawUrl)}`);
+    // 2. Global CORS image cache (Cloudflare weserv)
+    candidates.push(`https://images.weserv.nl/?url=${encodeURIComponent(rawUrl)}`);
+    // 3. Intento directo con anonymous CORS
+    candidates.push(rawUrl);
+
+    for (const testUrl of candidates) {
+        try {
+            const img = await new Promise((resolve) => {
+                const el = new Image();
+                el.crossOrigin = 'anonymous';
+                let resolved = false;
+                const timer = setTimeout(() => {
+                    if (!resolved) { resolved = true; resolve(null); }
+                }, 4500);
+                el.onload = () => {
+                    if (!resolved) {
+                        resolved = true;
+                        clearTimeout(timer);
+                        resolve(el);
+                    }
+                };
+                el.onerror = () => {
+                    if (!resolved) {
+                        resolved = true;
+                        clearTimeout(timer);
+                        resolve(null);
+                    }
+                };
+                el.src = testUrl;
+            });
+            if (img && img.naturalWidth > 0) return img;
+        } catch {}
+    }
+    return null;
+}
+
+function _formatCardRating(review, movie) {
+    let raw = null;
+    if (review && review.rating != null && review.rating !== '' && Number(review.rating) > 0) {
+        raw = Number(review.rating);
+    } else if (movie && movie.rating != null && movie.rating !== '' && movie.rating !== 'N/A' && Number(movie.rating) > 0) {
+        raw = Number(movie.rating);
+    }
+
+    if (raw == null || isNaN(raw) || raw <= 0) return null;
+
+    // CineZine usa escala de 0 a 10
+    const scoreOutOf10 = raw;
+    const stars5 = Math.min(5, Math.max(0, scoreOutOf10 / 2));
+
+    let starsStr = '';
+    for (let s = 1; s <= 5; s++) {
+        if (stars5 >= s) {
+            starsStr += '★ ';
+        } else if (stars5 >= s - 0.5) {
+            starsStr += '★ ';
+        } else {
+            starsStr += '☆ ';
+        }
+    }
+
+    return {
+        starsStr: starsStr.trim(),
+        scoreText: `${scoreOutOf10.toFixed(1)} / 10`
+    };
 }
 
 function _wrapCanvasText(ctx, text, maxWidth, maxLines = 4) {
@@ -3969,6 +4031,10 @@ async function generateExportCardCanvas() {
     if (loadingEl) loadingEl.classList.remove('hidden');
     if (previewImg) previewImg.classList.add('hidden');
 
+    if (document.fonts && document.fonts.ready) {
+        try { await document.fonts.ready; } catch {}
+    }
+
     const movie = _exportCardState.movie || currentDetailMovie || {};
     const review = _exportCardState.review || null;
     const isStory = _exportCardState.format === 'story';
@@ -3983,85 +4049,98 @@ async function generateExportCardCanvas() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Colores de la paleta editorial
-    const bg = isDark ? '#141210' : '#f5f0e6';
-    const textCol = isDark ? '#f5f0e6' : '#1c1917';
+    // Paleta editorial
+    const bg = isDark ? '#121110' : '#f5f0e4';
+    const textCol = isDark ? '#f7f4ed' : '#1c1917';
     const textMuted = isDark ? '#a8a29e' : '#78716c';
     const accentRed = isDark ? '#dc2626' : '#991b1b';
-    const borderCol = isDark ? '#3d3731' : '#d4ccbe';
+    const borderCol = isDark ? '#332d28' : '#cfc5b4';
     const boxBg = isDark ? 'rgba(255, 255, 255, 0.035)' : 'rgba(0, 0, 0, 0.035)';
     const starCol = isDark ? '#f59e0b' : '#d97706';
 
-    // 1. Fondo base
+    // 1. Fondo base y textura de grano
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, W, H);
 
-    // 2. Grano sutil fanzine
-    ctx.fillStyle = isDark ? 'rgba(255,255,255,0.015)' : 'rgba(0,0,0,0.015)';
-    for (let i = 0; i < 4000; i++) {
+    ctx.fillStyle = isDark ? 'rgba(255,255,255,0.018)' : 'rgba(0,0,0,0.018)';
+    for (let i = 0; i < 4500; i++) {
         ctx.fillRect(Math.random() * W, Math.random() * H, Math.random() * 2 + 0.5, Math.random() * 2 + 0.5);
     }
 
-    // 3. Bordes dobles de diario
+    // 2. Bordes dobles de diario
+    const outerPad = isStory ? 36 : 30;
+    const innerPad = outerPad + 12;
+
     ctx.strokeStyle = borderCol;
     ctx.lineWidth = 4;
-    ctx.strokeRect(36, 36, W - 72, H - 72);
+    ctx.strokeRect(outerPad, outerPad, W - outerPad * 2, H - outerPad * 2);
 
     ctx.strokeStyle = accentRed;
     ctx.lineWidth = 1.5;
-    ctx.strokeRect(48, 48, W - 96, H - 96);
+    ctx.strokeRect(innerPad, innerPad, W - innerPad * 2, H - innerPad * 2);
 
     // Esquinas decorativas
     ctx.fillStyle = accentRed;
-    [[48, 48], [W - 48, 48], [48, H - 48], [W - 48, H - 48]].forEach(([cx, cy]) => {
+    [
+        [innerPad, innerPad],
+        [W - innerPad, innerPad],
+        [innerPad, H - innerPad],
+        [W - innerPad, H - innerPad]
+    ].forEach(([cx, cy]) => {
         ctx.fillRect(cx - 4, cy - 4, 8, 8);
     });
 
-    // 4. Cabecera editorial (Masthead)
+    // 3. Cabecera editorial (Masthead)
+    const headY = isStory ? 92 : 78;
     ctx.fillStyle = accentRed;
     ctx.font = "bold 20px 'Space Mono', monospace";
     ctx.textAlign = 'center';
-    ctx.fillText("★  C I N E Z I N E  ·  D I A R I O   C I N É F I L O  ★", W / 2, 95);
+    ctx.fillText("★  C I N E Z I N E  ·  D I A R I O   C I N É F I L O  ★", W / 2, headY);
 
+    const ruleY = headY + 22;
     ctx.strokeStyle = borderCol;
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(80, 118);
-    ctx.lineTo(W - 80, 118);
+    ctx.moveTo(outerPad + 40, ruleY);
+    ctx.lineTo(W - (outerPad + 40), ruleY);
     ctx.stroke();
 
-    // 5. Cargar imagen de poster / still y avatar en paralelo
-    const posterUrl = movie.poster ? (movie.poster.startsWith('http') ? movie.poster : `https://image.tmdb.org/t/p/w780${movie.poster}`) : null;
+    // 4. Cargar imágenes (con proxy / weserv cascade)
+    let posterUrl = null;
+    if (movie.poster) {
+        posterUrl = movie.poster.startsWith('http') ? movie.poster : `https://image.tmdb.org/t/p/w780${movie.poster}`;
+    }
     const authorAvatarSeed = (review && review.avatarSeed) || currentUserAvatarSeed || currentUsername || 'cine';
     const authorName = (review && review.author) || currentUsername || 'Dani & Mauri';
-    const avatarUrl = `https://api.dicebear.com/7.x/bottts-neutral/svg?seed=${encodeURIComponent(authorAvatarSeed)}`;
+    const avatarUrl = `https://api.dicebear.com/7.x/bottts-neutral/png?seed=${encodeURIComponent(authorAvatarSeed)}`;
 
     const [posterImg, avatarImg] = await Promise.all([
         _loadCorsImage(posterUrl),
         _loadCorsImage(avatarUrl)
     ]);
 
-    // 6. Dibujar Poster / Fotograma
-    const isWide = !!(movie.isEpisode || (posterImg && posterImg.width / posterImg.height > 1.2));
+    // 5. Dimensiones y colocación del Póster
+    const isWide = !!(movie.isEpisode || (posterImg && posterImg.naturalWidth / posterImg.naturalHeight > 1.2));
     let pw, ph, px, py;
 
     if (isStory) {
         if (isWide) {
             pw = 860; ph = 484; px = (W - pw) / 2; py = 150;
         } else {
-            pw = 540; ph = 810; px = (W - pw) / 2; py = 150;
+            pw = 520; ph = 780; px = (W - pw) / 2; py = 150;
         }
     } else {
+        // Post 4:5 (1080x1350)
         if (isWide) {
-            pw = 740; ph = 416; px = (W - pw) / 2; py = 145;
+            pw = 760; ph = 428; px = (W - pw) / 2; py = 130;
         } else {
-            pw = 400; ph = 600; px = (W - pw) / 2; py = 145;
+            pw = 420; ph = 630; px = (W - pw) / 2; py = 125;
         }
     }
 
     if (posterImg) {
         ctx.save();
-        ctx.shadowColor = 'rgba(0,0,0,0.45)';
+        ctx.shadowColor = 'rgba(0,0,0,0.55)';
         ctx.shadowBlur = 24;
         ctx.shadowOffsetY = 8;
         ctx.drawImage(posterImg, px, py, pw, ph);
@@ -4082,8 +4161,8 @@ async function generateExportCardCanvas() {
         ctx.fillText(movie.title || 'CineZine', W / 2, py + ph / 2);
     }
 
-    // 7. Metadata y Título
-    let curY = py + ph + (isStory ? 45 : 32);
+    // 6. Metadata y Título
+    let curY = py + ph + (isStory ? 40 : 28);
 
     let tag = '';
     if (movie.isEpisode) {
@@ -4095,10 +4174,10 @@ async function generateExportCardCanvas() {
     }
 
     ctx.fillStyle = accentRed;
-    ctx.font = "bold 20px 'Space Mono', monospace";
+    ctx.font = "bold 18px 'Space Mono', monospace";
     ctx.textAlign = 'center';
     ctx.fillText(tag.toUpperCase(), W / 2, curY);
-    curY += (isStory ? 48 : 38);
+    curY += (isStory ? 44 : 34);
 
     const titleText = movie.isEpisode && movie.episodeName ? `${movie.title}: ${movie.episodeName}` : (movie.title || 'Sin título');
     ctx.fillStyle = textCol;
@@ -4107,106 +4186,115 @@ async function generateExportCardCanvas() {
     const titleLines = _wrapCanvasText(ctx, titleText, 900, 2);
     titleLines.forEach(l => {
         ctx.fillText(l, W / 2, curY);
-        curY += (isStory ? 52 : 42);
+        curY += (isStory ? 50 : 42);
     });
 
-    // 8. Puntuación en estrellas
-    const ratingVal = (review && review.rating != null) ? Number(review.rating) : (movie.rating ? Math.round(Number(movie.rating) / 2 * 10) / 10 : null);
-    if (ratingVal != null && ratingVal > 0) {
-        let starsStr = '';
-        for (let s = 1; s <= 5; s++) {
-            if (ratingVal >= s) starsStr += '★ ';
-            else if (ratingVal >= s - 0.5) starsStr += '★ ';
-            else starsStr += '☆ ';
-        }
+    // 7. Calificación (Estrellas + Calificación / 10)
+    const ratingObj = _formatCardRating(review, movie);
+    if (ratingObj) {
         ctx.fillStyle = starCol;
-        ctx.font = "30px 'Playfair Display', Georgia, serif";
+        ctx.font = `${isStory ? 28 : 24}px 'Playfair Display', Georgia, serif`;
         ctx.textAlign = 'center';
-        ctx.fillText(`${starsStr.trim()}   (${ratingVal}/5)`, W / 2, curY);
-        curY += (isStory ? 42 : 32);
+        ctx.fillText(`${ratingObj.starsStr}   ${ratingObj.scoreText}`, W / 2, curY);
+        curY += (isStory ? 40 : 30);
     }
 
-    // 9. Caja de Apunte / Reseña / Cita Editorial
-    const footerTop = H - 120;
+    // 8. Caja de Apunte / Reseña / Cita Editorial
+    const footerTop = H - (isStory ? 120 : 105);
     const boxX = 80;
     const boxW = W - 160;
-    const boxY = curY + 10;
-    const boxH = Math.max(120, footerTop - boxY - 20);
 
-    if (boxH >= 110) {
-        ctx.fillStyle = boxBg;
-        ctx.fillRect(boxX, boxY, boxW, boxH);
-        ctx.strokeStyle = borderCol;
-        ctx.lineWidth = 1.5;
-        ctx.strokeRect(boxX, boxY, boxW, boxH);
+    const headline = (review && review.reviewTitle) ? review.reviewTitle.trim() : '';
+    const quoteBody = (review && review.review) ? review.review.trim() : (movie.overview || 'Una obra seleccionada en el diario cinéfilo CineZine.');
 
-        const headline = (review && review.reviewTitle) ? review.reviewTitle.trim() : '';
-        const quoteBody = (review && review.review) ? review.review.trim() : (movie.overview || 'Una obra seleccionada en el diario cinéfilo CineZine.');
+    // Medir altura requerida de texto para no dejar vacío desproporcionado
+    ctx.font = `italic ${isStory ? 22 : 19}px Georgia, serif`;
+    const quoteLines = _wrapCanvasText(ctx, headline ? quoteBody : `“${quoteBody}”`, boxW - 80, isStory ? 5 : 3);
+    const textLinesHeight = quoteLines.length * (isStory ? 32 : 26);
+    const headlineHeight = headline ? 36 : 0;
+    const requiredBoxHeight = headlineHeight + textLinesHeight + (isStory ? 60 : 45);
 
-        let qy = boxY + 40;
-        if (headline) {
-            ctx.fillStyle = accentRed;
-            ctx.font = `bold ${isStory ? 26 : 22}px 'Playfair Display', Georgia, serif`;
-            ctx.textAlign = 'center';
-            ctx.fillText(`“${headline}”`, W / 2, qy);
-            qy += 34;
-        }
+    const availableSpace = Math.max(100, footerTop - curY - 20);
+    const actualBoxH = Math.min(availableSpace, Math.max(isStory ? 130 : 110, requiredBoxHeight));
+    
+    // Centrar la caja verticalmente en el espacio disponible restante
+    const boxY = curY + Math.max(10, (availableSpace - actualBoxH) / 2);
 
-        ctx.fillStyle = textCol;
-        ctx.font = `italic ${isStory ? 22 : 19}px Georgia, serif`;
+    ctx.fillStyle = boxBg;
+    ctx.fillRect(boxX, boxY, boxW, actualBoxH);
+    ctx.strokeStyle = borderCol;
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(boxX, boxY, boxW, actualBoxH);
+
+    // Pequeñas esquinas decorativas en la caja de cita
+    ctx.fillStyle = accentRed;
+    [[boxX, boxY], [boxX + boxW, boxY], [boxX, boxY + actualBoxH], [boxX + boxW, boxY + actualBoxH]].forEach(([kx, ky]) => {
+        ctx.fillRect(kx - 3, ky - 3, 6, 6);
+    });
+
+    let qy = boxY + (headline ? (isStory ? 38 : 32) : (isStory ? 45 : 38));
+    if (headline) {
+        ctx.fillStyle = accentRed;
+        ctx.font = `bold ${isStory ? 24 : 20}px 'Playfair Display', Georgia, serif`;
         ctx.textAlign = 'center';
-        const maxLines = Math.max(2, Math.floor((boxY + boxH - qy - 15) / (isStory ? 32 : 26)));
-        const quoteLines = _wrapCanvasText(ctx, headline ? quoteBody : `“${quoteBody}”`, boxW - 60, maxLines);
-        quoteLines.forEach(l => {
-            ctx.fillText(l, W / 2, qy);
-            qy += (isStory ? 32 : 26);
-        });
+        ctx.fillText(`“${headline}”`, W / 2, qy);
+        qy += (isStory ? 34 : 28);
     }
 
-    // 10. Pie de página (Autor + Sello de autenticidad)
+    ctx.fillStyle = textCol;
+    ctx.font = `italic ${isStory ? 22 : 18}px Georgia, serif`;
+    ctx.textAlign = 'center';
+    quoteLines.forEach(l => {
+        ctx.fillText(l, W / 2, qy);
+        qy += (isStory ? 32 : 26);
+    });
+
+    // 9. Pie de página (Autor + Sello de autenticidad)
+    const footLineY = H - (isStory ? 110 : 96);
     ctx.strokeStyle = borderCol;
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(80, H - 110);
-    ctx.lineTo(W - 80, H - 110);
+    ctx.moveTo(outerPad + 40, footLineY);
+    ctx.lineTo(W - (outerPad + 40), footLineY);
     ctx.stroke();
 
+    const avatarCenterY = footLineY + (isStory ? 45 : 42);
     if (avatarImg) {
         ctx.save();
         ctx.beginPath();
-        ctx.arc(115, H - 65, 24, 0, Math.PI * 2);
+        ctx.arc(outerPad + 60, avatarCenterY, 22, 0, Math.PI * 2);
         ctx.closePath();
         ctx.clip();
-        ctx.drawImage(avatarImg, 91, H - 89, 48, 48);
+        ctx.drawImage(avatarImg, outerPad + 38, avatarCenterY - 22, 44, 44);
         ctx.restore();
         ctx.strokeStyle = accentRed;
         ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.arc(115, H - 65, 25, 0, Math.PI * 2);
+        ctx.arc(outerPad + 60, avatarCenterY, 23, 0, Math.PI * 2);
         ctx.stroke();
     }
 
-    const textLeftX = avatarImg ? 150 : 90;
+    const textLeftX = avatarImg ? outerPad + 95 : outerPad + 50;
     ctx.textAlign = 'left';
     ctx.fillStyle = textCol;
     ctx.font = "bold 15px 'Space Mono', monospace";
-    ctx.fillText(`CRÍTICA POR ${authorName.toUpperCase()}`, textLeftX, H - 72);
+    ctx.fillText(`CRÍTICA POR ${authorName.toUpperCase()}`, textLeftX, avatarCenterY - 6);
 
     const dateStr = (review && review.date) || new Date().toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' });
     ctx.fillStyle = textMuted;
-    ctx.font = "13px 'Space Mono', monospace";
-    ctx.fillText(dateStr.toUpperCase(), textLeftX, H - 54);
+    ctx.font = "12px 'Space Mono', monospace";
+    ctx.fillText(dateStr.toUpperCase(), textLeftX, avatarCenterY + 12);
 
     ctx.textAlign = 'right';
     ctx.fillStyle = accentRed;
     ctx.font = "bold 15px 'Space Mono', monospace";
-    ctx.fillText("CINEZINE · ARCHIVO", W - 90, H - 72);
+    ctx.fillText("CINEZINE · ARCHIVO", W - (outerPad + 50), avatarCenterY - 6);
 
     ctx.fillStyle = textMuted;
-    ctx.font = "13px 'Space Mono', monospace";
-    ctx.fillText("cinezine.vercel.app", W - 90, H - 54);
+    ctx.font = "12px 'Space Mono', monospace";
+    ctx.fillText("cinezine.vercel.app", W - (outerPad + 50), avatarCenterY + 12);
 
-    // 11. Generar Blob y DataURL
+    // 10. Generar Blob y DataURL
     try {
         const dataUrl = canvas.toDataURL('image/png');
         _exportCardState.dataUrl = dataUrl;
