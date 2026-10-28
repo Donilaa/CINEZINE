@@ -4091,18 +4091,24 @@ async function generateExportCardCanvas() {
     // 3. Fondo atmosférico cinematográfico con el arte de la película (elimina el vacío estéril)
     if (posterImg) {
         ctx.save();
-        ctx.globalAlpha = isDark ? 0.20 : 0.12;
+        if ('filter' in ctx) {
+            ctx.filter = 'blur(28px)';
+        }
+        ctx.globalAlpha = isDark ? 0.22 : 0.14;
         ctx.drawImage(posterImg, -100, -100, W + 200, H + 200);
+        if ('filter' in ctx) {
+            ctx.filter = 'none';
+        }
 
         // Degradado de viñeta suave para dar textura y legibilidad
         const grad = ctx.createLinearGradient(0, 0, 0, H);
         if (isDark) {
-            grad.addColorStop(0, 'rgba(18, 17, 16, 0.65)');
-            grad.addColorStop(0.35, 'rgba(18, 17, 16, 0.85)');
+            grad.addColorStop(0, 'rgba(18, 17, 16, 0.70)');
+            grad.addColorStop(0.35, 'rgba(18, 17, 16, 0.88)');
             grad.addColorStop(1, 'rgba(18, 17, 16, 0.98)');
         } else {
-            grad.addColorStop(0, 'rgba(245, 240, 228, 0.65)');
-            grad.addColorStop(0.35, 'rgba(245, 240, 228, 0.85)');
+            grad.addColorStop(0, 'rgba(245, 240, 228, 0.70)');
+            grad.addColorStop(0.35, 'rgba(245, 240, 228, 0.88)');
             grad.addColorStop(1, 'rgba(245, 240, 228, 0.98)');
         }
         ctx.fillStyle = grad;
@@ -4140,7 +4146,7 @@ async function generateExportCardCanvas() {
     });
 
     // 6. Cabecera editorial (Masthead)
-    const headY = isStory ? 92 : 74;
+    const headY = isStory ? 92 : 72;
     ctx.fillStyle = accentRed;
     ctx.font = "bold 20px 'Space Mono', monospace";
     ctx.textAlign = 'center';
@@ -4154,22 +4160,22 @@ async function generateExportCardCanvas() {
     ctx.lineTo(W - (outerPad + 40), ruleY);
     ctx.stroke();
 
-    // 7. Dimensiones y colocación del Póster protagónico (escalado y presente)
+    // 7. Dimensiones y colocación del Póster protagónico
     const isWide = !!(movie.isEpisode || (posterImg && posterImg.naturalWidth / posterImg.naturalHeight > 1.2));
     let pw, ph, px, py;
 
     if (isStory) {
         if (isWide) {
-            pw = 880; ph = 495; px = (W - pw) / 2; py = 160;
+            pw = 880; ph = 495; px = (W - pw) / 2; py = 150;
         } else {
-            pw = 660; ph = 990; px = (W - pw) / 2; py = 145;
+            pw = 640; ph = 960; px = (W - pw) / 2; py = 135;
         }
     } else {
-        // Post 4:5 (1080x1350)
+        // Post 4:5 (1080x1350) - póster equilibrado para permitir respiro abajo
         if (isWide) {
-            pw = 800; ph = 450; px = (W - pw) / 2; py = 115;
+            pw = 780; ph = 438; px = (W - pw) / 2; py = 110;
         } else {
-            pw = 480; ph = 720; px = (W - pw) / 2; py = 110;
+            pw = 440; ph = 660; px = (W - pw) / 2; py = 100;
         }
     }
 
@@ -4200,8 +4206,8 @@ async function generateExportCardCanvas() {
         ctx.fillText(movie.title || 'CineZine', W / 2, py + ph / 2);
     }
 
-    // 8. Metadata y Título
-    let curY = py + ph + (isStory ? 40 : 26);
+    // 8. Metadata y Título con respiro y aire editorial
+    let curY = py + ph + (isStory ? 60 : 46);
 
     let tag = '';
     if (movie.isEpisode) {
@@ -4216,44 +4222,47 @@ async function generateExportCardCanvas() {
     ctx.font = `bold ${isStory ? 20 : 16}px 'Space Mono', monospace`;
     ctx.textAlign = 'center';
     ctx.fillText(tag.toUpperCase(), W / 2, curY);
-    curY += (isStory ? 48 : 34);
+    curY += (isStory ? 48 : 38);
 
     const titleText = movie.isEpisode && movie.episodeName ? `${movie.title}: ${movie.episodeName}` : (movie.title || 'Sin título');
     ctx.fillStyle = textCol;
-    ctx.font = `bold ${isStory ? 52 : 40}px 'Playfair Display', Georgia, serif`;
+    ctx.font = `bold ${isStory ? 54 : 42}px 'Playfair Display', Georgia, serif`;
     ctx.textAlign = 'center';
     const titleLines = _wrapCanvasText(ctx, titleText, 940, 2);
     titleLines.forEach(l => {
         ctx.fillText(l, W / 2, curY);
-        curY += (isStory ? 56 : 44);
+        curY += (isStory ? 58 : 46);
     });
 
-    // 9. Calificación en estrellas
+    // 9. Calificación en estrellas (con respiro)
+    curY += (isStory ? 10 : 6);
     const ratingObj = _formatCardRating(review, movie);
     if (ratingObj) {
         ctx.fillStyle = starCol;
-        ctx.font = `${isStory ? 32 : 26}px 'Playfair Display', Georgia, serif`;
+        ctx.font = `${isStory ? 34 : 28}px 'Playfair Display', Georgia, serif`;
         ctx.textAlign = 'center';
         ctx.fillText(`${ratingObj.starsStr}   ${ratingObj.scoreText}`, W / 2, curY);
-        curY += (isStory ? 44 : 32);
+        curY += (isStory ? 46 : 36);
     }
 
-    // 10. Caja de Apunte / Reseña / Cita Editorial
-    const footLineY = H - (isStory ? 120 : 100);
+    // 10. Caja de Apunte / Reseña / Cita Editorial (texto más grande y destacado)
+    const footLineY = H - (isStory ? 120 : 96);
     const boxW = isStory ? 940 : 920;
     const boxX = (W - boxW) / 2;
 
     const headline = (review && review.reviewTitle) ? review.reviewTitle.trim() : '';
     const quoteBody = (review && review.review) ? review.review.trim() : (movie.overview || 'Una obra seleccionada en el diario cinéfilo CineZine.');
 
-    ctx.font = `italic ${isStory ? 24 : 19}px Georgia, serif`;
-    const quoteLines = _wrapCanvasText(ctx, headline ? quoteBody : `“${quoteBody}”`, boxW - 80, isStory ? 5 : 3);
-    const textLinesHeight = quoteLines.length * (isStory ? 38 : 28);
-    const headlineHeight = headline ? (isStory ? 44 : 32) : 0;
-    const requiredBoxHeight = headlineHeight + textLinesHeight + (isStory ? 64 : 44);
+    const quoteFontSize = isStory ? 28 : 23;
+    const quoteLineHeight = isStory ? 44 : 35;
+    ctx.font = `italic ${quoteFontSize}px Georgia, serif`;
+    const quoteLines = _wrapCanvasText(ctx, headline ? quoteBody : `“${quoteBody}”`, boxW - 90, isStory ? 5 : 3);
+    const textLinesHeight = quoteLines.length * quoteLineHeight;
+    const headlineHeight = headline ? (isStory ? 48 : 36) : 0;
+    const requiredBoxHeight = headlineHeight + textLinesHeight + (isStory ? 68 : 50);
 
     const availableSpace = Math.max(120, footLineY - curY - 24);
-    const actualBoxH = Math.min(availableSpace, Math.max(isStory ? 180 : 130, requiredBoxHeight));
+    const actualBoxH = Math.min(availableSpace, Math.max(isStory ? 190 : 135, requiredBoxHeight));
 
     // Centrar armónicamente en el espacio restante
     const boxY = curY + Math.max(12, (availableSpace - actualBoxH) / 2);
@@ -4270,21 +4279,21 @@ async function generateExportCardCanvas() {
         ctx.fillRect(kx - 3, ky - 3, 6, 6);
     });
 
-    let qy = boxY + (headline ? (isStory ? 44 : 32) : (isStory ? 52 : 38));
+    let qy = boxY + (headline ? (isStory ? 46 : 34) : (isStory ? 56 : 42));
     if (headline) {
         ctx.fillStyle = accentRed;
-        ctx.font = `bold ${isStory ? 28 : 22}px 'Playfair Display', Georgia, serif`;
+        ctx.font = `bold ${isStory ? 32 : 25}px 'Playfair Display', Georgia, serif`;
         ctx.textAlign = 'center';
         ctx.fillText(`“${headline}”`, W / 2, qy);
-        qy += (isStory ? 40 : 30);
+        qy += (isStory ? 46 : 34);
     }
 
     ctx.fillStyle = textCol;
-    ctx.font = `italic ${isStory ? 24 : 19}px Georgia, serif`;
+    ctx.font = `italic ${quoteFontSize}px Georgia, serif`;
     ctx.textAlign = 'center';
     quoteLines.forEach(l => {
         ctx.fillText(l, W / 2, qy);
-        qy += (isStory ? 38 : 28);
+        qy += quoteLineHeight;
     });
 
     // 11. Pie de página (Autor + Sello de autenticidad)
