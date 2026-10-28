@@ -3967,14 +3967,17 @@ function openExportCardModalFromDetail(optionalMovie) {
         poster: isEpisode ? (_detailTvState.selectedEpisodePoster || baseMovie.poster) : baseMovie.poster
     };
 
-    _exportCardState.review = pReview ? {
-        reviewTitle: pReview.reviewTitle || '',
-        review: pReview.review || '',
-        rating: pReview.rating,
-        author: currentUsername || 'CineZine',
-        avatarSeed: currentUserAvatarSeed || currentUsername,
-        date: new Date(pReview.updatedAt || pReview.createdAt || Date.now()).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' })
-    } : null;
+    const myAvatar = (typeof getAvatarUrl === 'function') ? getAvatarUrl() : '';
+    const myName = (typeof _myName === 'function' ? _myName() : currentUsername) || 'Cinéfilo/a';
+
+    _exportCardState.review = {
+        reviewTitle: (pReview && pReview.reviewTitle) || '',
+        review: (pReview && pReview.review) || '',
+        rating: (pReview && pReview.rating != null) ? pReview.rating : null,
+        author: myName,
+        avatarUrl: myAvatar,
+        date: new Date((pReview && (pReview.updatedAt || pReview.createdAt)) || Date.now()).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' })
+    };
 
     _exportCardState.format = _exportCardState.format || 'story';
     _exportCardState.theme = _exportCardState.theme || 'dark';
@@ -4002,13 +4005,19 @@ function openExportCardModalFromPost(postId) {
         || { title: post.movieTitle || post.title || 'Obra', poster: post.poster || POSTER_FALLBACK };
 
     _exportCardState.movie = movie;
+
+    const isMe = post.mine || (window.currentUser && post.authorUid === window.currentUser.uid) || post.author === currentUsername;
+    const authorAvatar = isMe
+        ? (typeof getAvatarUrl === 'function' ? getAvatarUrl() : '')
+        : (post.avatarUrl || (post.avatarSeed ? _avatarOf(post.avatarSeed, post.author) : (typeof getAvatarUrl === 'function' ? getAvatarUrl() : '')));
+
     _exportCardState.review = {
         reviewTitle: post.reviewTitle || '',
         review: post.content || post.review || '',
         rating: post.rating != null ? post.rating : null,
-        author: post.author || 'CineZine',
+        author: post.author || currentUsername || 'Cinéfilo/a',
         authorUid: post.authorUid || '',
-        avatarSeed: post.avatarSeed || post.author,
+        avatarUrl: authorAvatar,
         date: post.date || new Date(post.createdAt || Date.now()).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' })
     };
 
@@ -4049,25 +4058,65 @@ async function generateExportCardCanvas() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Paleta editorial
+    // Paleta editorial fanzine
     const bg = isDark ? '#121110' : '#f5f0e4';
     const textCol = isDark ? '#f7f4ed' : '#1c1917';
     const textMuted = isDark ? '#a8a29e' : '#78716c';
     const accentRed = isDark ? '#dc2626' : '#991b1b';
-    const borderCol = isDark ? '#332d28' : '#cfc5b4';
-    const boxBg = isDark ? 'rgba(255, 255, 255, 0.035)' : 'rgba(0, 0, 0, 0.035)';
+    const borderCol = isDark ? '#38322c' : '#cfc5b4';
+    const boxBg = isDark ? 'rgba(255, 255, 255, 0.045)' : 'rgba(0, 0, 0, 0.035)';
     const starCol = isDark ? '#f59e0b' : '#d97706';
 
-    // 1. Fondo base y textura de grano
+    // 1. Cargar imágenes de portada y avatar real del usuario
+    let posterUrl = null;
+    if (movie.poster) {
+        posterUrl = movie.poster.startsWith('http') ? movie.poster : `https://image.tmdb.org/t/p/w780${movie.poster}`;
+    }
+
+    let rawAvatar = (review && review.avatarUrl) || (typeof getAvatarUrl === 'function' ? getAvatarUrl() : '');
+    if (rawAvatar && rawAvatar.includes('api.dicebear.com') && rawAvatar.includes('/svg')) {
+        rawAvatar = rawAvatar.replace('/svg', '/png');
+    }
+    const authorName = (review && review.author) || (typeof _myName === 'function' ? _myName() : currentUsername) || 'Cinéfilo/a';
+
+    const [posterImg, avatarImg] = await Promise.all([
+        _loadCorsImage(posterUrl),
+        _loadCorsImage(rawAvatar)
+    ]);
+
+    // 2. Fondo base
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, W, H);
 
+    // 3. Fondo atmosférico cinematográfico con el arte de la película (elimina el vacío estéril)
+    if (posterImg) {
+        ctx.save();
+        ctx.globalAlpha = isDark ? 0.20 : 0.12;
+        ctx.drawImage(posterImg, -100, -100, W + 200, H + 200);
+
+        // Degradado de viñeta suave para dar textura y legibilidad
+        const grad = ctx.createLinearGradient(0, 0, 0, H);
+        if (isDark) {
+            grad.addColorStop(0, 'rgba(18, 17, 16, 0.65)');
+            grad.addColorStop(0.35, 'rgba(18, 17, 16, 0.85)');
+            grad.addColorStop(1, 'rgba(18, 17, 16, 0.98)');
+        } else {
+            grad.addColorStop(0, 'rgba(245, 240, 228, 0.65)');
+            grad.addColorStop(0.35, 'rgba(245, 240, 228, 0.85)');
+            grad.addColorStop(1, 'rgba(245, 240, 228, 0.98)');
+        }
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, W, H);
+        ctx.restore();
+    }
+
+    // 4. Grano y textura de papel impreso
     ctx.fillStyle = isDark ? 'rgba(255,255,255,0.018)' : 'rgba(0,0,0,0.018)';
     for (let i = 0; i < 4500; i++) {
         ctx.fillRect(Math.random() * W, Math.random() * H, Math.random() * 2 + 0.5, Math.random() * 2 + 0.5);
     }
 
-    // 2. Bordes dobles de diario
+    // 5. Bordes dobles de diario
     const outerPad = isStory ? 36 : 30;
     const innerPad = outerPad + 12;
 
@@ -4090,14 +4139,14 @@ async function generateExportCardCanvas() {
         ctx.fillRect(cx - 4, cy - 4, 8, 8);
     });
 
-    // 3. Cabecera editorial (Masthead)
-    const headY = isStory ? 92 : 78;
+    // 6. Cabecera editorial (Masthead)
+    const headY = isStory ? 92 : 74;
     ctx.fillStyle = accentRed;
     ctx.font = "bold 20px 'Space Mono', monospace";
     ctx.textAlign = 'center';
     ctx.fillText("★  C I N E Z I N E  ·  D I A R I O   C I N É F I L O  ★", W / 2, headY);
 
-    const ruleY = headY + 22;
+    const ruleY = headY + 20;
     ctx.strokeStyle = borderCol;
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -4105,50 +4154,40 @@ async function generateExportCardCanvas() {
     ctx.lineTo(W - (outerPad + 40), ruleY);
     ctx.stroke();
 
-    // 4. Cargar imágenes (con proxy / weserv cascade)
-    let posterUrl = null;
-    if (movie.poster) {
-        posterUrl = movie.poster.startsWith('http') ? movie.poster : `https://image.tmdb.org/t/p/w780${movie.poster}`;
-    }
-    const authorAvatarSeed = (review && review.avatarSeed) || currentUserAvatarSeed || currentUsername || 'cine';
-    const authorName = (review && review.author) || currentUsername || 'CineZine';
-    const avatarUrl = `https://api.dicebear.com/7.x/bottts-neutral/png?seed=${encodeURIComponent(authorAvatarSeed)}`;
-
-    const [posterImg, avatarImg] = await Promise.all([
-        _loadCorsImage(posterUrl),
-        _loadCorsImage(avatarUrl)
-    ]);
-
-    // 5. Dimensiones y colocación del Póster
+    // 7. Dimensiones y colocación del Póster protagónico (escalado y presente)
     const isWide = !!(movie.isEpisode || (posterImg && posterImg.naturalWidth / posterImg.naturalHeight > 1.2));
     let pw, ph, px, py;
 
     if (isStory) {
         if (isWide) {
-            pw = 860; ph = 484; px = (W - pw) / 2; py = 150;
+            pw = 880; ph = 495; px = (W - pw) / 2; py = 160;
         } else {
-            pw = 520; ph = 780; px = (W - pw) / 2; py = 150;
+            pw = 660; ph = 990; px = (W - pw) / 2; py = 145;
         }
     } else {
         // Post 4:5 (1080x1350)
         if (isWide) {
-            pw = 760; ph = 428; px = (W - pw) / 2; py = 130;
+            pw = 800; ph = 450; px = (W - pw) / 2; py = 115;
         } else {
-            pw = 420; ph = 630; px = (W - pw) / 2; py = 125;
+            pw = 480; ph = 720; px = (W - pw) / 2; py = 110;
         }
     }
 
     if (posterImg) {
         ctx.save();
-        ctx.shadowColor = 'rgba(0,0,0,0.55)';
-        ctx.shadowBlur = 24;
-        ctx.shadowOffsetY = 8;
+        ctx.shadowColor = 'rgba(0,0,0,0.65)';
+        ctx.shadowBlur = 32;
+        ctx.shadowOffsetY = 12;
         ctx.drawImage(posterImg, px, py, pw, ph);
         ctx.restore();
 
         ctx.strokeStyle = borderCol;
-        ctx.lineWidth = 3;
+        ctx.lineWidth = 4;
         ctx.strokeRect(px, py, pw, ph);
+
+        ctx.strokeStyle = accentRed;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(px + 4, py + 4, pw - 8, ph - 8);
     } else {
         ctx.fillStyle = boxBg;
         ctx.fillRect(px, py, pw, ph);
@@ -4156,13 +4195,13 @@ async function generateExportCardCanvas() {
         ctx.lineWidth = 2;
         ctx.strokeRect(px, py, pw, ph);
         ctx.fillStyle = textMuted;
-        ctx.font = "italic 32px Georgia, serif";
+        ctx.font = "italic 36px Georgia, serif";
         ctx.textAlign = 'center';
         ctx.fillText(movie.title || 'CineZine', W / 2, py + ph / 2);
     }
 
-    // 6. Metadata y Título
-    let curY = py + ph + (isStory ? 40 : 28);
+    // 8. Metadata y Título
+    let curY = py + ph + (isStory ? 40 : 26);
 
     let tag = '';
     if (movie.isEpisode) {
@@ -4174,51 +4213,50 @@ async function generateExportCardCanvas() {
     }
 
     ctx.fillStyle = accentRed;
-    ctx.font = "bold 18px 'Space Mono', monospace";
+    ctx.font = `bold ${isStory ? 20 : 16}px 'Space Mono', monospace`;
     ctx.textAlign = 'center';
     ctx.fillText(tag.toUpperCase(), W / 2, curY);
-    curY += (isStory ? 44 : 34);
+    curY += (isStory ? 48 : 34);
 
     const titleText = movie.isEpisode && movie.episodeName ? `${movie.title}: ${movie.episodeName}` : (movie.title || 'Sin título');
     ctx.fillStyle = textCol;
-    ctx.font = `bold ${isStory ? 46 : 38}px 'Playfair Display', Georgia, serif`;
+    ctx.font = `bold ${isStory ? 52 : 40}px 'Playfair Display', Georgia, serif`;
     ctx.textAlign = 'center';
-    const titleLines = _wrapCanvasText(ctx, titleText, 900, 2);
+    const titleLines = _wrapCanvasText(ctx, titleText, 940, 2);
     titleLines.forEach(l => {
         ctx.fillText(l, W / 2, curY);
-        curY += (isStory ? 50 : 42);
+        curY += (isStory ? 56 : 44);
     });
 
-    // 7. Calificación (Estrellas + Calificación / 10)
+    // 9. Calificación en estrellas
     const ratingObj = _formatCardRating(review, movie);
     if (ratingObj) {
         ctx.fillStyle = starCol;
-        ctx.font = `${isStory ? 28 : 24}px 'Playfair Display', Georgia, serif`;
+        ctx.font = `${isStory ? 32 : 26}px 'Playfair Display', Georgia, serif`;
         ctx.textAlign = 'center';
         ctx.fillText(`${ratingObj.starsStr}   ${ratingObj.scoreText}`, W / 2, curY);
-        curY += (isStory ? 40 : 30);
+        curY += (isStory ? 44 : 32);
     }
 
-    // 8. Caja de Apunte / Reseña / Cita Editorial
-    const footerTop = H - (isStory ? 120 : 105);
-    const boxX = 80;
-    const boxW = W - 160;
+    // 10. Caja de Apunte / Reseña / Cita Editorial
+    const footLineY = H - (isStory ? 120 : 100);
+    const boxW = isStory ? 940 : 920;
+    const boxX = (W - boxW) / 2;
 
     const headline = (review && review.reviewTitle) ? review.reviewTitle.trim() : '';
     const quoteBody = (review && review.review) ? review.review.trim() : (movie.overview || 'Una obra seleccionada en el diario cinéfilo CineZine.');
 
-    // Medir altura requerida de texto para no dejar vacío desproporcionado
-    ctx.font = `italic ${isStory ? 22 : 19}px Georgia, serif`;
+    ctx.font = `italic ${isStory ? 24 : 19}px Georgia, serif`;
     const quoteLines = _wrapCanvasText(ctx, headline ? quoteBody : `“${quoteBody}”`, boxW - 80, isStory ? 5 : 3);
-    const textLinesHeight = quoteLines.length * (isStory ? 32 : 26);
-    const headlineHeight = headline ? 36 : 0;
-    const requiredBoxHeight = headlineHeight + textLinesHeight + (isStory ? 60 : 45);
+    const textLinesHeight = quoteLines.length * (isStory ? 38 : 28);
+    const headlineHeight = headline ? (isStory ? 44 : 32) : 0;
+    const requiredBoxHeight = headlineHeight + textLinesHeight + (isStory ? 64 : 44);
 
-    const availableSpace = Math.max(100, footerTop - curY - 20);
-    const actualBoxH = Math.min(availableSpace, Math.max(isStory ? 130 : 110, requiredBoxHeight));
-    
-    // Centrar la caja verticalmente en el espacio disponible restante
-    const boxY = curY + Math.max(10, (availableSpace - actualBoxH) / 2);
+    const availableSpace = Math.max(120, footLineY - curY - 24);
+    const actualBoxH = Math.min(availableSpace, Math.max(isStory ? 180 : 130, requiredBoxHeight));
+
+    // Centrar armónicamente en el espacio restante
+    const boxY = curY + Math.max(12, (availableSpace - actualBoxH) / 2);
 
     ctx.fillStyle = boxBg;
     ctx.fillRect(boxX, boxY, boxW, actualBoxH);
@@ -4226,31 +4264,30 @@ async function generateExportCardCanvas() {
     ctx.lineWidth = 1.5;
     ctx.strokeRect(boxX, boxY, boxW, actualBoxH);
 
-    // Pequeñas esquinas decorativas en la caja de cita
+    // Esquinas decorativas
     ctx.fillStyle = accentRed;
     [[boxX, boxY], [boxX + boxW, boxY], [boxX, boxY + actualBoxH], [boxX + boxW, boxY + actualBoxH]].forEach(([kx, ky]) => {
         ctx.fillRect(kx - 3, ky - 3, 6, 6);
     });
 
-    let qy = boxY + (headline ? (isStory ? 38 : 32) : (isStory ? 45 : 38));
+    let qy = boxY + (headline ? (isStory ? 44 : 32) : (isStory ? 52 : 38));
     if (headline) {
         ctx.fillStyle = accentRed;
-        ctx.font = `bold ${isStory ? 24 : 20}px 'Playfair Display', Georgia, serif`;
+        ctx.font = `bold ${isStory ? 28 : 22}px 'Playfair Display', Georgia, serif`;
         ctx.textAlign = 'center';
         ctx.fillText(`“${headline}”`, W / 2, qy);
-        qy += (isStory ? 34 : 28);
+        qy += (isStory ? 40 : 30);
     }
 
     ctx.fillStyle = textCol;
-    ctx.font = `italic ${isStory ? 22 : 18}px Georgia, serif`;
+    ctx.font = `italic ${isStory ? 24 : 19}px Georgia, serif`;
     ctx.textAlign = 'center';
     quoteLines.forEach(l => {
         ctx.fillText(l, W / 2, qy);
-        qy += (isStory ? 32 : 26);
+        qy += (isStory ? 38 : 28);
     });
 
-    // 9. Pie de página (Autor + Sello de autenticidad)
-    const footLineY = H - (isStory ? 110 : 96);
+    // 11. Pie de página (Autor + Sello de autenticidad)
     ctx.strokeStyle = borderCol;
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -4258,43 +4295,46 @@ async function generateExportCardCanvas() {
     ctx.lineTo(W - (outerPad + 40), footLineY);
     ctx.stroke();
 
-    const avatarCenterY = footLineY + (isStory ? 45 : 42);
+    const avatarCenterY = footLineY + (isStory ? 48 : 42);
+    const avatarRadius = isStory ? 30 : 24;
+
     if (avatarImg) {
         ctx.save();
         ctx.beginPath();
-        ctx.arc(outerPad + 60, avatarCenterY, 22, 0, Math.PI * 2);
+        ctx.arc(outerPad + 60, avatarCenterY, avatarRadius, 0, Math.PI * 2);
         ctx.closePath();
         ctx.clip();
-        ctx.drawImage(avatarImg, outerPad + 38, avatarCenterY - 22, 44, 44);
+        ctx.drawImage(avatarImg, outerPad + 60 - avatarRadius, avatarCenterY - avatarRadius, avatarRadius * 2, avatarRadius * 2);
         ctx.restore();
+
         ctx.strokeStyle = accentRed;
-        ctx.lineWidth = 1.5;
+        ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(outerPad + 60, avatarCenterY, 23, 0, Math.PI * 2);
+        ctx.arc(outerPad + 60, avatarCenterY, avatarRadius + 1, 0, Math.PI * 2);
         ctx.stroke();
     }
 
-    const textLeftX = avatarImg ? outerPad + 95 : outerPad + 50;
+    const textLeftX = avatarImg ? outerPad + 60 + avatarRadius + 18 : outerPad + 50;
     ctx.textAlign = 'left';
     ctx.fillStyle = textCol;
-    ctx.font = "bold 15px 'Space Mono', monospace";
+    ctx.font = `bold ${isStory ? 16 : 14}px 'Space Mono', monospace`;
     ctx.fillText(`CRÍTICA POR ${authorName.toUpperCase()}`, textLeftX, avatarCenterY - 6);
 
     const dateStr = (review && review.date) || new Date().toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' });
     ctx.fillStyle = textMuted;
-    ctx.font = "12px 'Space Mono', monospace";
-    ctx.fillText(dateStr.toUpperCase(), textLeftX, avatarCenterY + 12);
+    ctx.font = `${isStory ? 13 : 11}px 'Space Mono', monospace`;
+    ctx.fillText(dateStr.toUpperCase(), textLeftX, avatarCenterY + 14);
 
     ctx.textAlign = 'right';
     ctx.fillStyle = accentRed;
-    ctx.font = "bold 15px 'Space Mono', monospace";
+    ctx.font = `bold ${isStory ? 16 : 14}px 'Space Mono', monospace`;
     ctx.fillText("CINEZINE · ARCHIVO", W - (outerPad + 50), avatarCenterY - 6);
 
     ctx.fillStyle = textMuted;
-    ctx.font = "12px 'Space Mono', monospace";
-    ctx.fillText("cinezine.vercel.app", W - (outerPad + 50), avatarCenterY + 12);
+    ctx.font = `${isStory ? 13 : 11}px 'Space Mono', monospace`;
+    ctx.fillText("cinezine.vercel.app", W - (outerPad + 50), avatarCenterY + 14);
 
-    // 10. Generar Blob y DataURL
+    // 12. Generar Blob y DataURL
     try {
         const dataUrl = canvas.toDataURL('image/png');
         _exportCardState.dataUrl = dataUrl;

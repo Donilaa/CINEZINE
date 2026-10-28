@@ -23,10 +23,11 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'URL inválida' });
     }
 
-    // Permitir dominios de imágenes oficiales del proyecto
-    const allowedHosts = ['image.tmdb.org', 'api.dicebear.com', 'images.unsplash.com'];
-    if (!allowedHosts.includes(parsed.hostname.toLowerCase())) {
-        return res.status(403).json({ error: 'Dominio de imagen no permitido' });
+    // Permitir solo HTTPS y bloquear direcciones privadas / locales (SSRF protection)
+    const hostname = parsed.hostname.toLowerCase();
+    const isPrivate = /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|0\.|169\.254\.)/i.test(hostname);
+    if (parsed.protocol !== 'https:' || isPrivate) {
+        return res.status(403).json({ error: 'Host o protocolo no permitido' });
     }
 
     try {
