@@ -156,6 +156,11 @@ service cloud.firestore {
              && (request.resource.data.lastComment == null
                  || (request.resource.data.lastComment is map
                      && request.resource.data.lastComment.keys().hasOnly(['author', 'avatarSeed', 'text'])
+                     && request.resource.data.lastComment.author is string
+                     && request.resource.data.lastComment.author.size() <= 40
+                     && request.resource.data.lastComment.avatarSeed is string
+                     && request.resource.data.lastComment.avatarSeed.size() <= 60
+                     && request.resource.data.lastComment.text is string
                      && request.resource.data.lastComment.text.size() <= 160)) )
       );
 
