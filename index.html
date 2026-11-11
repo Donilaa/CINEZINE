@@ -1234,7 +1234,7 @@
             appId: "1:176182440928:web:46493539c9d8898c5b7185"
         });
 
-        const APP_CHECK_SITE_KEY = '';
+        const APP_CHECK_SITE_KEY = '6LchmxouAAAAAPMSB92WKszUH_ypVqdsXgg1OHm5';
         if (APP_CHECK_SITE_KEY) {
             if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
             initializeAppCheck(app, { provider: new ReCaptchaV3Provider(APP_CHECK_SITE_KEY), isTokenAutoRefreshEnabled: true });
