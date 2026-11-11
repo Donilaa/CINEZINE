@@ -1125,7 +1125,7 @@ function renderPostAuthor(p) {
             </span>
         </button>
         <div class="flex items-center gap-3 text-[10px] font-mono text-stone-500 flex-shrink-0">
-            ${p.type === 'review' ? `<button type="button" onclick="openExportCardModalFromPost('${_pmEsc(p.id)}')" class="hover:text-rose-700 dark:hover:text-rose-400 transition cursor-pointer flex items-center gap-1 text-rose-800 dark:text-rose-400" title="Exportar tarjeta editorial"><i class="fa-solid fa-share-nodes"></i>Tarjeta</button>` : ''}
+            ${p.type === 'review' ? `<button type="button" data-act="export" data-post-id="${_pmEsc(p.id)}" class="hover:text-rose-700 dark:hover:text-rose-400 transition cursor-pointer flex items-center gap-1 text-rose-800 dark:text-rose-400" title="Exportar tarjeta editorial"><i class="fa-solid fa-share-nodes"></i>Tarjeta</button>` : ''}
             ${p.mine ? `<button type="button" data-act="edit" class="hover:text-stone-900 dark:hover:text-stone-200 transition cursor-pointer"><i class="fa-solid fa-pen mr-1"></i>Editar</button>
             <button type="button" data-act="delete" class="hover:text-rose-600 transition cursor-pointer"><i class="fa-solid fa-trash mr-1"></i>Borrar</button>` : ''}
         </div>`;
@@ -1266,6 +1266,8 @@ function _muralModalClick(e) {
         case 'cdel': deleteMuralComment(pid, cid); break;
         case 'cvote': reactToComment(pid, cid, el.dataset.type); break;
         case 'send': submitMuralComment(pid); break;
+        case 'export': openExportCardModalFromPost(el.dataset.postId || pid); break;
+        case 'emoji': if (el.dataset.targetInput) toggleEmojiPicker(el.dataset.targetInput); break;
     }
 }
 
@@ -1287,6 +1289,7 @@ async function openMuralPostModal(postId, highlightCommentId) {
         modal.className = 'fixed inset-0 bg-stone-950/80 backdrop-blur-sm z-[120] hidden flex items-center justify-center p-4';
         document.body.appendChild(modal);
     }
+    const safePostId = String(postId || '').replace(/[^a-zA-Z0-9_-]/g, '');
     window._openPostId = postId;
     window._editingPost = false;
     window._editingComment = null;
@@ -1312,7 +1315,7 @@ async function openMuralPostModal(postId, highlightCommentId) {
                     <div id="replyIndicator_${postId}" class="text-[10px] font-mono text-stone-500 hidden"></div>
                     <div class="flex items-center gap-2 relative border-b border-stone-300 dark:border-stone-800 focus-within:border-rose-800 pb-1">
                         <input type="text" maxlength="1000" id="newCommentInput_${postId}" placeholder="Escribe tu apunte..." class="bg-transparent flex-grow px-1 py-0.5 text-xs font-serif text-stone-800 dark:text-stone-200 placeholder-stone-500 focus:outline-none">
-                        <button type="button" id="emojiBtn_newCommentInput_${postId}" onclick="toggleEmojiPicker('newCommentInput_${postId}')" aria-label="Añadir emoji" class="px-1 py-0.5 text-xs hover:opacity-80 transition cursor-pointer">🎬</button>
+                        <button type="button" id="emojiBtn_newCommentInput_${safePostId}" data-act="emoji" data-target-input="newCommentInput_${safePostId}" aria-label="Añadir emoji" class="px-1 py-0.5 text-xs hover:opacity-80 transition cursor-pointer">🎬</button>
                         <button type="button" data-act="send" class="px-3 py-1 bg-stone-200 dark:bg-stone-800 hover:bg-rose-900 hover:text-white dark:hover:bg-rose-900 text-stone-700 dark:text-stone-200 font-mono text-[10px] font-bold transition uppercase tracking-wider cursor-pointer">Enviar</button>
                     </div>
                 </div>
@@ -2452,7 +2455,7 @@ document.addEventListener('click', (e) => {
 
 // ===== VARIABLES GLOBALES Y ESTADO PRINCIPAL =====
 const TMDB_PROXY_URL = window.CINE_TMDB_PROXY || (
-    (typeof location !== 'undefined' && /\.vercel\.app$/i.test(location.hostname))
+    (typeof location !== 'undefined' && (/(\.vercel\.app|\.pages\.dev)$/i.test(location.hostname) || location.hostname === 'localhost' || location.hostname === '127.0.0.1'))
         ? '/api/tmdb'
         : 'https://cinezine.vercel.app/api/tmdb'
 );

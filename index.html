@@ -4,6 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-Content-Type-Options" content="nosniff">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
     <title>CineZine - Curaduría y ruleta cinematográfica</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -1195,12 +1197,8 @@
         </div>
     </div>
 
-    <!-- Configuración solo local (si se abre en PC sin servidor Vercel) y script principal -->
-    <script>
-        if (location.protocol === 'file:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
-            document.write('<script src="local-config.js"><\/script>');
-        }
-    </script>
+    <!-- Configuración local opcional (solo en tu PC) y script principal -->
+    <script src="local-config.js" onerror="this.remove()"></script>
     <script src="script.js"></script>
 
     <!-- SDKs de Firebase v10 y lógica de autenticación -->

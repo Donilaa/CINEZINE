@@ -4,26 +4,51 @@
 //   Valor:  (tu Read Access Token v4 de TMDb)
 
 const ALLOWED_ENDPOINT_RE = /^\/((movie|tv)\/\d+(\/watch\/providers|\/season\/\d+(\/episode\/\d+)?)?|search\/(movie|tv|multi)|discover\/(movie|tv))(\?[^\s#]*)?$/;
-const DEFAULT_ORIGIN_RE = /^https:\/\/(cinezine(-[a-z0-9-]+)?\.vercel\.app|donilaa\.github\.io)$/i;
+const DEFAULT_ORIGIN_RE = /^https:\/\/(cinezine(-[a-z0-9-]+)?\.(vercel\.app|pages\.dev)|donilaa\.github\.io)$/i;
 
 export default async function handler(req, res) {
     const origin = req.headers.origin || '';
+    const referer = req.headers.referer || '';
+    const secFetchSite = req.headers['sec-fetch-site'] || '';
+
+    let refererOrigin = '';
+    if (referer) {
+        try {
+            refererOrigin = new URL(referer).origin;
+        } catch {
+            // Referer malformado
+        }
+    }
+
+    const effectiveOrigin = origin || refererOrigin;
     const allowedEnv = (process.env.ALLOWED_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean);
-    const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin) || origin === 'null';
-    const isAllowedOrigin = origin && (
-        allowedEnv.includes(origin) ||
-        (allowedEnv.length === 0 && DEFAULT_ORIGIN_RE.test(origin)) ||
-        isLocal
+    const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(effectiveOrigin);
+    
+    // Validación estricta anti-Open Proxy: debe provenir del origen permitido o ser same-origin
+    const isAllowed = Boolean(
+        (effectiveOrigin && (
+            allowedEnv.includes(effectiveOrigin) ||
+            (allowedEnv.length === 0 && DEFAULT_ORIGIN_RE.test(effectiveOrigin)) ||
+            isLocal
+        )) ||
+        secFetchSite === 'same-origin'
     );
 
-    if (isAllowedOrigin) {
-        res.setHeader('Access-Control-Allow-Origin', origin === 'null' ? '*' : origin);
+    if (!isAllowed) {
+        return res.status(403).json({ error: 'Origen o petición no autorizada' });
+    }
+
+    // Cabeceras CORS defensivas
+    if (origin && isAllowed) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
         res.setHeader('Vary', 'Origin');
-    } else if (!origin) {
+    } else {
         res.setHeader('Access-Control-Allow-Origin', 'https://cinezine.vercel.app');
     }
+
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
 
     if (req.method === 'OPTIONS') {
         return res.status(204).end();
@@ -35,7 +60,7 @@ export default async function handler(req, res) {
     const rawToken = process.env.TMDB_BEARER_TOKEN;
     const token = rawToken ? rawToken.trim().replace(/^["']+|["';]+$/g, '') : '';
     if (!token) {
-        return res.status(500).json({ error: 'Falta configurar TMDB_BEARER_TOKEN en Vercel' });
+        return res.status(500).json({ error: 'Falta configurar TMDB_BEARER_TOKEN en el servidor de Vercel' });
     }
 
     const endpoint = String((req.query && req.query.endpoint) || '');
@@ -71,7 +96,7 @@ export default async function handler(req, res) {
         }
 
         const data = await upstream.json();
-        // Caché en borde de Vercel por 1 hora (acelera la web y ahorra cuota de TMDb)
+        // Caché en borde por 1 hora (acelera la web y ahorra cuota de TMDb)
         res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
         return res.status(200).json(data);
     } catch (err) {
